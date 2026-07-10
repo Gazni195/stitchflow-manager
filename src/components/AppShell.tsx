@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Menu, Bell, Search, LayoutDashboard, Shirt, Factory, Warehouse, X } from "lucide-react";
+import { Menu, Bell, Search, LayoutDashboard, Shirt, FlaskConical, Factory, Warehouse, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { WORKFLOW } from "@/lib/workflow";
 import { cn } from "@/lib/utils";
@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const PRIMARY_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/designs", label: "Designs", icon: Shirt },
+  { to: "/sample-development", label: "Samples", icon: FlaskConical },
   { to: "/stitching", label: "Production", icon: Factory },
   { to: "/stock", label: "Stock", icon: Warehouse },
 ] as const;
@@ -98,7 +99,7 @@ export function AppShell({
 
       {/* Mobile bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur lg:hidden">
-        <ul className="grid grid-cols-4">
+        <ul className="grid grid-cols-5">
           {PRIMARY_NAV.map((item) => {
             const active =
               item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
