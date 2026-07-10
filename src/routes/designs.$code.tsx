@@ -38,7 +38,7 @@ export const Route = createFileRoute("/designs/$code")({
 });
 
 function DesignDetails() {
-  const { design } = Route.useLoaderData();
+  const { design } = Route.useLoaderData() as { design: Design };
   return (
     <AppShell
       title={design.name}
