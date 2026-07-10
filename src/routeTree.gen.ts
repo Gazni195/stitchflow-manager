@@ -9,8 +9,80 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StockRouteImport } from './routes/stock'
+import { Route as StitchingRouteImport } from './routes/stitching'
+import { Route as SamplesRouteImport } from './routes/samples'
+import { Route as SampleMakingRouteImport } from './routes/sample-making'
+import { Route as QcRouteImport } from './routes/qc'
+import { Route as PackingRouteImport } from './routes/packing'
+import { Route as MaterialsRouteImport } from './routes/materials'
+import { Route as HandworkRouteImport } from './routes/handwork'
+import { Route as CuttingRouteImport } from './routes/cutting'
+import { Route as CostingRouteImport } from './routes/costing'
+import { Route as BarcodeRouteImport } from './routes/barcode'
+import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as IndexRouteImport } from './routes/index'
 
+const StockRoute = StockRouteImport.update({
+  id: '/stock',
+  path: '/stock',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StitchingRoute = StitchingRouteImport.update({
+  id: '/stitching',
+  path: '/stitching',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SamplesRoute = SamplesRouteImport.update({
+  id: '/samples',
+  path: '/samples',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SampleMakingRoute = SampleMakingRouteImport.update({
+  id: '/sample-making',
+  path: '/sample-making',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QcRoute = QcRouteImport.update({
+  id: '/qc',
+  path: '/qc',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PackingRoute = PackingRouteImport.update({
+  id: '/packing',
+  path: '/packing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MaterialsRoute = MaterialsRouteImport.update({
+  id: '/materials',
+  path: '/materials',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HandworkRoute = HandworkRouteImport.update({
+  id: '/handwork',
+  path: '/handwork',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CuttingRoute = CuttingRouteImport.update({
+  id: '/cutting',
+  path: '/cutting',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CostingRoute = CostingRouteImport.update({
+  id: '/costing',
+  path: '/costing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BarcodeRoute = BarcodeRouteImport.update({
+  id: '/barcode',
+  path: '/barcode',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApprovalsRoute = ApprovalsRouteImport.update({
+  id: '/approvals',
+  path: '/approvals',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +91,200 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/approvals': typeof ApprovalsRoute
+  '/barcode': typeof BarcodeRoute
+  '/costing': typeof CostingRoute
+  '/cutting': typeof CuttingRoute
+  '/handwork': typeof HandworkRoute
+  '/materials': typeof MaterialsRoute
+  '/packing': typeof PackingRoute
+  '/qc': typeof QcRoute
+  '/sample-making': typeof SampleMakingRoute
+  '/samples': typeof SamplesRoute
+  '/stitching': typeof StitchingRoute
+  '/stock': typeof StockRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/approvals': typeof ApprovalsRoute
+  '/barcode': typeof BarcodeRoute
+  '/costing': typeof CostingRoute
+  '/cutting': typeof CuttingRoute
+  '/handwork': typeof HandworkRoute
+  '/materials': typeof MaterialsRoute
+  '/packing': typeof PackingRoute
+  '/qc': typeof QcRoute
+  '/sample-making': typeof SampleMakingRoute
+  '/samples': typeof SamplesRoute
+  '/stitching': typeof StitchingRoute
+  '/stock': typeof StockRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/approvals': typeof ApprovalsRoute
+  '/barcode': typeof BarcodeRoute
+  '/costing': typeof CostingRoute
+  '/cutting': typeof CuttingRoute
+  '/handwork': typeof HandworkRoute
+  '/materials': typeof MaterialsRoute
+  '/packing': typeof PackingRoute
+  '/qc': typeof QcRoute
+  '/sample-making': typeof SampleMakingRoute
+  '/samples': typeof SamplesRoute
+  '/stitching': typeof StitchingRoute
+  '/stock': typeof StockRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/approvals'
+    | '/barcode'
+    | '/costing'
+    | '/cutting'
+    | '/handwork'
+    | '/materials'
+    | '/packing'
+    | '/qc'
+    | '/sample-making'
+    | '/samples'
+    | '/stitching'
+    | '/stock'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/approvals'
+    | '/barcode'
+    | '/costing'
+    | '/cutting'
+    | '/handwork'
+    | '/materials'
+    | '/packing'
+    | '/qc'
+    | '/sample-making'
+    | '/samples'
+    | '/stitching'
+    | '/stock'
+  id:
+    | '__root__'
+    | '/'
+    | '/approvals'
+    | '/barcode'
+    | '/costing'
+    | '/cutting'
+    | '/handwork'
+    | '/materials'
+    | '/packing'
+    | '/qc'
+    | '/sample-making'
+    | '/samples'
+    | '/stitching'
+    | '/stock'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApprovalsRoute: typeof ApprovalsRoute
+  BarcodeRoute: typeof BarcodeRoute
+  CostingRoute: typeof CostingRoute
+  CuttingRoute: typeof CuttingRoute
+  HandworkRoute: typeof HandworkRoute
+  MaterialsRoute: typeof MaterialsRoute
+  PackingRoute: typeof PackingRoute
+  QcRoute: typeof QcRoute
+  SampleMakingRoute: typeof SampleMakingRoute
+  SamplesRoute: typeof SamplesRoute
+  StitchingRoute: typeof StitchingRoute
+  StockRoute: typeof StockRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/stock': {
+      id: '/stock'
+      path: '/stock'
+      fullPath: '/stock'
+      preLoaderRoute: typeof StockRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stitching': {
+      id: '/stitching'
+      path: '/stitching'
+      fullPath: '/stitching'
+      preLoaderRoute: typeof StitchingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/samples': {
+      id: '/samples'
+      path: '/samples'
+      fullPath: '/samples'
+      preLoaderRoute: typeof SamplesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sample-making': {
+      id: '/sample-making'
+      path: '/sample-making'
+      fullPath: '/sample-making'
+      preLoaderRoute: typeof SampleMakingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qc': {
+      id: '/qc'
+      path: '/qc'
+      fullPath: '/qc'
+      preLoaderRoute: typeof QcRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/packing': {
+      id: '/packing'
+      path: '/packing'
+      fullPath: '/packing'
+      preLoaderRoute: typeof PackingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/materials': {
+      id: '/materials'
+      path: '/materials'
+      fullPath: '/materials'
+      preLoaderRoute: typeof MaterialsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/handwork': {
+      id: '/handwork'
+      path: '/handwork'
+      fullPath: '/handwork'
+      preLoaderRoute: typeof HandworkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cutting': {
+      id: '/cutting'
+      path: '/cutting'
+      fullPath: '/cutting'
+      preLoaderRoute: typeof CuttingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/costing': {
+      id: '/costing'
+      path: '/costing'
+      fullPath: '/costing'
+      preLoaderRoute: typeof CostingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/barcode': {
+      id: '/barcode'
+      path: '/barcode'
+      fullPath: '/barcode'
+      preLoaderRoute: typeof BarcodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/approvals': {
+      id: '/approvals'
+      path: '/approvals'
+      fullPath: '/approvals'
+      preLoaderRoute: typeof ApprovalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,17 +297,19 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApprovalsRoute: ApprovalsRoute,
+  BarcodeRoute: BarcodeRoute,
+  CostingRoute: CostingRoute,
+  CuttingRoute: CuttingRoute,
+  HandworkRoute: HandworkRoute,
+  MaterialsRoute: MaterialsRoute,
+  PackingRoute: PackingRoute,
+  QcRoute: QcRoute,
+  SampleMakingRoute: SampleMakingRoute,
+  SamplesRoute: SamplesRoute,
+  StitchingRoute: StitchingRoute,
+  StockRoute: StockRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
