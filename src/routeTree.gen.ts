@@ -23,6 +23,8 @@ import { Route as CostingRouteImport } from './routes/costing'
 import { Route as BarcodeRouteImport } from './routes/barcode'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DesignsIndexRouteImport } from './routes/designs.index'
+import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
 
 const StockRoute = StockRouteImport.update({
   id: '/stock',
@@ -94,6 +96,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DesignsIndexRoute = DesignsIndexRouteImport.update({
+  id: '/designs/',
+  path: '/designs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DesignsCodeRoute = DesignsCodeRouteImport.update({
+  id: '/designs/$code',
+  path: '/designs/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -110,6 +122,8 @@ export interface FileRoutesByFullPath {
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
+  '/designs/$code': typeof DesignsCodeRoute
+  '/designs/': typeof DesignsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -126,6 +140,8 @@ export interface FileRoutesByTo {
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
+  '/designs/$code': typeof DesignsCodeRoute
+  '/designs': typeof DesignsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -143,6 +159,8 @@ export interface FileRoutesById {
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
+  '/designs/$code': typeof DesignsCodeRoute
+  '/designs/': typeof DesignsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -161,6 +179,8 @@ export interface FileRouteTypes {
     | '/samples'
     | '/stitching'
     | '/stock'
+    | '/designs/$code'
+    | '/designs/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -177,6 +197,8 @@ export interface FileRouteTypes {
     | '/samples'
     | '/stitching'
     | '/stock'
+    | '/designs/$code'
+    | '/designs'
   id:
     | '__root__'
     | '/'
@@ -193,6 +215,8 @@ export interface FileRouteTypes {
     | '/samples'
     | '/stitching'
     | '/stock'
+    | '/designs/$code'
+    | '/designs/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -210,6 +234,8 @@ export interface RootRouteChildren {
   SamplesRoute: typeof SamplesRoute
   StitchingRoute: typeof StitchingRoute
   StockRoute: typeof StockRoute
+  DesignsCodeRoute: typeof DesignsCodeRoute
+  DesignsIndexRoute: typeof DesignsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -312,6 +338,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/designs/': {
+      id: '/designs/'
+      path: '/designs'
+      fullPath: '/designs/'
+      preLoaderRoute: typeof DesignsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/designs/$code': {
+      id: '/designs/$code'
+      path: '/designs/$code'
+      fullPath: '/designs/$code'
+      preLoaderRoute: typeof DesignsCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -330,6 +370,8 @@ const rootRouteChildren: RootRouteChildren = {
   SamplesRoute: SamplesRoute,
   StitchingRoute: StitchingRoute,
   StockRoute: StockRoute,
+  DesignsCodeRoute: DesignsCodeRoute,
+  DesignsIndexRoute: DesignsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
