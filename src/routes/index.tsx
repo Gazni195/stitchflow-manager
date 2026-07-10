@@ -1,5 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, TrendingUp, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  ClipboardList,
+  Factory,
+  ShieldAlert,
+  Warehouse,
+  type LucideIcon,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { WORKFLOW } from "@/lib/workflow";
 
@@ -7,11 +15,55 @@ export const Route = createFileRoute("/")({
   component: Dashboard,
 });
 
-const STATS = [
-  { label: "Active Orders", value: "24", icon: TrendingUp, tone: "primary" as const },
-  { label: "In Production", value: "12", icon: Clock, tone: "warning" as const },
-  { label: "Ready Stock", value: "1,248", icon: CheckCircle2, tone: "success" as const },
-  { label: "QC Pending", value: "6", icon: AlertTriangle, tone: "destructive" as const },
+type Tone = "primary" | "info" | "warning" | "success";
+
+type Stat = {
+  label: string;
+  value: string;
+  delta: string;
+  hint: string;
+  icon: LucideIcon;
+  to: string;
+  tone: Tone;
+};
+
+const STATS: Stat[] = [
+  {
+    label: "Total Orders",
+    value: "128",
+    delta: "+12 this week",
+    hint: "Across all clients",
+    icon: ClipboardList,
+    to: "/samples",
+    tone: "primary",
+  },
+  {
+    label: "In Production",
+    value: "42",
+    delta: "8 lines active",
+    hint: "Cutting · Handwork · Stitching",
+    icon: Factory,
+    to: "/stitching",
+    tone: "info",
+  },
+  {
+    label: "QC Pending",
+    value: "17",
+    delta: "3 urgent",
+    hint: "Awaiting inspection",
+    icon: ShieldAlert,
+    to: "/qc",
+    tone: "warning",
+  },
+  {
+    label: "Ready Stock",
+    value: "1,248",
+    delta: "+96 today",
+    hint: "Packed & barcoded",
+    icon: Warehouse,
+    to: "/stock",
+    tone: "success",
+  },
 ];
 
 function Dashboard() {
@@ -19,65 +71,44 @@ function Dashboard() {
     <AppShell title="Dashboard" subtitle="Fawri Lifestyle · Production overview">
       <div className="grid gap-6">
         {/* Hero */}
-        <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-primary-glow p-6 text-primary-foreground shadow-lg sm:p-8">
-          <p className="text-xs font-semibold uppercase tracking-widest opacity-80">
-            Welcome back
-          </p>
-          <h2 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">
-            Let's move today's production forward.
-          </h2>
-          <p className="mt-2 max-w-xl text-sm opacity-90">
-            Track every garment from sample to ready stock in one simple flow.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-2">
-            <Link
-              to="/samples"
-              className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold backdrop-blur transition hover:bg-white/25"
-            >
-              Start a Sample <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              to="/stitching"
-              className="inline-flex items-center gap-2 rounded-xl bg-background px-4 py-2.5 text-sm font-semibold text-foreground shadow-sm hover:opacity-90"
-            >
-              Production Line
-            </Link>
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-primary-glow p-6 text-primary-foreground shadow-lg sm:p-8">
+          <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute -bottom-24 -left-10 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+          <div className="relative">
+            <p className="text-xs font-semibold uppercase tracking-widest opacity-80">
+              Good day
+            </p>
+            <h2 className="mt-2 max-w-xl text-2xl font-extrabold tracking-tight sm:text-3xl">
+              Here's how production is moving today.
+            </h2>
+            <p className="mt-2 max-w-xl text-sm opacity-90">
+              4 stages need your attention. Tap a card to jump straight in.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Link
+                to="/qc"
+                className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold backdrop-blur transition hover:bg-white/25"
+              >
+                Review QC <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                to="/stitching"
+                className="inline-flex items-center gap-2 rounded-xl bg-background px-4 py-2.5 text-sm font-semibold text-foreground shadow-sm hover:opacity-90"
+              >
+                Production Line
+              </Link>
+            </div>
           </div>
         </section>
 
-        {/* Stats */}
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {STATS.map((s) => {
-            const Icon = s.icon;
-            return (
-              <div
-                key={s.label}
-                className="rounded-2xl border border-border bg-card p-4 shadow-sm"
-              >
-                <div className="flex items-center justify-between">
-                  <span
-                    className={
-                      "grid h-9 w-9 place-items-center rounded-xl " +
-                      (s.tone === "primary"
-                        ? "bg-primary-soft text-primary"
-                        : s.tone === "warning"
-                          ? "bg-warning/15 text-warning"
-                          : s.tone === "success"
-                            ? "bg-success/15 text-success"
-                            : "bg-destructive/15 text-destructive")
-                    }
-                  >
-                    <Icon className="h-5 w-5" />
-                  </span>
-                </div>
-                <p className="mt-3 text-2xl font-extrabold tracking-tight">{s.value}</p>
-                <p className="text-xs font-medium text-muted-foreground">{s.label}</p>
-              </div>
-            );
-          })}
+        {/* KPI cards */}
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {STATS.map((s) => (
+            <StatCard key={s.label} stat={s} />
+          ))}
         </section>
 
-        {/* Workflow */}
+        {/* Workflow shortcuts */}
         <section>
           <div className="mb-3 flex items-end justify-between">
             <div>
@@ -122,5 +153,54 @@ function Dashboard() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function StatCard({ stat }: { stat: Stat }) {
+  const Icon = stat.icon;
+  // All four cards use lavender gradients — varied depth/tint per tone so
+  // they stay a cohesive brand family without looking identical.
+  const gradient =
+    stat.tone === "primary"
+      ? "from-[oklch(0.55_0.24_293)] via-[oklch(0.62_0.22_293)] to-[oklch(0.78_0.14_300)]"
+      : stat.tone === "info"
+        ? "from-[oklch(0.48_0.22_285)] via-[oklch(0.58_0.22_290)] to-[oklch(0.72_0.16_298)]"
+        : stat.tone === "warning"
+          ? "from-[oklch(0.60_0.22_310)] via-[oklch(0.68_0.20_305)] to-[oklch(0.82_0.14_320)]"
+          : "from-[oklch(0.52_0.20_280)] via-[oklch(0.62_0.20_288)] to-[oklch(0.80_0.14_295)]";
+
+  return (
+    <Link
+      to={stat.to}
+      className={
+        "group relative overflow-hidden rounded-3xl bg-gradient-to-br p-5 text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-0.5 hover:shadow-xl " +
+        gradient
+      }
+    >
+      <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/15 blur-2xl transition group-hover:bg-white/25" />
+      <div className="absolute -bottom-10 -left-6 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+
+      <div className="relative flex items-start justify-between">
+        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/20 backdrop-blur">
+          <Icon className="h-5 w-5" />
+        </div>
+        <ArrowUpRight className="h-5 w-5 opacity-70 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:opacity-100" />
+      </div>
+
+      <div className="relative mt-6">
+        <p className="text-xs font-semibold uppercase tracking-widest opacity-85">
+          {stat.label}
+        </p>
+        <p className="mt-1 text-4xl font-extrabold leading-none tracking-tight">
+          {stat.value}
+        </p>
+        <div className="mt-3 flex items-center justify-between text-[11px] font-medium">
+          <span className="rounded-full bg-white/20 px-2 py-0.5 backdrop-blur">
+            {stat.delta}
+          </span>
+          <span className="truncate pl-2 opacity-80">{stat.hint}</span>
+        </div>
+      </div>
+    </Link>
   );
 }
