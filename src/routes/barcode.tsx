@@ -35,8 +35,10 @@ function BarcodePage() {
     });
   }, [sampleCode]);
 
+  const chrome = useStageChrome(selectedCode, "barcode");
+
   return (
-    <AppShell title="Barcode" subtitle={`Step 11 of ${WORKFLOW.length} · Finishing`}>
+    <AppShell title="Barcode" subtitle={chrome.subtitle}>
       <div className="grid gap-5">
         <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
           <SectionHeader icon={<Search className="h-4 w-4" />} title="Production Order" />
@@ -123,15 +125,11 @@ function BarcodePage() {
             className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-3.5 text-sm font-bold text-foreground shadow-sm hover:bg-accent">
             <Printer className="h-4 w-4" /> Print
           </button>
-          <Link to="/stock" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-success px-4 py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90">
-            Continue to Ready Stock <ArrowRight className="h-4 w-4" />
-          </Link>
+          <NextStepButton next={chrome.next} />
         </section>
 
-        <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <SectionHeader icon={<FileText className="h-4 w-4" />} title="Production Timeline" />
-          <ProductionTimeline steps={buildTimeline("Barcode")} currentIcon={QrCode} />
-        </section>
+        <StageTimelineCard chrome={chrome} currentIcon={QrCode} />
+
       </div>
     </AppShell>
   );
