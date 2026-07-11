@@ -73,7 +73,10 @@ function BulkCuttingPage() {
   const [cuttingDate, setCuttingDate] = useState("2026-07-11");
   const [master, setMaster] = useState("Ramesh K.");
   const [machine, setMachine] = useState("Auto-Cut #3");
-  const [parts, setParts] = useState<Part[]>(INITIAL_PARTS);
+  const initialOrder = ORDERS.find((o) => o.code === "MG001") ?? ORDERS[0];
+  const [parts, setParts] = useState<Part[]>(() =>
+    buildInitialParts(initialOrder.code, initialOrder.quantity),
+  );
   const [showAdd, setShowAdd] = useState(false);
   const [customPart, setCustomPart] = useState("");
 
@@ -98,21 +101,31 @@ function BulkCuttingPage() {
   const balance = Math.max(0, totals.planned - totals.cut);
   const pct = totals.planned ? Math.round((totals.cut / totals.planned) * 100) : 0;
 
+  const partPresets = getOrderParts(selectedCode);
+
+  function selectOrder(code: string) {
+    setSelectedCode(code);
+    const o = ORDERS.find((x) => x.code === code);
+    if (o) setParts(buildInitialParts(o.code, o.quantity));
+  }
   function updatePart(id: string, patch: Partial<Part>) {
     setParts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   }
   function removePart(id: string) {
     setParts((prev) => prev.filter((p) => p.id !== id));
   }
-  function addPart(name: string) {
-    if (!name.trim()) return;
+  function addPart(name: string, fabric?: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const resolvedFabric = fabric ?? partPresets.find((p) => p.name === trimmed)?.fabric ?? "—";
     setParts((prev) => [
       ...prev,
-      { id: `p${Date.now()}`, name: name.trim(), planned: 0, cut: 0, remarks: "" },
+      { id: `p${Date.now()}`, name: trimmed, fabric: resolvedFabric, planned: 0, cut: 0, remarks: "" },
     ]);
     setShowAdd(false);
     setCustomPart("");
   }
+
 
   const chrome = useStageChrome(selectedCode, "cutting");
 
