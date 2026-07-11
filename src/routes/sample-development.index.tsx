@@ -6,7 +6,7 @@ import { useRequireAuth } from "@/hooks/use-auth";
 import { useDesigns } from "@/lib/api/designs";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/designs";
 
-export const Route = createFileRoute("/sample-development")({
+export const Route = createFileRoute("/sample-development/")({
   head: () => ({
     meta: [
       { title: "Sample Development — Fawri Lifestyle" },
