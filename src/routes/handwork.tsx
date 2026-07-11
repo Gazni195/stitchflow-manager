@@ -103,9 +103,10 @@ function BulkHandWorkPage() {
   const pending = Math.max(0, issued - completed - rework);
   const balance = Math.max(0, issued - completed);
   const pct = issued ? Math.min(100, Math.round((completed / issued) * 100)) : 0;
+  const chrome = useStageChrome(selectedCode, "handwork");
 
   return (
-    <AppShell title="Bulk Hand Work" subtitle={`Step 7 of ${WORKFLOW.length} · Bulk`}>
+    <AppShell title="Bulk Hand Work" subtitle={chrome.subtitle}>
       <div className="grid gap-5">
         {/* 1. Select Production Order */}
         <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
@@ -371,69 +372,11 @@ function BulkHandWorkPage() {
           <button className="inline-flex items-center justify-center gap-2 rounded-2xl bg-success px-4 py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90">
             <CheckCircle2 className="h-4 w-4" /> Mark as Completed
           </button>
-          <Link
-            to="/stitching"
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
-          >
-            Continue to Stitching <ArrowRight className="h-4 w-4" />
-          </Link>
+          <NextStepButton next={chrome.next} />
         </section>
 
-        {/* 8. Timeline */}
-        <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <SectionHeader icon={<CheckCircle2 className="h-4 w-4" />} title="Production Timeline" />
-          <ol className="mt-4 grid gap-2">
-            {TIMELINE.map((step) => {
-              const done = step.state === "done";
-              const current = step.state === "current";
-              return (
-                <li
-                  key={step.label}
-                  className={cn(
-                    "flex items-center gap-3 rounded-2xl border p-3",
-                    current
-                      ? "border-primary bg-primary-soft"
-                      : done
-                        ? "border-success/30 bg-success/5"
-                        : "border-border bg-background",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "grid h-9 w-9 shrink-0 place-items-center rounded-xl",
-                      done
-                        ? "bg-success text-white"
-                        : current
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    {done ? (
-                      <Check className="h-4 w-4" />
-                    ) : current ? (
-                      <Hand className="h-4 w-4" />
-                    ) : (
-                      <Circle className="h-4 w-4" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className={cn("text-sm font-semibold", current && "text-primary")}>
-                      {step.label}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {done ? "Completed" : current ? "In progress" : "Pending"}
-                    </p>
-                  </div>
-                  {current && (
-                    <span className="rounded-full bg-primary px-2.5 py-1 text-[10px] font-bold uppercase text-primary-foreground">
-                      Current
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-        </section>
+        {/* 8. Timeline (from design's configured workflow) */}
+        <StageTimelineCard chrome={chrome} currentIcon={Hand} />
       </div>
     </AppShell>
   );
