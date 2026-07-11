@@ -8,12 +8,16 @@ export type DesignStatus =
   | "in_production"
   | "completed";
 
+export type DesignPart = { id: string; name: string };
+
 export type Design = {
   id: string;
   code: string;
   name: string;
   customer: string;
   category: string;
+  productType: string;
+  parts: DesignPart[];
   fabric: string;
   color: string;
   orderQuantity: number;
