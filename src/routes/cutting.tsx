@@ -264,15 +264,16 @@ function BulkCuttingPage() {
             <div className="mt-3 rounded-2xl border border-primary/30 bg-primary-soft/60 p-3">
               <p className="text-xs font-semibold text-accent-foreground">Choose a part</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {PART_PRESETS.map((name) => (
+                {partPresets.map((p) => (
                   <button
-                    key={name}
-                    onClick={() => addPart(name)}
+                    key={p.name}
+                    onClick={() => addPart(p.name, p.fabric)}
                     className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium hover:border-primary hover:text-primary"
                   >
-                    {name}
+                    {p.name} · {p.fabric}
                   </button>
                 ))}
+
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <input
