@@ -93,6 +93,8 @@ export type CreateDesignInput = {
   name: string;
   customer: string;
   category: string;
+  productType: string;
+  parts: DesignPart[];
   fabric: string;
   color: string;
   orderQuantity: number;
@@ -125,6 +127,8 @@ export function useCreateDesign() {
           name: input.name,
           customer: input.customer,
           category: input.category,
+          product_type: input.productType,
+          parts: input.parts.map((p) => ({ id: p.id, name: p.name })),
           fabric: input.fabric,
           color: input.color,
           order_quantity: input.orderQuantity,
