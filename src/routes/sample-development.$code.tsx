@@ -77,9 +77,28 @@ function DesignSamplePage() {
 
 function DesignSample({ design }: { design: Design }) {
   const [tab, setTab] = useState<TabId>("status");
-  const { data: workflows = [] } = useWorkflows(design.id);
-  const sample = workflows.find((w) => w.kind === "sample");
-  const bulk = workflows.find((w) => w.kind === "bulk");
+  const { data: workflows, isLoading: wfLoading } = useWorkflows(design.id);
+  const sample = workflows?.find((w) => w.kind === "sample");
+  const bulk = workflows?.find((w) => w.kind === "bulk");
+  const qc = useQueryClient();
+  const creatingRef = useRef(false);
+
+  // Auto-create a sample workflow when the design has none yet.
+  useEffect(() => {
+    if (wfLoading || !workflows) return;
+    if (sample || bulk) return;
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    (async () => {
+      const { error } = await supabase
+        .from("design_workflows")
+        .insert({ design_id: design.id, kind: "sample", locked: false });
+      if (!error) {
+        qc.invalidateQueries({ queryKey: ["workflows", design.id] });
+      }
+      creatingRef.current = false;
+    })();
+  }, [wfLoading, workflows, sample, bulk, design.id, qc]);
 
   const stage: "In Development" | "Ready for Review" | "Approved" = bulk
     ? "Approved"
