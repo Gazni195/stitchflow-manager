@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
   Search,
@@ -12,15 +12,13 @@ import {
   CalendarCheck,
   Save,
   CheckCircle2,
-  ArrowRight,
   Check,
-  Circle,
   FileText,
   AlertCircle,
   type LucideIcon,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { WORKFLOW } from "@/lib/workflow";
+import { useStageChrome, NextStepButton, StageTimelineCard } from "@/components/production/stage-chrome";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/handwork")({ component: BulkHandWorkPage });
