@@ -369,8 +369,9 @@ function BulkHandWorkPage() {
               </p>
               <p className="mt-1 text-2xl font-extrabold">{pct}% Complete</p>
               <p className="text-xs opacity-80">
-                {part} · {WORK_TYPES.find((w) => w.key === workType)?.label}
+                {part} · {partFabric} · {WORK_TYPES.find((w) => w.key === workType)?.label}
               </p>
+
             </div>
             <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white/15 backdrop-blur">
               <Hand className="h-7 w-7" />
