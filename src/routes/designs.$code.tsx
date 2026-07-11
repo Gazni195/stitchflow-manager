@@ -46,14 +46,19 @@ export const Route = createFileRoute("/designs/$code")({
 
 function DesignDetails() {
   const { design } = Route.useLoaderData() as { design: Design };
+  const workflow = useDesignWorkflow(design.code);
   return (
     <AppShell
       title={design.name}
       subtitle={`${design.code} · ${design.customer}`}
       action={
-        <button className="hidden items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 sm:inline-flex">
-          <Pencil className="h-4 w-4" /> Edit
-        </button>
+        <Link
+          to="/designs/$code/workflow"
+          params={{ code: design.code }}
+          className="hidden items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 sm:inline-flex"
+        >
+          <Settings2 className="h-4 w-4" /> Configure Workflow
+        </Link>
       }
     >
       <div className="grid gap-5">
