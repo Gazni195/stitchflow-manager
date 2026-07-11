@@ -119,7 +119,7 @@ function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => 
   }
 
   const partsValid = d.parts.every(
-    (p) => p.name.trim() && p.fabric.trim() && p.color.trim() && p.quantity > 0,
+    (p) => p.name.trim() && p.fabric.trim() && p.color.trim(),
   );
   const valid =
     d.code.trim() &&
@@ -145,7 +145,6 @@ function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => 
           name: p.name.trim(),
           fabric: p.fabric.trim(),
           color: p.color.trim(),
-          quantity: p.quantity,
         })),
         color: d.color.trim(),
         orderQuantity: d.orderQuantity,
