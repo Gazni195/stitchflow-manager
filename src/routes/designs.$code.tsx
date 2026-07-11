@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   CalendarDays,
   Factory,
+  FlaskConical,
   Layers,
   Loader2,
   Palette,
@@ -91,9 +92,16 @@ function DesignDetails({ design }: { design: Design }) {
       action={
         <div className="flex items-center gap-2">
           <Link
+            to="/sample-development/$code"
+            params={{ code: design.code }}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary to-primary-glow px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:brightness-105"
+          >
+            <FlaskConical className="h-4 w-4" /> Start Sample Development
+          </Link>
+          <Link
             to="/designs/$code/workflow"
             params={{ code: design.code }}
-            className="hidden items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 sm:inline-flex"
+            className="hidden items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-accent sm:inline-flex"
           >
             <Settings2 className="h-4 w-4" /> Configure Workflow
           </Link>

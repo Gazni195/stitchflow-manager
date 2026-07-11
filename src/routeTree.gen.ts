@@ -25,6 +25,7 @@ import { Route as BarcodeRouteImport } from './routes/barcode'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
+import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
 import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
 import { Route as DesignsCodeWorkflowRouteImport } from './routes/designs.$code.workflow'
 
@@ -108,6 +109,11 @@ const DesignsIndexRoute = DesignsIndexRouteImport.update({
   path: '/designs/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SampleDevelopmentCodeRoute = SampleDevelopmentCodeRouteImport.update({
+  id: '/$code',
+  path: '/$code',
+  getParentRoute: () => SampleDevelopmentRoute,
+} as any)
 const DesignsCodeRoute = DesignsCodeRouteImport.update({
   id: '/designs/$code',
   path: '/designs/$code',
@@ -130,12 +136,13 @@ export interface FileRoutesByFullPath {
   '/materials': typeof MaterialsRoute
   '/packing': typeof PackingRoute
   '/qc': typeof QcRoute
-  '/sample-development': typeof SampleDevelopmentRoute
+  '/sample-development': typeof SampleDevelopmentRouteWithChildren
   '/sample-making': typeof SampleMakingRoute
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
@@ -150,12 +157,13 @@ export interface FileRoutesByTo {
   '/materials': typeof MaterialsRoute
   '/packing': typeof PackingRoute
   '/qc': typeof QcRoute
-  '/sample-development': typeof SampleDevelopmentRoute
+  '/sample-development': typeof SampleDevelopmentRouteWithChildren
   '/sample-making': typeof SampleMakingRoute
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs': typeof DesignsIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
@@ -171,12 +179,13 @@ export interface FileRoutesById {
   '/materials': typeof MaterialsRoute
   '/packing': typeof PackingRoute
   '/qc': typeof QcRoute
-  '/sample-development': typeof SampleDevelopmentRoute
+  '/sample-development': typeof SampleDevelopmentRouteWithChildren
   '/sample-making': typeof SampleMakingRoute
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
@@ -199,6 +208,7 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/sample-development/$code'
     | '/designs/'
     | '/designs/$code/workflow'
   fileRoutesByTo: FileRoutesByTo
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/sample-development/$code'
     | '/designs'
     | '/designs/$code/workflow'
   id:
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/sample-development/$code'
     | '/designs/'
     | '/designs/$code/workflow'
   fileRoutesById: FileRoutesById
@@ -254,7 +266,7 @@ export interface RootRouteChildren {
   MaterialsRoute: typeof MaterialsRoute
   PackingRoute: typeof PackingRoute
   QcRoute: typeof QcRoute
-  SampleDevelopmentRoute: typeof SampleDevelopmentRoute
+  SampleDevelopmentRoute: typeof SampleDevelopmentRouteWithChildren
   SampleMakingRoute: typeof SampleMakingRoute
   SamplesRoute: typeof SamplesRoute
   StitchingRoute: typeof StitchingRoute
@@ -377,6 +389,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sample-development/$code': {
+      id: '/sample-development/$code'
+      path: '/$code'
+      fullPath: '/sample-development/$code'
+      preLoaderRoute: typeof SampleDevelopmentCodeRouteImport
+      parentRoute: typeof SampleDevelopmentRoute
+    }
     '/designs/$code': {
       id: '/designs/$code'
       path: '/designs/$code'
@@ -393,6 +412,17 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface SampleDevelopmentRouteChildren {
+  SampleDevelopmentCodeRoute: typeof SampleDevelopmentCodeRoute
+}
+
+const SampleDevelopmentRouteChildren: SampleDevelopmentRouteChildren = {
+  SampleDevelopmentCodeRoute: SampleDevelopmentCodeRoute,
+}
+
+const SampleDevelopmentRouteWithChildren =
+  SampleDevelopmentRoute._addFileChildren(SampleDevelopmentRouteChildren)
 
 interface DesignsCodeRouteChildren {
   DesignsCodeWorkflowRoute: typeof DesignsCodeWorkflowRoute
@@ -417,7 +447,7 @@ const rootRouteChildren: RootRouteChildren = {
   MaterialsRoute: MaterialsRoute,
   PackingRoute: PackingRoute,
   QcRoute: QcRoute,
-  SampleDevelopmentRoute: SampleDevelopmentRoute,
+  SampleDevelopmentRoute: SampleDevelopmentRouteWithChildren,
   SampleMakingRoute: SampleMakingRoute,
   SamplesRoute: SamplesRoute,
   StitchingRoute: StitchingRoute,
