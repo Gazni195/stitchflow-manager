@@ -60,6 +60,7 @@ export type Database = {
           id: string
           image_path: string | null
           name: string
+          notes: string
           order_quantity: number
           parts: Json
           product_type: string
@@ -76,6 +77,7 @@ export type Database = {
           id?: string
           image_path?: string | null
           name: string
+          notes?: string
           order_quantity?: number
           parts?: Json
           product_type?: string
@@ -92,6 +94,7 @@ export type Database = {
           id?: string
           image_path?: string | null
           name?: string
+          notes?: string
           order_quantity?: number
           parts?: Json
           product_type?: string
