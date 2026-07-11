@@ -129,39 +129,9 @@ function DesignSample({ design }: { design: Design }) {
           <ArrowLeft className="h-4 w-4" /> All samples
         </Link>
 
-        {/* Auto-filled design summary */}
-        <section className="grid gap-4 overflow-hidden rounded-3xl border border-border bg-card p-4 shadow-sm sm:p-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <div className="aspect-[4/3] overflow-hidden rounded-2xl bg-primary-soft">
-            <DesignImage path={design.imagePath} alt={design.name} />
-          </div>
-          <div className="grid gap-3">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-primary">
-                Auto-filled from design
-              </p>
-              <h2 className="mt-1 text-xl font-extrabold tracking-tight sm:text-2xl">
-                {design.name}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                For <span className="font-semibold text-foreground">{design.customer}</span>
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <Fact label="Order Qty" value={design.orderQuantity.toLocaleString()} />
-              <Fact label="Color" value={design.color || "—"} />
-              <Fact label="Category" value={design.category || "—"} />
-              <Fact label="Parts" value={String(design.parts.length)} />
-            </div>
-            <span
-              className={
-                "w-fit rounded-full px-3 py-1 text-xs font-semibold " +
-                STATUS_TONE[design.status]
-              }
-            >
-              Design: {STATUS_LABEL[design.status]}
-            </span>
-          </div>
-        </section>
+        {/* Mockup-style summary: image hero + facts + workflow progress dots */}
+        <SampleHeader design={design} stage={stage} />
+
 
         {/* Tabs */}
         <section>
