@@ -92,9 +92,12 @@ function BulkHandWorkPage() {
   }, [query]);
 
   const order = ORDERS.find((o) => o.code === selectedCode) ?? ORDERS[0];
+  const orderParts = getOrderParts(selectedCode);
+  const partFabric = part === "Custom" ? "—" : getPartFabric(selectedCode, part);
 
   const pending = Math.max(0, issued - completed - rework);
   const balance = Math.max(0, issued - completed);
+
   const pct = issued ? Math.min(100, Math.round((completed / issued) * 100)) : 0;
   const chrome = useStageChrome(selectedCode, "handwork");
 
