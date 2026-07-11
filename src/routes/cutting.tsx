@@ -304,11 +304,17 @@ function BulkCuttingPage() {
                         <Scissors className="h-4 w-4" />
                       </div>
                       <div>
-                        <p className="text-sm font-bold">{p.name}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-bold">{p.name}</p>
+                          <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
+                            {p.fabric}
+                          </span>
+                        </div>
                         <p className="text-[11px] text-muted-foreground">
                           {pp}% complete · Balance {bal}
                         </p>
                       </div>
+
                     </div>
                     <button
                       aria-label="Remove"
