@@ -36,7 +36,10 @@ function BulkStitchingPage() {
   const balance = Math.max(0, received - stitched);
   const pct = received ? Math.min(100, Math.round((stitched / received) * 100)) : 0;
   const order = SAMPLE_ORDERS.find((o) => o.code === selectedCode) ?? SAMPLE_ORDERS[0];
+  const orderParts = getOrderParts(selectedCode);
+  const partFabric = part === "Custom" ? "—" : getPartFabric(selectedCode, part);
   const chrome = useStageChrome(selectedCode, "stitching");
+
 
   return (
     <AppShell title="Bulk Stitching" subtitle={chrome.subtitle}>
