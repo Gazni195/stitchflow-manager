@@ -601,9 +601,119 @@ function ApprovalPanel({ design }: { design: Design }) {
 
 /* ---------- Shared ---------- */
 
+function SampleHeader({
+  design,
+  stage,
+}: {
+  design: Design;
+  stage: "In Development" | "Ready for Review" | "Approved";
+}) {
+  // Mock financial + designer facts for UI-first pass.
+  const targetCostPerPc = 1250;
+  const estMargin = "25%";
+  const designer = "Rifa";
+  const createdOn = new Date(design.createdAt).toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  // 7-step workflow dots (per mockup). Mark step 3 as current when In Development.
+  const total = 7;
+  const currentIdx =
+    stage === "Approved" ? total : stage === "Ready for Review" ? 5 : 3;
+
+  return (
+    <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+      <div className="relative aspect-[16/10] w-full bg-primary-soft">
+        <DesignImage path={design.imagePath} alt={design.name} />
+        <span
+          className={
+            "absolute right-3 top-3 rounded-full px-3 py-1 text-[11px] font-bold shadow-sm " +
+            STATUS_TONE[design.status]
+          }
+        >
+          {STATUS_LABEL[design.status]}
+        </span>
+      </div>
+
+      <div className="grid gap-4 p-4 sm:p-5">
+        <div>
+          <p className="text-[11px] font-bold tracking-widest text-muted-foreground">
+            {design.code}
+          </p>
+          <h2 className="mt-0.5 text-xl font-extrabold tracking-tight sm:text-2xl">
+            {design.name}
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <Fact
+            label="Order Qty (Planned)"
+            value={`${design.orderQuantity.toLocaleString()} Pcs`}
+          />
+          <Fact label="Category" value={design.category || "—"} />
+          <Fact label="Target Cost (Per Pc)" value={`₹${targetCostPerPc.toLocaleString()}`} />
+          <Fact label="Est. Margin" value={estMargin} />
+          <Fact label="Created On" value={createdOn} />
+          <Fact label="Designer" value={designer} />
+        </div>
+
+        <div className="rounded-2xl border border-border bg-background p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold">Workflow Progress</p>
+            <p className="text-[11px] font-semibold text-muted-foreground">
+              Step {Math.min(currentIdx, total)} of {total}
+            </p>
+          </div>
+          <ol className="mt-3 flex items-center gap-1.5">
+            {Array.from({ length: total }, (_, i) => i + 1).map((n) => {
+              const done = n < currentIdx;
+              const current = n === currentIdx;
+              return (
+                <li key={n} className="flex flex-1 items-center gap-1.5">
+                  <span
+                    className={
+                      "grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-bold transition " +
+                      (done
+                        ? "bg-primary text-primary-foreground"
+                        : current
+                          ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
+                          : "bg-muted text-muted-foreground")
+                    }
+                  >
+                    {done ? "✓" : n}
+                  </span>
+                  {n < total && (
+                    <span
+                      className={
+                        "h-0.5 flex-1 rounded-full " +
+                        (n < currentIdx ? "bg-primary" : "bg-muted")
+                      }
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+
+        <Link
+          to="/designs/$code/workflow"
+          params={{ code: design.code }}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+        >
+          View Workflow
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-border bg-background p-3">
+
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
