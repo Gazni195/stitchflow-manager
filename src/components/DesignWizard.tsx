@@ -143,10 +143,17 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
 
   const step0Valid = !!d.category;
   const partsValid =
-    d.parts.length > 0 && d.parts.every((p) => p.name.trim().length > 0);
+    d.parts.length > 0 &&
+    d.parts.every(
+      (p) =>
+        p.name.trim().length > 0 &&
+        p.fabric.trim().length > 0 &&
+        p.color.trim().length > 0 &&
+        p.quantity > 0,
+    );
   const step1Valid = !!d.productType && partsValid;
   const step2Valid = d.code.trim() && d.name.trim() && d.customer.trim();
-  const step3Valid = d.fabric.trim() && d.color.trim() && d.orderQuantity > 0;
+  const step3Valid = d.color.trim() && d.orderQuantity > 0;
 
   const stepTitle = [
     "Category",
