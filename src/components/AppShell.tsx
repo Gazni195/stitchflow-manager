@@ -92,6 +92,16 @@ export function AppShell({
               <div className="ml-1 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-primary-glow text-sm font-bold text-primary-foreground shadow-sm">
                 FL
               </div>
+              <button
+                aria-label="Sign out"
+                onClick={async () => {
+                  const { supabase } = await import("@/integrations/supabase/client");
+                  await supabase.auth.signOut();
+                }}
+                className="hidden rounded-xl px-2 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground sm:inline-flex"
+              >
+                Sign out
+              </button>
             </div>
           </div>
         </header>
