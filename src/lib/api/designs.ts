@@ -14,6 +14,7 @@ type DbDesign = {
   color: string;
   order_quantity: number;
   image_path: string | null;
+  notes: string | null;
   status: DesignStatus;
   created_by: string;
   created_at: string;
