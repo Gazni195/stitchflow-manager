@@ -43,6 +43,7 @@ function QualityCheckPage() {
   const [rows, setRows] = useState<QCRow[]>(INITIAL);
 
   const order = SAMPLE_ORDERS.find((o) => o.code === selectedCode) ?? SAMPLE_ORDERS[0];
+  const orderParts = getOrderParts(selectedCode);
   const totalChecked = rows.reduce((s, r) => s + r.checked, 0);
   const totalPassed = rows.reduce((s, r) => s + r.passed, 0);
   const totalRejected = rows.reduce((s, r) => s + r.rejected, 0);
@@ -56,9 +57,10 @@ function QualityCheckPage() {
   const add = () =>
     setRows((rs) => [
       ...rs,
-      { id: `r${Date.now()}`, part: PARTS[0], checked: 0, passed: 0, rejected: 0, reason: "Stitch Issue", decision: "Pass" },
+      { id: `r${Date.now()}`, part: orderParts[0]?.name ?? "Front Body", checked: 0, passed: 0, rejected: 0, reason: "Stitch Issue", decision: "Pass" },
     ]);
   const chrome = useStageChrome(selectedCode, "qc");
+
 
   return (
     <AppShell title="Quality Check" subtitle={chrome.subtitle}>
