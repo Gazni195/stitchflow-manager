@@ -60,6 +60,7 @@ function mapDesign(r: DbDesign): Design {
     color: r.color,
     orderQuantity: r.order_quantity,
     imagePath: r.image_path,
+    notes: r.notes ?? "",
     status: r.status,
     createdBy: r.created_by,
     createdAt: r.created_at,
