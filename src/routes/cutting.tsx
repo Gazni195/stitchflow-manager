@@ -158,7 +158,7 @@ function BulkCuttingPage() {
               return (
                 <button
                   key={o.code}
-                  onClick={() => setSelectedCode(o.code)}
+                  onClick={() => selectOrder(o.code)}
                   className={cn(
                     "flex items-center gap-3 rounded-2xl border p-3 text-left transition",
                     active
