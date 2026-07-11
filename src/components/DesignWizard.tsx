@@ -567,3 +567,33 @@ function IconBtn({
     </button>
   );
 }
+
+function PartField({
+  label,
+  placeholder,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  placeholder?: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: "text" | "number";
+}) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        {label}
+      </span>
+      <input
+        type={type}
+        min={type === "number" ? 0 : undefined}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:border-primary"
+      />
+    </label>
+  );
+}
