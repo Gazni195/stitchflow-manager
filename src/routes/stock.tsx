@@ -4,11 +4,11 @@ import {
   Search, Warehouse, Calendar, Save, CheckCircle2, RefreshCw, FileText, MapPin,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { WORKFLOW } from "@/lib/workflow";
 import {
   SectionHeader, MiniStat, Field, SelectField, NumField, BigStat,
-  ProductionTimeline, OrderPicker, SAMPLE_ORDERS, buildTimeline,
+  OrderPicker, SAMPLE_ORDERS,
 } from "@/components/production/ui";
+import { useStageChrome, StageTimelineCard } from "@/components/production/stage-chrome";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/stock")({ component: ReadyStockPage });
@@ -36,8 +36,10 @@ function ReadyStockPage() {
     setTimeout(() => setSyncing(false), 1200);
   };
 
+  const chrome = useStageChrome(selectedCode, "ready-stock");
+
   return (
-    <AppShell title="Ready Stock" subtitle={`Step 12 of ${WORKFLOW.length} · Finishing`}>
+    <AppShell title="Ready Stock" subtitle={chrome.subtitle}>
       <div className="grid gap-5">
         <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
           <SectionHeader icon={<Search className="h-4 w-4" />} title="Production Order" />
@@ -121,10 +123,8 @@ function ReadyStockPage() {
           ERPNext sync is a placeholder — API integration coming soon.
         </p>
 
-        <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <SectionHeader icon={<CheckCircle2 className="h-4 w-4" />} title="Production Timeline" />
-          <ProductionTimeline steps={buildTimeline("Ready Stock")} currentIcon={Warehouse} />
-        </section>
+        <StageTimelineCard chrome={chrome} currentIcon={Warehouse} />
+
       </div>
     </AppShell>
   );

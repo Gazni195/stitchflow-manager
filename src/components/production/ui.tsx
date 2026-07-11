@@ -1,6 +1,9 @@
-import { Check, Circle, type LucideIcon } from "lucide-react";
+import { Check, Circle, SkipForward, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import type { DesignWorkflow } from "@/lib/design-workflow";
+import { stepLabel } from "@/lib/design-workflow";
+import { getOperation } from "@/lib/operations";
 
 export function SectionHeader({
   icon,
@@ -199,7 +202,8 @@ export function BigStat({ label, value }: { label: string; value: number | strin
 
 export type TimelineStep = {
   label: string;
-  state: "done" | "current" | "pending";
+  state: "done" | "current" | "pending" | "skipped";
+  key?: string;
 };
 
 export function ProductionTimeline({
@@ -211,19 +215,22 @@ export function ProductionTimeline({
 }) {
   return (
     <ol className="mt-4 grid gap-2">
-      {steps.map((step) => {
+      {steps.map((step, i) => {
         const done = step.state === "done";
         const current = step.state === "current";
+        const skipped = step.state === "skipped";
         return (
           <li
-            key={step.label}
+            key={step.key ?? `${step.label}-${i}`}
             className={cn(
               "flex items-center gap-3 rounded-2xl border p-3",
               current
                 ? "border-primary bg-primary-soft"
                 : done
                   ? "border-success/30 bg-success/5"
-                  : "border-border bg-background",
+                  : skipped
+                    ? "border-dashed border-border bg-muted/40 opacity-60"
+                    : "border-border bg-background",
             )}
           >
             <div
@@ -233,23 +240,27 @@ export function ProductionTimeline({
                   ? "bg-success text-white"
                   : current
                     ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground",
+                    : skipped
+                      ? "bg-muted text-muted-foreground"
+                      : "bg-muted text-muted-foreground",
               )}
             >
               {done ? (
                 <Check className="h-4 w-4" />
               ) : current && CurrentIcon ? (
                 <CurrentIcon className="h-4 w-4" />
+              ) : skipped ? (
+                <SkipForward className="h-4 w-4" />
               ) : (
                 <Circle className="h-4 w-4" />
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className={cn("text-sm font-semibold", current && "text-primary")}>
+              <p className={cn("text-sm font-semibold", current && "text-primary", skipped && "line-through")}>
                 {step.label}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                {done ? "Completed" : current ? "In progress" : "Pending"}
+                {done ? "Completed" : current ? "In progress" : skipped ? "Skipped" : "Pending"}
               </p>
             </div>
             {current && (
@@ -263,6 +274,31 @@ export function ProductionTimeline({
     </ol>
   );
 }
+
+export function buildTimelineFromWorkflow(
+  wf: DesignWorkflow,
+  currentStepId?: string,
+): TimelineStep[] {
+  return wf.steps.map((s) => {
+    const isCurrent = currentStepId
+      ? s.stepId === currentStepId
+      : s.status === "in-progress";
+    const state: TimelineStep["state"] = isCurrent
+      ? "current"
+      : s.status === "completed"
+        ? "done"
+        : s.status === "skipped"
+          ? "skipped"
+          : "pending";
+    return {
+      key: s.stepId,
+      label: `${s.sequence}. ${stepLabel(s, wf)}`,
+      state,
+    };
+  });
+}
+// Keep `getOperation` importable for consumers even if unused here.
+void getOperation;
 
 export function OrderPicker<T extends { code: string; customer: string; quantity: number; progress: number }>({
   orders,

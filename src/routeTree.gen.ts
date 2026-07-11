@@ -26,6 +26,7 @@ import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
+import { Route as DesignsCodeWorkflowRouteImport } from './routes/designs.$code.workflow'
 
 const StockRoute = StockRouteImport.update({
   id: '/stock',
@@ -112,6 +113,11 @@ const DesignsCodeRoute = DesignsCodeRouteImport.update({
   path: '/designs/$code',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DesignsCodeWorkflowRoute = DesignsCodeWorkflowRouteImport.update({
+  id: '/workflow',
+  path: '/workflow',
+  getParentRoute: () => DesignsCodeRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -129,8 +135,9 @@ export interface FileRoutesByFullPath {
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
-  '/designs/$code': typeof DesignsCodeRoute
+  '/designs/$code': typeof DesignsCodeRouteWithChildren
   '/designs/': typeof DesignsIndexRoute
+  '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -148,8 +155,9 @@ export interface FileRoutesByTo {
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
-  '/designs/$code': typeof DesignsCodeRoute
+  '/designs/$code': typeof DesignsCodeRouteWithChildren
   '/designs': typeof DesignsIndexRoute
+  '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -168,8 +176,9 @@ export interface FileRoutesById {
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
-  '/designs/$code': typeof DesignsCodeRoute
+  '/designs/$code': typeof DesignsCodeRouteWithChildren
   '/designs/': typeof DesignsIndexRoute
+  '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -191,6 +200,7 @@ export interface FileRouteTypes {
     | '/stock'
     | '/designs/$code'
     | '/designs/'
+    | '/designs/$code/workflow'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -210,6 +220,7 @@ export interface FileRouteTypes {
     | '/stock'
     | '/designs/$code'
     | '/designs'
+    | '/designs/$code/workflow'
   id:
     | '__root__'
     | '/'
@@ -229,6 +240,7 @@ export interface FileRouteTypes {
     | '/stock'
     | '/designs/$code'
     | '/designs/'
+    | '/designs/$code/workflow'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -247,7 +259,7 @@ export interface RootRouteChildren {
   SamplesRoute: typeof SamplesRoute
   StitchingRoute: typeof StitchingRoute
   StockRoute: typeof StockRoute
-  DesignsCodeRoute: typeof DesignsCodeRoute
+  DesignsCodeRoute: typeof DesignsCodeRouteWithChildren
   DesignsIndexRoute: typeof DesignsIndexRoute
 }
 
@@ -372,8 +384,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignsCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/designs/$code/workflow': {
+      id: '/designs/$code/workflow'
+      path: '/workflow'
+      fullPath: '/designs/$code/workflow'
+      preLoaderRoute: typeof DesignsCodeWorkflowRouteImport
+      parentRoute: typeof DesignsCodeRoute
+    }
   }
 }
+
+interface DesignsCodeRouteChildren {
+  DesignsCodeWorkflowRoute: typeof DesignsCodeWorkflowRoute
+}
+
+const DesignsCodeRouteChildren: DesignsCodeRouteChildren = {
+  DesignsCodeWorkflowRoute: DesignsCodeWorkflowRoute,
+}
+
+const DesignsCodeRouteWithChildren = DesignsCodeRoute._addFileChildren(
+  DesignsCodeRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -391,7 +422,7 @@ const rootRouteChildren: RootRouteChildren = {
   SamplesRoute: SamplesRoute,
   StitchingRoute: StitchingRoute,
   StockRoute: StockRoute,
-  DesignsCodeRoute: DesignsCodeRoute,
+  DesignsCodeRoute: DesignsCodeRouteWithChildren,
   DesignsIndexRoute: DesignsIndexRoute,
 }
 export const routeTree = rootRouteImport
