@@ -16,6 +16,7 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { useStageChrome, NextStepButton, StageTimelineCard } from "@/components/production/stage-chrome";
 import { cn } from "@/lib/utils";
+import { getOrderParts } from "@/lib/production-parts";
 
 export const Route = createFileRoute("/cutting")({ component: BulkCuttingPage });
 
@@ -24,32 +25,35 @@ type Order = {
   customer: string;
   quantity: number;
   status: string;
-  fabric: string;
 };
 
 const ORDERS: Order[] = [
-  { code: "MG001", customer: "Aanya Couture", quantity: 240, status: "Sample Approved", fabric: "Silk Chanderi" },
-  { code: "MG002", customer: "House of Meher", quantity: 500, status: "Sample Approved", fabric: "Cotton Cambric" },
-  { code: "MG003", customer: "Riya Boutique", quantity: 120, status: "Ready for Cutting", fabric: "Banarasi Silk" },
-  { code: "MG004", customer: "Studio Verve", quantity: 90, status: "Sample Approved", fabric: "Georgette" },
+  { code: "MG001", customer: "Aanya Couture", quantity: 240, status: "Sample Approved" },
+  { code: "MG002", customer: "House of Meher", quantity: 500, status: "Sample Approved" },
+  { code: "MG003", customer: "Riya Boutique", quantity: 120, status: "Ready for Cutting" },
+  { code: "MG004", customer: "Studio Verve", quantity: 90, status: "Sample Approved" },
 ];
 
 type Part = {
   id: string;
   name: string;
+  fabric: string;
   planned: number;
   cut: number;
   remarks: string;
 };
 
-const PART_PRESETS = ["Front Body", "Back Body", "Sleeve", "Collar", "Pant", "Dupatta", "Cuff", "Yoke"];
+function buildInitialParts(code: string, orderQty: number): Part[] {
+  return getOrderParts(code).map((p, i) => ({
+    id: `p-${code}-${i}`,
+    name: p.name,
+    fabric: p.fabric,
+    planned: orderQty,
+    cut: 0,
+    remarks: "",
+  }));
+}
 
-const INITIAL_PARTS: Part[] = [
-  { id: "p1", name: "Front Body", planned: 240, cut: 240, remarks: "Clean cut" },
-  { id: "p2", name: "Back Body", planned: 240, cut: 220, remarks: "20 pending" },
-  { id: "p3", name: "Sleeve", planned: 480, cut: 300, remarks: "In progress" },
-  { id: "p4", name: "Collar", planned: 240, cut: 0, remarks: "" },
-];
 
 const TIMELINE = [
   "Sample Approved",
@@ -69,7 +73,10 @@ function BulkCuttingPage() {
   const [cuttingDate, setCuttingDate] = useState("2026-07-11");
   const [master, setMaster] = useState("Ramesh K.");
   const [machine, setMachine] = useState("Auto-Cut #3");
-  const [parts, setParts] = useState<Part[]>(INITIAL_PARTS);
+  const initialOrder = ORDERS.find((o) => o.code === "MG001") ?? ORDERS[0];
+  const [parts, setParts] = useState<Part[]>(() =>
+    buildInitialParts(initialOrder.code, initialOrder.quantity),
+  );
   const [showAdd, setShowAdd] = useState(false);
   const [customPart, setCustomPart] = useState("");
 
@@ -94,21 +101,31 @@ function BulkCuttingPage() {
   const balance = Math.max(0, totals.planned - totals.cut);
   const pct = totals.planned ? Math.round((totals.cut / totals.planned) * 100) : 0;
 
+  const partPresets = getOrderParts(selectedCode);
+
+  function selectOrder(code: string) {
+    setSelectedCode(code);
+    const o = ORDERS.find((x) => x.code === code);
+    if (o) setParts(buildInitialParts(o.code, o.quantity));
+  }
   function updatePart(id: string, patch: Partial<Part>) {
     setParts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   }
   function removePart(id: string) {
     setParts((prev) => prev.filter((p) => p.id !== id));
   }
-  function addPart(name: string) {
-    if (!name.trim()) return;
+  function addPart(name: string, fabric?: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const resolvedFabric = fabric ?? partPresets.find((p) => p.name === trimmed)?.fabric ?? "—";
     setParts((prev) => [
       ...prev,
-      { id: `p${Date.now()}`, name: name.trim(), planned: 0, cut: 0, remarks: "" },
+      { id: `p${Date.now()}`, name: trimmed, fabric: resolvedFabric, planned: 0, cut: 0, remarks: "" },
     ]);
     setShowAdd(false);
     setCustomPart("");
   }
+
 
   const chrome = useStageChrome(selectedCode, "cutting");
 
@@ -141,7 +158,7 @@ function BulkCuttingPage() {
               return (
                 <button
                   key={o.code}
-                  onClick={() => setSelectedCode(o.code)}
+                  onClick={() => selectOrder(o.code)}
                   className={cn(
                     "flex items-center gap-3 rounded-2xl border p-3 text-left transition",
                     active
@@ -196,13 +213,13 @@ function BulkCuttingPage() {
             title="Cutting Details"
           />
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Field icon={<Scissors className="h-4 w-4" />} label="Fabric Type" value={order.fabric} readOnly />
             <Field
               icon={<Barcode className="h-4 w-4" />}
               label="Fabric Barcode"
               value={fabricBarcode}
               onChange={setFabricBarcode}
             />
+
             <Field
               icon={<Calendar className="h-4 w-4" />}
               label="Cutting Date"
@@ -247,15 +264,16 @@ function BulkCuttingPage() {
             <div className="mt-3 rounded-2xl border border-primary/30 bg-primary-soft/60 p-3">
               <p className="text-xs font-semibold text-accent-foreground">Choose a part</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {PART_PRESETS.map((name) => (
+                {partPresets.map((p) => (
                   <button
-                    key={name}
-                    onClick={() => addPart(name)}
+                    key={p.name}
+                    onClick={() => addPart(p.name, p.fabric)}
                     className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium hover:border-primary hover:text-primary"
                   >
-                    {name}
+                    {p.name} · {p.fabric}
                   </button>
                 ))}
+
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <input
@@ -286,11 +304,17 @@ function BulkCuttingPage() {
                         <Scissors className="h-4 w-4" />
                       </div>
                       <div>
-                        <p className="text-sm font-bold">{p.name}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-bold">{p.name}</p>
+                          <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
+                            {p.fabric}
+                          </span>
+                        </div>
                         <p className="text-[11px] text-muted-foreground">
                           {pp}% complete · Balance {bal}
                         </p>
                       </div>
+
                     </div>
                     <button
                       aria-label="Remove"

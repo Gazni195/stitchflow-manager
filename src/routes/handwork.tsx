@@ -37,15 +37,8 @@ const ORDERS: Order[] = [
   { code: "MG004", customer: "Studio Verve", quantity: 90, progress: 22 },
 ];
 
-const PARTS = [
-  "Front Body",
-  "Back Body",
-  "Sleeve",
-  "Collar",
-  "Pant",
-  "Dupatta",
-  "Custom",
-] as const;
+import { getOrderParts, getPartFabric } from "@/lib/production-parts";
+
 
 type HandWorkType = {
   key: string;
@@ -99,9 +92,12 @@ function BulkHandWorkPage() {
   }, [query]);
 
   const order = ORDERS.find((o) => o.code === selectedCode) ?? ORDERS[0];
+  const orderParts = getOrderParts(selectedCode);
+  const partFabric = part === "Custom" ? "—" : getPartFabric(selectedCode, part);
 
   const pending = Math.max(0, issued - completed - rework);
   const balance = Math.max(0, issued - completed);
+
   const pct = issued ? Math.min(100, Math.round((completed / issued) * 100)) : 0;
   const chrome = useStageChrome(selectedCode, "handwork");
 
@@ -186,25 +182,50 @@ function BulkHandWorkPage() {
 
         {/* 2. Select Part */}
         <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <SectionHeader icon={<Hand className="h-4 w-4" />} title="Select Part" />
+          <SectionHeader
+            icon={<Hand className="h-4 w-4" />}
+            title="Select Part"
+            hint={`Fabric: ${partFabric}`}
+          />
           <div className="mt-3 flex flex-wrap gap-2">
-            {PARTS.map((name) => {
-              const active = part === name;
+            {orderParts.map((p) => {
+              const active = part === p.name;
               return (
                 <button
-                  key={name}
-                  onClick={() => setPart(name)}
+                  key={p.name}
+                  onClick={() => setPart(p.name)}
                   className={cn(
-                    "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                    "flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
                     active
                       ? "border-primary bg-primary text-primary-foreground shadow-sm"
                       : "border-border bg-background text-foreground hover:border-primary/40",
                   )}
                 >
-                  {name}
+                  <span>{p.name}</span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                      active
+                        ? "bg-white/20 text-primary-foreground"
+                        : "bg-primary-soft text-primary",
+                    )}
+                  >
+                    {p.fabric}
+                  </span>
                 </button>
               );
             })}
+            <button
+              onClick={() => setPart("Custom")}
+              className={cn(
+                "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                part === "Custom"
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : "border-border bg-background text-foreground hover:border-primary/40",
+              )}
+            >
+              Custom
+            </button>
           </div>
           {part === "Custom" && (
             <input
@@ -215,6 +236,7 @@ function BulkHandWorkPage() {
             />
           )}
         </section>
+
 
         {/* 3. Hand Work Details */}
         <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
@@ -347,8 +369,9 @@ function BulkHandWorkPage() {
               </p>
               <p className="mt-1 text-2xl font-extrabold">{pct}% Complete</p>
               <p className="text-xs opacity-80">
-                {part} · {WORK_TYPES.find((w) => w.key === workType)?.label}
+                {part} · {partFabric} · {WORK_TYPES.find((w) => w.key === workType)?.label}
               </p>
+
             </div>
             <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white/15 backdrop-blur">
               <Hand className="h-7 w-7" />

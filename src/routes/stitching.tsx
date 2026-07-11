@@ -9,10 +9,11 @@ import {
   OrderPicker, SAMPLE_ORDERS,
 } from "@/components/production/ui";
 import { useStageChrome, NextStepButton, StageTimelineCard } from "@/components/production/stage-chrome";
+import { getOrderParts, getPartFabric } from "@/lib/production-parts";
 
 export const Route = createFileRoute("/stitching")({ component: BulkStitchingPage });
 
-const PARTS = ["Front Body", "Back Body", "Sleeve", "Pant", "Dupatta", "Custom"] as const;
+
 const LINES = ["Line A", "Line B", "Line C", "Line D"];
 const TAILORS = ["Team A · Ramesh", "Team B · Salim", "Team C · Anil", "Team D · Farid"];
 const MACHINES = ["Juki DDL-8700", "Brother S-7220C", "Singer 4432", "Overlock JUKI MO-6714"];
@@ -35,7 +36,10 @@ function BulkStitchingPage() {
   const balance = Math.max(0, received - stitched);
   const pct = received ? Math.min(100, Math.round((stitched / received) * 100)) : 0;
   const order = SAMPLE_ORDERS.find((o) => o.code === selectedCode) ?? SAMPLE_ORDERS[0];
+  const orderParts = getOrderParts(selectedCode);
+  const partFabric = part === "Custom" ? "—" : getPartFabric(selectedCode, part);
   const chrome = useStageChrome(selectedCode, "stitching");
+
 
   return (
     <AppShell title="Bulk Stitching" subtitle={chrome.subtitle}>
@@ -51,23 +55,35 @@ function BulkStitchingPage() {
         </section>
 
         <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <SectionHeader icon={<Shirt className="h-4 w-4" />} title="Select Part" />
+          <SectionHeader icon={<Shirt className="h-4 w-4" />} title="Select Part" hint={`Fabric: ${partFabric}`} />
           <div className="mt-3 flex flex-wrap gap-2">
-            {PARTS.map((name) => {
-              const active = part === name;
+            {orderParts.map((p) => {
+              const active = part === p.name;
               return (
                 <button
-                  key={name}
-                  onClick={() => setPart(name)}
-                  className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                  key={p.name}
+                  onClick={() => setPart(p.name)}
+                  className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition ${
                     active ? "border-primary bg-primary text-primary-foreground shadow-sm"
                            : "border-border bg-background text-foreground hover:border-primary/40"
                   }`}
                 >
-                  {name}
+                  <span>{p.name}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${active ? "bg-white/20 text-primary-foreground" : "bg-primary-soft text-primary"}`}>
+                    {p.fabric}
+                  </span>
                 </button>
               );
             })}
+            <button
+              onClick={() => setPart("Custom")}
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                part === "Custom" ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                                   : "border-border bg-background text-foreground hover:border-primary/40"
+              }`}
+            >
+              Custom
+            </button>
           </div>
           {part === "Custom" && (
             <input value={customPart} onChange={(e) => setCustomPart(e.target.value)}
@@ -75,6 +91,7 @@ function BulkStitchingPage() {
               className="mt-3 w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm font-medium outline-none focus:border-primary" />
           )}
         </section>
+
 
         <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
           <SectionHeader icon={<Cog className="h-4 w-4" />} title="Stitching Details" />
@@ -116,7 +133,7 @@ function BulkStitchingPage() {
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wider opacity-80">Stitching Summary</p>
               <p className="mt-1 text-2xl font-extrabold">{pct}% Complete</p>
-              <p className="text-xs opacity-80">{part} · {line}</p>
+              <p className="text-xs opacity-80">{part} · {partFabric} · {line}</p>
             </div>
             <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white/15 backdrop-blur">
               <Shirt className="h-7 w-7" />

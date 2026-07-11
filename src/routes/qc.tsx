@@ -9,12 +9,13 @@ import {
   OrderPicker, SAMPLE_ORDERS,
 } from "@/components/production/ui";
 import { useStageChrome, NextStepButton, StageTimelineCard } from "@/components/production/stage-chrome";
+import { getOrderParts, getPartFabric } from "@/lib/production-parts";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/qc")({ component: QualityCheckPage });
 
 const INSPECTORS = ["Anita Sharma", "Vikram Rao", "Neha Iyer", "Rakesh Gupta"];
-const PARTS = ["Front Body", "Back Body", "Sleeve", "Pant", "Dupatta"];
+
 const REASONS = ["Stitch Issue", "Measurement Issue", "Fabric Defect", "Hand Work Defect", "Other"] as const;
 const DECISIONS = ["Pass", "Rework", "Reject"] as const;
 
@@ -42,6 +43,7 @@ function QualityCheckPage() {
   const [rows, setRows] = useState<QCRow[]>(INITIAL);
 
   const order = SAMPLE_ORDERS.find((o) => o.code === selectedCode) ?? SAMPLE_ORDERS[0];
+  const orderParts = getOrderParts(selectedCode);
   const totalChecked = rows.reduce((s, r) => s + r.checked, 0);
   const totalPassed = rows.reduce((s, r) => s + r.passed, 0);
   const totalRejected = rows.reduce((s, r) => s + r.rejected, 0);
@@ -55,9 +57,10 @@ function QualityCheckPage() {
   const add = () =>
     setRows((rs) => [
       ...rs,
-      { id: `r${Date.now()}`, part: PARTS[0], checked: 0, passed: 0, rejected: 0, reason: "Stitch Issue", decision: "Pass" },
+      { id: `r${Date.now()}`, part: orderParts[0]?.name ?? "Front Body", checked: 0, passed: 0, rejected: 0, reason: "Stitch Issue", decision: "Pass" },
     ]);
   const chrome = useStageChrome(selectedCode, "qc");
+
 
   return (
     <AppShell title="Quality Check" subtitle={chrome.subtitle}>
@@ -90,12 +93,16 @@ function QualityCheckPage() {
                   <div className="flex items-center gap-2">
                     <select value={r.part} onChange={(e) => update(r.id, { part: e.target.value })}
                       className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm font-bold outline-none focus:border-primary">
-                      {PARTS.map((p) => <option key={p} value={p}>{p}</option>)}
+                      {orderParts.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
                     </select>
+                    <span className="rounded-full bg-primary-soft px-2.5 py-1 text-[10px] font-semibold text-primary">
+                      {getPartFabric(selectedCode, r.part)}
+                    </span>
                     <button onClick={() => remove(r.id)} className="grid h-9 w-9 place-items-center rounded-xl border border-border text-destructive hover:bg-destructive/10">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
+
 
                   <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <NumField label="Checked" value={r.checked} onChange={(v) => update(r.id, { checked: v })} tone="primary" />
