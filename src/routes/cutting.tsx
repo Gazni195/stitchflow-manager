@@ -16,6 +16,7 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { useStageChrome, NextStepButton, StageTimelineCard } from "@/components/production/stage-chrome";
 import { cn } from "@/lib/utils";
+import { getOrderParts } from "@/lib/production-parts";
 
 export const Route = createFileRoute("/cutting")({ component: BulkCuttingPage });
 
@@ -24,32 +25,35 @@ type Order = {
   customer: string;
   quantity: number;
   status: string;
-  fabric: string;
 };
 
 const ORDERS: Order[] = [
-  { code: "MG001", customer: "Aanya Couture", quantity: 240, status: "Sample Approved", fabric: "Silk Chanderi" },
-  { code: "MG002", customer: "House of Meher", quantity: 500, status: "Sample Approved", fabric: "Cotton Cambric" },
-  { code: "MG003", customer: "Riya Boutique", quantity: 120, status: "Ready for Cutting", fabric: "Banarasi Silk" },
-  { code: "MG004", customer: "Studio Verve", quantity: 90, status: "Sample Approved", fabric: "Georgette" },
+  { code: "MG001", customer: "Aanya Couture", quantity: 240, status: "Sample Approved" },
+  { code: "MG002", customer: "House of Meher", quantity: 500, status: "Sample Approved" },
+  { code: "MG003", customer: "Riya Boutique", quantity: 120, status: "Ready for Cutting" },
+  { code: "MG004", customer: "Studio Verve", quantity: 90, status: "Sample Approved" },
 ];
 
 type Part = {
   id: string;
   name: string;
+  fabric: string;
   planned: number;
   cut: number;
   remarks: string;
 };
 
-const PART_PRESETS = ["Front Body", "Back Body", "Sleeve", "Collar", "Pant", "Dupatta", "Cuff", "Yoke"];
+function buildInitialParts(code: string, orderQty: number): Part[] {
+  return getOrderParts(code).map((p, i) => ({
+    id: `p-${code}-${i}`,
+    name: p.name,
+    fabric: p.fabric,
+    planned: orderQty,
+    cut: 0,
+    remarks: "",
+  }));
+}
 
-const INITIAL_PARTS: Part[] = [
-  { id: "p1", name: "Front Body", planned: 240, cut: 240, remarks: "Clean cut" },
-  { id: "p2", name: "Back Body", planned: 240, cut: 220, remarks: "20 pending" },
-  { id: "p3", name: "Sleeve", planned: 480, cut: 300, remarks: "In progress" },
-  { id: "p4", name: "Collar", planned: 240, cut: 0, remarks: "" },
-];
 
 const TIMELINE = [
   "Sample Approved",
