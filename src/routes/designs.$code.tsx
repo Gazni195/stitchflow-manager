@@ -129,45 +129,75 @@ function DesignDetails() {
           </div>
         </section>
 
-        {/* Workflow progress */}
+        {/* Workflow progress — driven by this design's configured steps */}
         <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <h3 className="text-base font-bold">Production Workflow</h3>
-          <p className="text-xs text-muted-foreground">
-            Stage-by-stage status for {design.code}
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold">Production Workflow</h3>
+              <p className="text-xs text-muted-foreground">
+                {workflow.steps.length} steps configured for {design.code}
+              </p>
+            </div>
+            <Link
+              to="/designs/$code/workflow"
+              params={{ code: design.code }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-semibold hover:bg-accent"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Configure
+            </Link>
+          </div>
 
           <ol className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {WORKFLOW.map((stage) => {
-              const state = stageState(design, stage.step);
-              const Icon = stage.icon;
+            {workflow.steps.map((step) => {
+              const op = getOperation(step.operationId);
+              const Icon = op.icon;
+              const state = step.status;
+              const tone =
+                state === "completed"
+                  ? "border-primary/30 bg-primary-soft"
+                  : state === "in-progress"
+                    ? "border-primary bg-primary/10"
+                    : state === "skipped"
+                      ? "border-dashed border-border bg-background opacity-60"
+                      : "border-border bg-background";
+              const chip =
+                state === "completed"
+                  ? "bg-primary text-primary-foreground"
+                  : state === "in-progress"
+                    ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
+                    : state === "skipped"
+                      ? "bg-muted text-muted-foreground line-through"
+                      : "bg-muted text-muted-foreground";
+              const label =
+                state === "completed"
+                  ? "Completed"
+                  : state === "in-progress"
+                    ? "In progress"
+                    : state === "skipped"
+                      ? "Skipped"
+                      : "Pending";
               return (
                 <li
-                  key={stage.id}
-                  className={
-                    "flex items-center gap-3 rounded-2xl border p-3 " +
-                    (state === "done"
-                      ? "border-primary/30 bg-primary-soft"
-                      : state === "current"
-                        ? "border-primary bg-primary/10"
-                        : "border-border bg-background")
-                  }
+                  key={step.stepId}
+                  className={"flex items-center gap-3 rounded-2xl border p-3 " + tone}
                 >
                   <div
                     className={
                       "grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xs font-bold " +
-                      (state === "done"
-                        ? "bg-primary text-primary-foreground"
-                        : state === "current"
-                          ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
-                          : "bg-muted text-muted-foreground")
+                      chip
                     }
                   >
+                    <span className="absolute -mt-8 rounded-full bg-background px-1.5 text-[10px] font-bold text-primary shadow-sm">
+                      {step.sequence}
+                    </span>
                     <Icon className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{stage.title}</p>
+                    <p className="truncate text-sm font-semibold">
+                      {stepLabel(step, workflow)}
+                    </p>
                     <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                      {state === "done" ? "Completed" : state === "current" ? "In progress" : "Pending"}
+                      {label}
                     </p>
                   </div>
                 </li>
