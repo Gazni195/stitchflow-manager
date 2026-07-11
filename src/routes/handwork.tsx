@@ -37,15 +37,8 @@ const ORDERS: Order[] = [
   { code: "MG004", customer: "Studio Verve", quantity: 90, progress: 22 },
 ];
 
-const PARTS = [
-  "Front Body",
-  "Back Body",
-  "Sleeve",
-  "Collar",
-  "Pant",
-  "Dupatta",
-  "Custom",
-] as const;
+import { getOrderParts, getPartFabric } from "@/lib/production-parts";
+
 
 type HandWorkType = {
   key: string;
