@@ -9,10 +9,11 @@ import {
   OrderPicker, SAMPLE_ORDERS,
 } from "@/components/production/ui";
 import { useStageChrome, NextStepButton, StageTimelineCard } from "@/components/production/stage-chrome";
+import { getOrderParts, getPartFabric } from "@/lib/production-parts";
 
 export const Route = createFileRoute("/stitching")({ component: BulkStitchingPage });
 
-const PARTS = ["Front Body", "Back Body", "Sleeve", "Pant", "Dupatta", "Custom"] as const;
+
 const LINES = ["Line A", "Line B", "Line C", "Line D"];
 const TAILORS = ["Team A · Ramesh", "Team B · Salim", "Team C · Anil", "Team D · Farid"];
 const MACHINES = ["Juki DDL-8700", "Brother S-7220C", "Singer 4432", "Overlock JUKI MO-6714"];
