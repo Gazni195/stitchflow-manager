@@ -8,10 +8,7 @@ import { useMemo, useState } from "react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
-    meta: [
-      { title: "Dashboard — Fawri Lifestyle" },
-      { name: "description", content: "Your samples at a glance." },
-    ],
+    meta: [{ title: "Dashboard — Fawri Lifestyle" }, { name: "description", content: "Your samples at a glance." }],
   }),
   component: Dashboard,
 });
@@ -63,11 +60,9 @@ function Dashboard() {
         {/* Greeting */}
         <section>
           <h2 className="text-2xl font-extrabold tracking-tight">
-            Hello, Rifa <span aria-hidden>👋</span>
+            Hello, Rawana <span aria-hidden>👋</span>
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Here's what's happening today
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Here's what's happening today</p>
         </section>
 
         {/* Status filter chips */}
@@ -85,17 +80,10 @@ function Dashboard() {
                     : "border-border bg-card hover:border-primary/30")
                 }
               >
-                <span
-                  className={
-                    "inline-block rounded-full px-2 py-0.5 text-[10px] font-bold " +
-                    f.tone
-                  }
-                >
+                <span className={"inline-block rounded-full px-2 py-0.5 text-[10px] font-bold " + f.tone}>
                   {f.label}
                 </span>
-                <p className="mt-2 text-2xl font-extrabold tracking-tight">
-                  {counts[f.id]}
-                </p>
+                <p className="mt-2 text-2xl font-extrabold tracking-tight">{counts[f.id]}</p>
               </button>
             );
           })}
@@ -105,10 +93,7 @@ function Dashboard() {
         <section>
           <div className="mb-3 flex items-end justify-between">
             <h3 className="text-lg font-bold tracking-tight">My Samples</h3>
-            <Link
-              to="/sample-development"
-              className="text-xs font-semibold text-primary hover:underline"
-            >
+            <Link to="/sample-development" className="text-xs font-semibold text-primary hover:underline">
               View All
             </Link>
           </div>
@@ -119,9 +104,7 @@ function Dashboard() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-border bg-card p-10 text-center">
-              <p className="text-sm text-muted-foreground">
-                No samples in this bucket yet.
-              </p>
+              <p className="text-sm text-muted-foreground">No samples in this bucket yet.</p>
               <Link
                 to="/designs"
                 className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
@@ -149,17 +132,12 @@ function Dashboard() {
                             {d.code}
                           </p>
                         </div>
-                        <p className="truncate text-base font-extrabold">
-                          {d.name}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          Designer: {meta.designer}
-                        </p>
+                        <p className="truncate text-base font-extrabold">{d.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">Designer: {meta.designer}</p>
                         <div className="mt-2 flex items-center gap-2">
                           <span
                             className={
-                              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold " +
-                              STATUS_TONE[d.status]
+                              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold " + STATUS_TONE[d.status]
                             }
                           >
                             {STATUS_LABEL[d.status]}
