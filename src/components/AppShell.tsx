@@ -3,6 +3,7 @@ import { Menu, Bell, Search, LayoutDashboard, Shirt, FlaskConical, Factory, Ware
 import { useState, type ReactNode } from "react";
 import { WORKFLOW } from "@/lib/workflow";
 import { cn } from "@/lib/utils";
+import { useRequireAuth } from "@/hooks/use-auth";
 
 const PRIMARY_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -25,6 +26,7 @@ export function AppShell({
 }) {
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useRequireAuth();
 
   return (
     <div className="min-h-screen bg-background text-foreground">
