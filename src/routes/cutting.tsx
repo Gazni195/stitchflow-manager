@@ -110,10 +110,12 @@ function BulkCuttingPage() {
     setCustomPart("");
   }
 
+  const chrome = useStageChrome(selectedCode, "cutting");
+
   return (
     <AppShell
       title="Bulk Cutting"
-      subtitle={`Step 6 of ${WORKFLOW.length} · Bulk`}
+      subtitle={chrome.subtitle}
     >
       <div className="grid gap-5">
         {/* 1. Select Production Order */}
@@ -375,72 +377,11 @@ function BulkCuttingPage() {
           <button className="inline-flex items-center justify-center gap-2 rounded-2xl bg-success px-4 py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90">
             <CheckCircle2 className="h-4 w-4" /> Complete Cutting
           </button>
-          <Link
-            to="/handwork"
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
-          >
-            Continue to Hand Work <ArrowRight className="h-4 w-4" />
-          </Link>
+          <NextStepButton next={chrome.next} />
         </section>
 
-        {/* 7. Timeline */}
-        <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <SectionHeader
-            icon={<CheckCircle2 className="h-4 w-4" />}
-            title="Production Timeline"
-          />
-          <ol className="mt-4 grid gap-2">
-            {TIMELINE.map((step, i) => {
-              const done = i === 0;
-              const current = i === 1;
-              return (
-                <li
-                  key={step}
-                  className={cn(
-                    "flex items-center gap-3 rounded-2xl border p-3",
-                    current
-                      ? "border-primary bg-primary-soft"
-                      : done
-                        ? "border-success/30 bg-success/5"
-                        : "border-border bg-background",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "grid h-9 w-9 shrink-0 place-items-center rounded-xl",
-                      done
-                        ? "bg-success text-white"
-                        : current
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    {done ? (
-                      <Check className="h-4 w-4" />
-                    ) : current ? (
-                      <Scissors className="h-4 w-4" />
-                    ) : (
-                      <Circle className="h-4 w-4" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className={cn("text-sm font-semibold", current && "text-primary")}>
-                      {step}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {done ? "Completed" : current ? "In progress" : "Pending"}
-                    </p>
-                  </div>
-                  {current && (
-                    <span className="rounded-full bg-primary px-2.5 py-1 text-[10px] font-bold uppercase text-primary-foreground">
-                      Current
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-        </section>
+        {/* 7. Timeline (from design's configured workflow) */}
+        <StageTimelineCard chrome={chrome} currentIcon={Scissors} />
       </div>
     </AppShell>
   );
