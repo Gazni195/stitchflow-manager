@@ -175,7 +175,7 @@ function DesignDetails({ design }: { design: Design }) {
             </p>
             <button
               disabled={!sampleComplete || approve.isPending || !!bulk}
-              onClick={() => approve.mutate()}
+              onClick={() => approve.mutate(undefined)}
               className="mt-3 inline-flex items-center gap-2 rounded-xl bg-success px-4 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
             >
               {approve.isPending && <Loader2 className="h-4 w-4 animate-spin" />}

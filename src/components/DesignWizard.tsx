@@ -55,6 +55,8 @@ type Draft = {
   fabric: string;
   color: string;
   orderQuantity: number;
+  assignedDesigner: string;
+  targetCostPerPiece: number;
   imageFile: File | null;
 };
 
@@ -68,6 +70,8 @@ const EMPTY: Draft = {
   fabric: "",
   color: "",
   orderQuantity: 0,
+  assignedDesigner: "",
+  targetCostPerPiece: 0,
   imageFile: null,
 };
 
@@ -178,6 +182,8 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
         })),
         color: d.color.trim(),
         orderQuantity: d.orderQuantity,
+        assignedDesigner: d.assignedDesigner.trim(),
+        targetCostPerPiece: d.targetCostPerPiece,
         imageFile: d.imageFile,
       });
       reset();
@@ -376,6 +382,12 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
                 value={d.customer}
                 onChange={(v) => setD({ ...d, customer: v })}
               />
+              <Text
+                label="Assigned Designer (optional)"
+                placeholder="e.g. Priya Nair"
+                value={d.assignedDesigner}
+                onChange={(v) => setD({ ...d, assignedDesigner: v })}
+              />
             </div>
           )}
 
@@ -397,6 +409,21 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
                     setD({
                       ...d,
                       orderQuantity: Math.max(0, Number(e.target.value) || 0),
+                    })
+                  }
+                  className="mt-1.5 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <Label>Target Cost / Pc (optional)</Label>
+                <input
+                  type="number"
+                  min={0}
+                  value={d.targetCostPerPiece || ""}
+                  onChange={(e) =>
+                    setD({
+                      ...d,
+                      targetCostPerPiece: Math.max(0, Number(e.target.value) || 0),
                     })
                   }
                   className="mt-1.5 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:border-primary"

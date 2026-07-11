@@ -15,6 +15,8 @@ type DbDesign = {
   order_quantity: number;
   image_path: string | null;
   notes: string | null;
+  assigned_designer: string | null;
+  target_cost_per_piece: number | null;
   status: DesignStatus;
   created_by: string;
   created_at: string;
@@ -59,6 +61,8 @@ function mapDesign(r: DbDesign): Design {
     orderQuantity: r.order_quantity,
     imagePath: r.image_path,
     notes: r.notes ?? "",
+    assignedDesigner: r.assigned_designer ?? "",
+    targetCostPerPiece: r.target_cost_per_piece ?? 0,
     status: r.status,
     createdBy: r.created_by,
     createdAt: r.created_at,
@@ -105,6 +109,8 @@ export type CreateDesignInput = {
   parts: DesignPart[];
   color: string;
   orderQuantity: number;
+  assignedDesigner: string;
+  targetCostPerPiece: number;
   imageFile?: File | null;
 };
 
@@ -143,6 +149,8 @@ export function useCreateDesign() {
           })),
           color: input.color,
           order_quantity: input.orderQuantity,
+          assigned_designer: input.assignedDesigner,
+          target_cost_per_piece: input.targetCostPerPiece,
           image_path,
           status: "draft" as DesignStatus,
           created_by: uid,
@@ -175,6 +183,8 @@ export type UpdateDesignInput = {
   color: string;
   orderQuantity: number;
   notes: string;
+  assignedDesigner: string;
+  targetCostPerPiece: number;
   /** "keep" leaves image untouched, "clear" removes it, File replaces it. */
   image?: File | "clear" | "keep";
   currentImagePath?: string | null;
@@ -217,6 +227,8 @@ export function useUpdateDesign() {
         color: input.color,
         order_quantity: input.orderQuantity,
         notes: input.notes,
+        assigned_designer: input.assignedDesigner,
+        target_cost_per_piece: input.targetCostPerPiece,
       };
       if (image_path !== undefined) patch.image_path = image_path;
 

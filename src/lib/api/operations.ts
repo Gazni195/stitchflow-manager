@@ -5,7 +5,7 @@ import {
   type Operation as OpMeta,
   type OperationId,
 } from "@/lib/operations";
-import { Wrench } from "lucide-react";
+import { Wrench, Printer, Droplets, MoreHorizontal, type LucideIcon } from "lucide-react";
 
 export type CatalogOperation = {
   id: string;
@@ -14,6 +14,7 @@ export type CatalogOperation = {
   category: "Sample" | "Bulk" | "Finishing";
   repeatable: boolean;
   sort: number;
+  department: string;
   icon: OpMeta["icon"];
   route: string;
 };
@@ -34,9 +35,20 @@ const FALLBACK_ROUTE: Record<string, string> = {
   "fabric-selection": "/materials",
   "machine-embroidery": "/handwork",
   "bulk-embroidery": "/handwork",
+  printing: "/sample-development",
+  "wash-dye": "/sample-development",
+  "other-process": "/sample-development",
 };
 
-export function decorate(id: string, name: string, short: string, category: CatalogOperation["category"], repeatable: boolean, sort: number): CatalogOperation {
+// Ops not covered by the legacy src/lib/operations.ts icon map (printing/wash-dye/other-process
+// only exist in the live operations_catalog table, added for the sample flow).
+const EXTRA_ICONS: Record<string, LucideIcon> = {
+  printing: Printer,
+  "wash-dye": Droplets,
+  "other-process": MoreHorizontal,
+};
+
+export function decorate(id: string, name: string, short: string, category: CatalogOperation["category"], repeatable: boolean, sort: number, department: string): CatalogOperation {
   const meta = ICONS[id as OperationId];
   return {
     id,
@@ -45,7 +57,8 @@ export function decorate(id: string, name: string, short: string, category: Cata
     category,
     repeatable,
     sort,
-    icon: meta?.icon ?? Wrench,
+    department,
+    icon: meta?.icon ?? EXTRA_ICONS[id] ?? Wrench,
     route: meta?.route ?? FALLBACK_ROUTE[id] ?? "/",
   };
 }
@@ -60,8 +73,8 @@ export function useOperationCatalog() {
         .select("*")
         .order("sort", { ascending: true });
       if (error) throw error;
-      return (data as Array<{ id: string; name: string; short: string; category: CatalogOperation["category"]; repeatable: boolean; sort: number }>).map(
-        (r) => decorate(r.id, r.name, r.short, r.category, r.repeatable, r.sort),
+      return (data as Array<{ id: string; name: string; short: string; category: CatalogOperation["category"]; repeatable: boolean; sort: number; department: string }>).map(
+        (r) => decorate(r.id, r.name, r.short, r.category, r.repeatable, r.sort, r.department),
       );
     },
   });

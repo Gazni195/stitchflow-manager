@@ -16,27 +16,36 @@ export type Database = {
     Tables: {
       design_workflows: {
         Row: {
+          approval_notes: string | null
           created_at: string
           design_id: string
           id: string
           kind: string
           locked: boolean
+          other_charges: number
+          po_number: string | null
           updated_at: string
         }
         Insert: {
+          approval_notes?: string | null
           created_at?: string
           design_id: string
           id?: string
           kind: string
           locked?: boolean
+          other_charges?: number
+          po_number?: string | null
           updated_at?: string
         }
         Update: {
+          approval_notes?: string | null
           created_at?: string
           design_id?: string
           id?: string
           kind?: string
           locked?: boolean
+          other_charges?: number
+          po_number?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -51,6 +60,7 @@ export type Database = {
       }
       designs: {
         Row: {
+          assigned_designer: string
           category: string
           code: string
           color: string
@@ -65,9 +75,11 @@ export type Database = {
           parts: Json
           product_type: string
           status: string
+          target_cost_per_piece: number
           updated_at: string
         }
         Insert: {
+          assigned_designer?: string
           category?: string
           code: string
           color?: string
@@ -82,9 +94,11 @@ export type Database = {
           parts?: Json
           product_type?: string
           status?: string
+          target_cost_per_piece?: number
           updated_at?: string
         }
         Update: {
+          assigned_designer?: string
           category?: string
           code?: string
           color?: string
@@ -99,6 +113,7 @@ export type Database = {
           parts?: Json
           product_type?: string
           status?: string
+          target_cost_per_piece?: number
           updated_at?: string
         }
         Relationships: []
@@ -106,6 +121,7 @@ export type Database = {
       operations_catalog: {
         Row: {
           category: string
+          department: string
           id: string
           name: string
           repeatable: boolean
@@ -114,6 +130,7 @@ export type Database = {
         }
         Insert: {
           category: string
+          department?: string
           id: string
           name: string
           repeatable?: boolean
@@ -122,6 +139,7 @@ export type Database = {
         }
         Update: {
           category?: string
+          department?: string
           id?: string
           name?: string
           repeatable?: boolean
@@ -130,53 +148,166 @@ export type Database = {
         }
         Relationships: []
       }
+      sample_bom_items: {
+        Row: {
+          color: string
+          consumption: number
+          created_at: string
+          design_id: string
+          id: string
+          kind: string
+          name: string
+          part_id: string | null
+          rate: number
+          sequence: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          consumption?: number
+          created_at?: string
+          design_id: string
+          id?: string
+          kind: string
+          name: string
+          part_id?: string | null
+          rate?: number
+          sequence?: number
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          consumption?: number
+          created_at?: string
+          design_id?: string
+          id?: string
+          kind?: string
+          name?: string
+          part_id?: string | null
+          rate?: number
+          sequence?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sample_bom_items_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workers: {
+        Row: {
+          active: boolean
+          created_at: string
+          daily_wage: number
+          department: string
+          id: string
+          name: string
+          phone: string | null
+          role: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          daily_wage?: number
+          department?: string
+          id?: string
+          name: string
+          phone?: string | null
+          role?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          daily_wage?: number
+          department?: string
+          id?: string
+          name?: string
+          phone?: string | null
+          role?: string
+        }
+        Relationships: []
+      }
       workflow_steps: {
         Row: {
+          accumulated_seconds: number
           assigned_to: string | null
+          assigned_worker_id: string | null
+          completed_at: string | null
+          cost_per_piece: number | null
           created_at: string
           end_date: string | null
           id: string
           input_quantity: number | null
+          is_paused: boolean
           label: string | null
           operation_id: string
           output_quantity: number | null
+          reference_file_name: string | null
+          reference_file_path: string | null
+          reference_file_size: number | null
           remarks: string | null
           sequence: number
           start_date: string | null
+          started_at: string | null
           status: string
           updated_at: string
           wastage_quantity: number | null
           workflow_id: string
         }
         Insert: {
+          accumulated_seconds?: number
           assigned_to?: string | null
+          assigned_worker_id?: string | null
+          completed_at?: string | null
+          cost_per_piece?: number | null
           created_at?: string
           end_date?: string | null
           id?: string
           input_quantity?: number | null
+          is_paused?: boolean
           label?: string | null
           operation_id: string
           output_quantity?: number | null
+          reference_file_name?: string | null
+          reference_file_path?: string | null
+          reference_file_size?: number | null
           remarks?: string | null
           sequence: number
           start_date?: string | null
+          started_at?: string | null
           status?: string
           updated_at?: string
           wastage_quantity?: number | null
           workflow_id: string
         }
         Update: {
+          accumulated_seconds?: number
           assigned_to?: string | null
+          assigned_worker_id?: string | null
+          completed_at?: string | null
+          cost_per_piece?: number | null
           created_at?: string
           end_date?: string | null
           id?: string
           input_quantity?: number | null
+          is_paused?: boolean
           label?: string | null
           operation_id?: string
           output_quantity?: number | null
+          reference_file_name?: string | null
+          reference_file_path?: string | null
+          reference_file_size?: number | null
           remarks?: string | null
           sequence?: number
           start_date?: string | null
+          started_at?: string | null
           status?: string
           updated_at?: string
           wastage_quantity?: number | null
@@ -197,6 +328,13 @@ export type Database = {
             referencedRelation: "design_workflows"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "workflow_steps_assigned_worker_id_fkey"
+            columns: ["assigned_worker_id"]
+            isOneToOne: false
+            referencedRelation: "workers"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
@@ -204,9 +342,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      approve_sample: { Args: { _design_id: string }; Returns: string }
+      approve_sample: {
+        Args: { _design_id: string; _notes?: string | null }
+        Returns: string
+      }
       has_design_access: { Args: { _design_id: string }; Returns: boolean }
       has_workflow_access: { Args: { _workflow_id: string }; Returns: boolean }
+      reject_sample: {
+        Args: { _design_id: string; _notes?: string | null }
+        Returns: undefined
+      }
       start_bulk_production: {
         Args: { _design_id: string }
         Returns: undefined

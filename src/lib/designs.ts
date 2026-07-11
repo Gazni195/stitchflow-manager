@@ -5,6 +5,7 @@ export type DesignStatus =
   | "draft"
   | "sampling"
   | "sample_approved"
+  | "sample_rejected"
   | "in_production"
   | "completed";
 
@@ -27,6 +28,8 @@ export type Design = {
   orderQuantity: number;
   imagePath: string | null;
   notes: string;
+  assignedDesigner: string;
+  targetCostPerPiece: number;
   status: DesignStatus;
   createdBy: string;
   createdAt: string;
@@ -37,6 +40,7 @@ export const STATUS_LABEL: Record<DesignStatus, string> = {
   draft: "Draft",
   sampling: "Sampling",
   sample_approved: "Sample Approved",
+  sample_rejected: "Sample Rejected",
   in_production: "In Production",
   completed: "Completed",
 };
@@ -45,6 +49,7 @@ export const STATUS_TONE: Record<DesignStatus, string> = {
   draft: "bg-muted text-muted-foreground",
   sampling: "bg-accent text-accent-foreground",
   sample_approved: "bg-primary-soft text-primary",
+  sample_rejected: "bg-destructive/15 text-destructive",
   in_production: "bg-primary/15 text-primary",
   completed: "bg-success/15 text-success",
 };

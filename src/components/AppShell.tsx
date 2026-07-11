@@ -1,9 +1,24 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Menu, Bell, Search, LayoutDashboard, Shirt, FlaskConical, Factory, Warehouse, X } from "lucide-react";
+import {
+  Menu,
+  Bell,
+  Search,
+  LayoutDashboard,
+  Shirt,
+  FlaskConical,
+  Factory,
+  Warehouse,
+  X,
+  Plus,
+  MoreHorizontal,
+  LogOut,
+} from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { WORKFLOW } from "@/lib/workflow";
 import { cn } from "@/lib/utils";
 import { useRequireAuth } from "@/hooks/use-auth";
+import { DesignWizard } from "@/components/DesignWizard";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 
 const PRIMARY_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -25,6 +40,8 @@ export function AppShell({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useRequireAuth();
 
@@ -106,34 +123,142 @@ export function AppShell({
           </div>
         </header>
 
-        <main className="mx-auto max-w-6xl px-4 pb-28 pt-5 sm:px-6 lg:pb-10">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 pb-32 pt-5 sm:px-6 lg:pb-10">{children}</main>
       </div>
 
-      {/* Mobile bottom nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur lg:hidden">
-        <ul className="grid grid-cols-5">
-          {PRIMARY_NAV.map((item) => {
-            const active =
-              item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
-            const Icon = item.icon;
-            return (
-              <li key={item.to}>
-                <Link
-                  to={item.to}
-                  className={cn(
-                    "flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition",
-                    active ? "text-primary" : "text-muted-foreground",
-                  )}
-                >
-                  <Icon className={cn("h-5 w-5", active && "stroke-[2.5]")} />
-                  {item.label}
-                </Link>
-              </li>
-            );
-          })}
+      {/* Mobile bottom nav: Home / Samples / + / Production / More */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur lg:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <ul className="relative grid grid-cols-5">
+          <BottomNavLink to="/" label="Home" icon={LayoutDashboard} pathname={pathname} exact />
+          <BottomNavLink
+            to="/sample-development"
+            label="Samples"
+            icon={FlaskConical}
+            pathname={pathname}
+          />
+          <li className="flex items-center justify-center">
+            <button
+              aria-label="New design"
+              onClick={() => setWizardOpen(true)}
+              className="-mt-6 grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow-lg shadow-primary/30 transition hover:brightness-105"
+            >
+              <Plus className="h-6 w-6" />
+            </button>
+          </li>
+          <BottomNavLink to="/designs" label="Production" icon={Factory} pathname={pathname} />
+          <li>
+            <button
+              onClick={() => setMoreOpen(true)}
+              className="flex w-full flex-col items-center gap-1 py-2.5 text-[11px] font-medium text-muted-foreground transition"
+            >
+              <MoreHorizontal className="h-5 w-5" />
+              More
+            </button>
+          </li>
         </ul>
       </nav>
+
+      <DesignWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
+      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} pathname={pathname} />
     </div>
+  );
+}
+
+function BottomNavLink({
+  to,
+  label,
+  icon: Icon,
+  pathname,
+  exact,
+}: {
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  pathname: string;
+  exact?: boolean;
+}) {
+  const active = exact ? pathname === to : pathname.startsWith(to);
+  return (
+    <li>
+      <Link
+        to={to}
+        className={cn(
+          "flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition",
+          active ? "text-primary" : "text-muted-foreground",
+        )}
+      >
+        <Icon className={cn("h-5 w-5", active && "stroke-[2.5]")} />
+        {label}
+      </Link>
+    </li>
+  );
+}
+
+function MoreSheet({
+  open,
+  onClose,
+  pathname,
+}: {
+  open: boolean;
+  onClose: () => void;
+  pathname: string;
+}) {
+  return (
+    <Drawer open={open} onOpenChange={(v) => !v && onClose()}>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>More</DrawerTitle>
+        </DrawerHeader>
+        <div className="max-h-[65vh] overflow-y-auto px-4 pb-6">
+          <ul className="space-y-0.5">
+            {WORKFLOW.map((stage) => {
+              const active = pathname.startsWith(stage.to);
+              const Icon = stage.icon;
+              return (
+                <li key={stage.id}>
+                  <Link
+                    to={stage.to}
+                    onClick={onClose}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+                      active
+                        ? "bg-primary-soft text-primary"
+                        : "text-foreground hover:bg-accent",
+                    )}
+                  >
+                    <Icon className="h-4 w-4 shrink-0 opacity-70" />
+                    {stage.title}
+                  </Link>
+                </li>
+              );
+            })}
+            <li>
+              <Link
+                to="/stock"
+                onClick={onClose}
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-foreground hover:bg-accent"
+              >
+                <Warehouse className="h-4 w-4 shrink-0 opacity-70" />
+                Ready Stock
+              </Link>
+            </li>
+          </ul>
+          <button
+            onClick={async () => {
+              const { supabase } = await import("@/integrations/supabase/client");
+              await supabase.auth.signOut();
+            }}
+            className="mt-4 flex w-full items-center gap-3 rounded-xl border border-border px-3 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/10"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
+        </div>
+      </DrawerContent>
+    </Drawer>
   );
 }
 

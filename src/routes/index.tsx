@@ -4,12 +4,20 @@ import {
   ArrowUpRight,
   ClipboardList,
   Factory,
+  Loader2,
   ShieldAlert,
+  User,
   Warehouse,
   type LucideIcon,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { DesignImage } from "@/components/DesignImage";
 import { WORKFLOW } from "@/lib/workflow";
+import { STATUS_LABEL, STATUS_TONE, type Design } from "@/lib/designs";
+import { useDesigns } from "@/lib/api/designs";
+import { useWorkflows } from "@/lib/api/workflows";
+import { useOperationCatalog } from "@/lib/api/operations";
+import { getDesignLifecycle } from "@/lib/design-lifecycle";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -67,6 +75,12 @@ const STATS: Stat[] = [
 ];
 
 function Dashboard() {
+  const { data: designs = [], isLoading } = useDesigns();
+  const activeDesigns = designs
+    .filter((d) => d.status !== "completed")
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+    .slice(0, 6);
+
   return (
     <AppShell title="Dashboard" subtitle="Fawri Lifestyle · Production overview">
       <div className="grid gap-6">
@@ -99,6 +113,48 @@ function Dashboard() {
               </Link>
             </div>
           </div>
+        </section>
+
+        {/* Active Designs — every sample is a stage inside its design, not a separate record */}
+        <section>
+          <div className="mb-3 flex items-end justify-between">
+            <div>
+              <h3 className="text-lg font-bold tracking-tight">Active Designs</h3>
+              <p className="text-sm text-muted-foreground">
+                Each card shows a design's live progress through its lifecycle.
+              </p>
+            </div>
+            <Link
+              to="/designs"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
+            >
+              View all <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+
+          {isLoading ? (
+            <div className="grid place-items-center py-16 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : activeDesigns.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-border bg-card p-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                No active designs yet. Create a design to start its sample development.
+              </p>
+              <Link
+                to="/designs"
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+              >
+                Go to Designs <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {activeDesigns.map((d) => (
+                <ActiveDesignCard key={d.id} design={d} />
+              ))}
+            </div>
+          )}
         </section>
 
         {/* KPI cards */}
@@ -153,6 +209,78 @@ function Dashboard() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function ActiveDesignCard({ design }: { design: Design }) {
+  const { data: workflows = [] } = useWorkflows(design.id);
+  const { data: catalog = [] } = useOperationCatalog();
+  const { stage, currentStepLabel, progressPct, continueTo } = getDesignLifecycle(
+    workflows,
+    catalog,
+  );
+
+  return (
+    <div className="flex flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+      <div className="relative aspect-[16/9] overflow-hidden bg-primary-soft">
+        <DesignImage path={design.imagePath} alt={design.name} />
+        <div className="absolute left-3 top-3 rounded-lg bg-background/90 px-2 py-1 text-[11px] font-bold tracking-wider backdrop-blur">
+          {design.code}
+        </div>
+        <span
+          className={
+            "absolute right-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur " +
+            STATUS_TONE[design.status]
+          }
+        >
+          {STATUS_LABEL[design.status]}
+        </span>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div>
+          <p className="truncate text-base font-bold">{design.name}</p>
+          <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
+            <User className="h-3.5 w-3.5 shrink-0" />
+            {design.assignedDesigner || "Unassigned"}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full bg-primary-soft px-2.5 py-1 font-semibold text-primary">
+            {stage}
+          </span>
+          <span className="truncate text-muted-foreground">{currentStepLabel}</span>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
+            <span>Progress</span>
+            <span className="text-primary">{progressPct}%</span>
+          </div>
+          <div
+            className="mt-1 h-2 w-full overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-valuenow={progressPct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-primary to-primary-glow transition-all"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        </div>
+
+        <Link
+          to={continueTo}
+          params={{ code: design.code }}
+          className="mt-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+        >
+          Continue <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
+    </div>
   );
 }
 
