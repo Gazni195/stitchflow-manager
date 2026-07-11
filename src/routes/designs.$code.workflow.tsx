@@ -46,13 +46,14 @@ import {
 } from "@/lib/api/workflows";
 import { useOperationCatalog, type CatalogOperation } from "@/lib/api/operations";
 import { cn } from "@/lib/utils";
-import { z } from "zod";
-import { zodValidator } from "@tanstack/zod-adapter";
 
-const search = z.object({ kind: z.enum(["sample", "bulk"]).optional() });
+type WorkflowSearch = { kind?: WorkflowKind };
 
 export const Route = createFileRoute("/designs/$code/workflow")({
-  validateSearch: zodValidator(search),
+  validateSearch: (search: Record<string, unknown>): WorkflowSearch => {
+    const k = search.kind;
+    return { kind: k === "sample" || k === "bulk" ? k : undefined };
+  },
   head: ({ params }) => ({
     meta: [{ title: `Configure Workflow — ${params.code}` }],
   }),

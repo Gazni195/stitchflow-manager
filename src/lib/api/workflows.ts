@@ -146,7 +146,8 @@ export function useUpdateStep(designId: string) {
       if (p.startDate !== undefined) dbPatch.start_date = p.startDate;
       if (p.endDate !== undefined) dbPatch.end_date = p.endDate;
       if (p.remarks !== undefined) dbPatch.remarks = p.remarks;
-      const { error } = await supabase.from("workflow_steps").update(dbPatch).eq("id", v.stepId);
+      const { error } = await (supabase.from("workflow_steps") as unknown as { update: (p: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: unknown }> } })
+        .update(dbPatch).eq("id", v.stepId);
       if (error) throw error;
     },
     onSuccess: () => invalidate(qc, designId),
