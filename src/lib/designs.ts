@@ -27,6 +27,7 @@ export type Design = {
   color: string;
   orderQuantity: number;
   imagePath: string | null;
+  notes: string;
   status: DesignStatus;
   createdBy: string;
   createdAt: string;
