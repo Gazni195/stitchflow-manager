@@ -25,14 +25,23 @@ function normalizeParts(v: unknown): DesignPart[] {
   return v
     .map((p, i) => {
       if (p && typeof p === "object" && "name" in (p as object)) {
-        const obj = p as { id?: unknown; name?: unknown; fabric?: unknown };
+        const obj = p as {
+          id?: unknown;
+          name?: unknown;
+          fabric?: unknown;
+          color?: unknown;
+          quantity?: unknown;
+        };
         return {
           id: typeof obj.id === "string" ? obj.id : `p-${i}`,
           name: String(obj.name ?? ""),
           fabric: typeof obj.fabric === "string" ? obj.fabric : "",
+          color: typeof obj.color === "string" ? obj.color : "",
+          quantity: typeof obj.quantity === "number" ? obj.quantity : 0,
         };
       }
-      if (typeof p === "string") return { id: `p-${i}`, name: p, fabric: "" };
+      if (typeof p === "string")
+        return { id: `p-${i}`, name: p, fabric: "", color: "", quantity: 0 };
       return null;
     })
     .filter((x): x is DesignPart => !!x && !!x.name.trim());
