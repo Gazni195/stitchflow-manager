@@ -177,39 +177,72 @@ export type UpdateDesignInput = {
   parts: DesignPart[];
   color: string;
   orderQuantity: number;
+  notes: string;
+  /** "keep" leaves image untouched, "clear" removes it, File replaces it. */
+  image?: File | "clear" | "keep";
+  currentImagePath?: string | null;
 };
 
 export function useUpdateDesign() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: UpdateDesignInput): Promise<Design> => {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      if (!uid) throw new Error("Not signed in");
+
+      let image_path: string | null | undefined = undefined; // undefined => don't touch
+      const action = input.image ?? "keep";
+      if (action instanceof File) {
+        const ext = action.name.split(".").pop() ?? "jpg";
+        const path = `${uid}/${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from("design-images")
+          .upload(path, action, { upsert: false });
+        if (upErr) throw upErr;
+        image_path = path;
+      } else if (action === "clear") {
+        image_path = null;
+      }
+
+      const patch: Record<string, unknown> = {
+        code: input.code,
+        name: input.name,
+        customer: input.customer,
+        category: input.category,
+        product_type: input.productType,
+        parts: input.parts.map((p) => ({
+          id: p.id,
+          name: p.name,
+          fabric: p.fabric,
+          color: p.color,
+          quantity: p.quantity,
+        })),
+        color: input.color,
+        order_quantity: input.orderQuantity,
+        notes: input.notes,
+      };
+      if (image_path !== undefined) patch.image_path = image_path;
+
       const { data, error } = await supabase
         .from("designs")
-        .update({
-          code: input.code,
-          name: input.name,
-          customer: input.customer,
-          category: input.category,
-          product_type: input.productType,
-          parts: input.parts.map((p) => ({
-            id: p.id,
-            name: p.name,
-            fabric: p.fabric,
-            color: p.color,
-            quantity: p.quantity,
-          })),
-          color: input.color,
-          order_quantity: input.orderQuantity,
-        })
+        .update(patch)
         .eq("id", input.id)
         .select("*")
         .single();
       if (error) throw error;
+
+      // Best-effort remove the previous image if it was replaced or cleared
+      if (image_path !== undefined && input.currentImagePath && input.currentImagePath !== image_path) {
+        await supabase.storage.from("design-images").remove([input.currentImagePath]);
+      }
+
       return mapDesign(data as DbDesign);
     },
     onSuccess: (d) => {
       qc.invalidateQueries({ queryKey: ["designs"] });
       qc.invalidateQueries({ queryKey: ["design", "by-code", d.code] });
+      qc.invalidateQueries({ queryKey: ["design-image"] });
     },
   });
 }
