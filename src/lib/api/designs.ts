@@ -11,7 +11,6 @@ type DbDesign = {
   category: string;
   product_type: string;
   parts: unknown;
-  fabric: string;
   color: string;
   order_quantity: number;
   image_path: string | null;
@@ -26,13 +25,14 @@ function normalizeParts(v: unknown): DesignPart[] {
   return v
     .map((p, i) => {
       if (p && typeof p === "object" && "name" in (p as object)) {
-        const obj = p as { id?: unknown; name?: unknown };
+        const obj = p as { id?: unknown; name?: unknown; fabric?: unknown };
         return {
           id: typeof obj.id === "string" ? obj.id : `p-${i}`,
           name: String(obj.name ?? ""),
+          fabric: typeof obj.fabric === "string" ? obj.fabric : "",
         };
       }
-      if (typeof p === "string") return { id: `p-${i}`, name: p };
+      if (typeof p === "string") return { id: `p-${i}`, name: p, fabric: "" };
       return null;
     })
     .filter((x): x is DesignPart => !!x && !!x.name.trim());
@@ -47,7 +47,6 @@ function mapDesign(r: DbDesign): Design {
     category: r.category,
     productType: r.product_type,
     parts: normalizeParts(r.parts),
-    fabric: r.fabric,
     color: r.color,
     orderQuantity: r.order_quantity,
     imagePath: r.image_path,
@@ -95,7 +94,6 @@ export type CreateDesignInput = {
   category: string;
   productType: string;
   parts: DesignPart[];
-  fabric: string;
   color: string;
   orderQuantity: number;
   imageFile?: File | null;
@@ -128,8 +126,7 @@ export function useCreateDesign() {
           customer: input.customer,
           category: input.category,
           product_type: input.productType,
-          parts: input.parts.map((p) => ({ id: p.id, name: p.name })),
-          fabric: input.fabric,
+          parts: input.parts.map((p) => ({ id: p.id, name: p.name, fabric: p.fabric })),
           color: input.color,
           order_quantity: input.orderQuantity,
           image_path,

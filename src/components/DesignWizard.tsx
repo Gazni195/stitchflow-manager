@@ -108,12 +108,12 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
   }
 
   function pickProductType(pt: ProductType) {
-    const parts = DEFAULT_PARTS[pt].map((name) => ({ id: uid(), name }));
+    const parts = DEFAULT_PARTS[pt].map((name) => ({ id: uid(), name, fabric: "" }));
     setD({ ...d, productType: pt, parts });
   }
 
   function addPart() {
-    setD({ ...d, parts: [...d.parts, { id: uid(), name: "" }] });
+    setD({ ...d, parts: [...d.parts, { id: uid(), name: "", fabric: "" }] });
   }
   function removePart(id: string) {
     setD({ ...d, parts: d.parts.filter((p) => p.id !== id) });
@@ -153,8 +153,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
         customer: d.customer.trim(),
         category: d.category,
         productType: d.productType || "",
-        parts: d.parts.map((p) => ({ id: p.id, name: p.name.trim() })),
-        fabric: d.fabric.trim(),
+        parts: d.parts.map((p) => ({ id: p.id, name: p.name.trim(), fabric: (p.fabric ?? d.fabric ?? "").trim() })),
         color: d.color.trim(),
         orderQuantity: d.orderQuantity,
         imageFile: d.imageFile,

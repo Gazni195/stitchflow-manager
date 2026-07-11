@@ -140,7 +140,7 @@ function DesignDetails({ design }: { design: Design }) {
             <div className="grid grid-cols-2 gap-3">
               <Fact icon={Users} label="Customer" value={design.customer} />
               <Fact icon={Factory} label="Order Qty" value={design.orderQuantity.toLocaleString()} />
-              <Fact icon={Layers} label="Fabric" value={design.fabric || "—"} />
+              <Fact icon={Layers} label="Fabrics" value={design.parts.map((p) => p.fabric).filter(Boolean).join(", ") || "—"} />
               <Fact icon={Palette} label="Color" value={design.color || "—"} />
               <Fact icon={CalendarDays} label="Category" value={design.category || "—"} />
               <Fact icon={Users} label="Created" value={formatDate(design.createdAt)} />
