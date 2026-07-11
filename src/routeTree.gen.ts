@@ -16,6 +16,7 @@ import { Route as SampleMakingRouteImport } from './routes/sample-making'
 import { Route as SampleDevelopmentRouteImport } from './routes/sample-development'
 import { Route as QcRouteImport } from './routes/qc'
 import { Route as PackingRouteImport } from './routes/packing'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HandworkRouteImport } from './routes/handwork'
@@ -26,6 +27,9 @@ import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
+import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
+import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 
 const StockRoute = StockRouteImport.update({
   id: '/stock',
@@ -60,6 +64,11 @@ const QcRoute = QcRouteImport.update({
 const PackingRoute = PackingRouteImport.update({
   id: '/packing',
   path: '/packing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MaterialsRoute = MaterialsRouteImport.update({
@@ -112,6 +121,24 @@ const DesignsCodeRoute = DesignsCodeRouteImport.update({
   path: '/designs/$code',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char91DotmcpChar93ListToolsRoute =
+  Char91DotmcpChar93ListToolsRouteImport.update({
+    id: '/.mcp/list-tools',
+    path: '/.mcp/list-tools',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char91DotmcpChar93InvokeToolToolRoute =
+  Char91DotmcpChar93InvokeToolToolRouteImport.update({
+    id: '/.mcp/invoke-tool/$tool',
+    path: '/.mcp/invoke-tool/$tool',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -122,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/handwork': typeof HandworkRoute
   '/login': typeof LoginRoute
   '/materials': typeof MaterialsRoute
+  '/mcp': typeof McpRoute
   '/packing': typeof PackingRoute
   '/qc': typeof QcRoute
   '/sample-development': typeof SampleDevelopmentRoute
@@ -129,8 +157,11 @@ export interface FileRoutesByFullPath {
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/designs/$code': typeof DesignsCodeRoute
   '/designs/': typeof DesignsIndexRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -141,6 +172,7 @@ export interface FileRoutesByTo {
   '/handwork': typeof HandworkRoute
   '/login': typeof LoginRoute
   '/materials': typeof MaterialsRoute
+  '/mcp': typeof McpRoute
   '/packing': typeof PackingRoute
   '/qc': typeof QcRoute
   '/sample-development': typeof SampleDevelopmentRoute
@@ -148,8 +180,11 @@ export interface FileRoutesByTo {
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/designs/$code': typeof DesignsCodeRoute
   '/designs': typeof DesignsIndexRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -161,6 +196,7 @@ export interface FileRoutesById {
   '/handwork': typeof HandworkRoute
   '/login': typeof LoginRoute
   '/materials': typeof MaterialsRoute
+  '/mcp': typeof McpRoute
   '/packing': typeof PackingRoute
   '/qc': typeof QcRoute
   '/sample-development': typeof SampleDevelopmentRoute
@@ -168,8 +204,11 @@ export interface FileRoutesById {
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/designs/$code': typeof DesignsCodeRoute
   '/designs/': typeof DesignsIndexRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -182,6 +221,7 @@ export interface FileRouteTypes {
     | '/handwork'
     | '/login'
     | '/materials'
+    | '/mcp'
     | '/packing'
     | '/qc'
     | '/sample-development'
@@ -189,8 +229,11 @@ export interface FileRouteTypes {
     | '/samples'
     | '/stitching'
     | '/stock'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/designs/$code'
     | '/designs/'
+    | '/.mcp/invoke-tool/$tool'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -201,6 +244,7 @@ export interface FileRouteTypes {
     | '/handwork'
     | '/login'
     | '/materials'
+    | '/mcp'
     | '/packing'
     | '/qc'
     | '/sample-development'
@@ -208,8 +252,11 @@ export interface FileRouteTypes {
     | '/samples'
     | '/stitching'
     | '/stock'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/designs/$code'
     | '/designs'
+    | '/.mcp/invoke-tool/$tool'
   id:
     | '__root__'
     | '/'
@@ -220,6 +267,7 @@ export interface FileRouteTypes {
     | '/handwork'
     | '/login'
     | '/materials'
+    | '/mcp'
     | '/packing'
     | '/qc'
     | '/sample-development'
@@ -227,8 +275,11 @@ export interface FileRouteTypes {
     | '/samples'
     | '/stitching'
     | '/stock'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/designs/$code'
     | '/designs/'
+    | '/.mcp/invoke-tool/$tool'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -240,6 +291,7 @@ export interface RootRouteChildren {
   HandworkRoute: typeof HandworkRoute
   LoginRoute: typeof LoginRoute
   MaterialsRoute: typeof MaterialsRoute
+  McpRoute: typeof McpRoute
   PackingRoute: typeof PackingRoute
   QcRoute: typeof QcRoute
   SampleDevelopmentRoute: typeof SampleDevelopmentRoute
@@ -247,8 +299,11 @@ export interface RootRouteChildren {
   SamplesRoute: typeof SamplesRoute
   StitchingRoute: typeof StitchingRoute
   StockRoute: typeof StockRoute
+  Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
+  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   DesignsCodeRoute: typeof DesignsCodeRoute
   DesignsIndexRoute: typeof DesignsIndexRoute
+  Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -300,6 +355,13 @@ declare module '@tanstack/react-router' {
       path: '/packing'
       fullPath: '/packing'
       preLoaderRoute: typeof PackingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/materials': {
@@ -372,6 +434,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignsCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/list-tools': {
+      id: '/.mcp/list-tools'
+      path: '/.mcp/list-tools'
+      fullPath: '/.mcp/list-tools'
+      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/invoke-tool/$tool': {
+      id: '/.mcp/invoke-tool/$tool'
+      path: '/.mcp/invoke-tool/$tool'
+      fullPath: '/.mcp/invoke-tool/$tool'
+      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -384,6 +467,7 @@ const rootRouteChildren: RootRouteChildren = {
   HandworkRoute: HandworkRoute,
   LoginRoute: LoginRoute,
   MaterialsRoute: MaterialsRoute,
+  McpRoute: McpRoute,
   PackingRoute: PackingRoute,
   QcRoute: QcRoute,
   SampleDevelopmentRoute: SampleDevelopmentRoute,
@@ -391,8 +475,12 @@ const rootRouteChildren: RootRouteChildren = {
   SamplesRoute: SamplesRoute,
   StitchingRoute: StitchingRoute,
   StockRoute: StockRoute,
+  Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
+  Char91DotwellKnownChar93OauthProtectedResourceRoute:
+    Char91DotwellKnownChar93OauthProtectedResourceRoute,
   DesignsCodeRoute: DesignsCodeRoute,
   DesignsIndexRoute: DesignsIndexRoute,
+  Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
