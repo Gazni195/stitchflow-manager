@@ -1,7 +1,7 @@
 // Supabase-backed CRUD for designs, with react-query hooks.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Design, DesignStatus } from "@/lib/designs";
+import type { Design, DesignPart, DesignStatus } from "@/lib/designs";
 
 type DbDesign = {
   id: string;
@@ -9,6 +9,8 @@ type DbDesign = {
   name: string;
   customer: string;
   category: string;
+  product_type: string;
+  parts: unknown;
   fabric: string;
   color: string;
   order_quantity: number;
@@ -19,6 +21,23 @@ type DbDesign = {
   updated_at: string;
 };
 
+function normalizeParts(v: unknown): DesignPart[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((p, i) => {
+      if (p && typeof p === "object" && "name" in (p as object)) {
+        const obj = p as { id?: unknown; name?: unknown };
+        return {
+          id: typeof obj.id === "string" ? obj.id : `p-${i}`,
+          name: String(obj.name ?? ""),
+        };
+      }
+      if (typeof p === "string") return { id: `p-${i}`, name: p };
+      return null;
+    })
+    .filter((x): x is DesignPart => !!x && !!x.name.trim());
+}
+
 function mapDesign(r: DbDesign): Design {
   return {
     id: r.id,
@@ -26,6 +45,8 @@ function mapDesign(r: DbDesign): Design {
     name: r.name,
     customer: r.customer,
     category: r.category,
+    productType: r.product_type,
+    parts: normalizeParts(r.parts),
     fabric: r.fabric,
     color: r.color,
     orderQuantity: r.order_quantity,
