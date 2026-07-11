@@ -213,7 +213,7 @@ function BulkCuttingPage() {
             title="Cutting Details"
           />
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Field icon={<Scissors className="h-4 w-4" />} label="Fabric Type" value={order.fabric} readOnly />
+            <Field icon={<Barcode className="h-4 w-4" />} label="Fabric Barcode" value={fabricBarcode} onChange={setFabricBarcode} />
             <Field
               icon={<Barcode className="h-4 w-4" />}
               label="Fabric Barcode"
