@@ -123,7 +123,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
       ...d,
       parts: [
         ...d.parts,
-        { id: uid(), name: "", fabric: "", color: "", quantity: 0 },
+        { id: uid(), name: "", fabric: "", color: "" },
       ],
     });
   }
