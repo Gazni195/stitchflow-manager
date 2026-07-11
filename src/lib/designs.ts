@@ -13,7 +13,6 @@ export type DesignPart = {
   name: string;
   fabric: string;
   color: string;
-  quantity: number;
 };
 
 export type Design = {

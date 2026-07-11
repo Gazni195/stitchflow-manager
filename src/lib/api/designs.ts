@@ -31,18 +31,16 @@ function normalizeParts(v: unknown): DesignPart[] {
           name?: unknown;
           fabric?: unknown;
           color?: unknown;
-          quantity?: unknown;
         };
         return {
           id: typeof obj.id === "string" ? obj.id : `p-${i}`,
           name: String(obj.name ?? ""),
           fabric: typeof obj.fabric === "string" ? obj.fabric : "",
           color: typeof obj.color === "string" ? obj.color : "",
-          quantity: typeof obj.quantity === "number" ? obj.quantity : 0,
         };
       }
       if (typeof p === "string")
-        return { id: `p-${i}`, name: p, fabric: "", color: "", quantity: 0 };
+        return { id: `p-${i}`, name: p, fabric: "", color: "" };
       return null;
     })
     .filter((x): x is DesignPart => !!x && !!x.name.trim());
@@ -142,7 +140,6 @@ export function useCreateDesign() {
             name: p.name,
             fabric: p.fabric,
             color: p.color,
-            quantity: p.quantity,
           })),
           color: input.color,
           order_quantity: input.orderQuantity,
@@ -216,7 +213,6 @@ export function useUpdateDesign() {
           name: p.name,
           fabric: p.fabric,
           color: p.color,
-          quantity: p.quantity,
         })),
         color: input.color,
         order_quantity: input.orderQuantity,
