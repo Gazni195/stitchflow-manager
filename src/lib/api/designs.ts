@@ -94,7 +94,6 @@ export type CreateDesignInput = {
   category: string;
   productType: string;
   parts: DesignPart[];
-  fabric: string;
   color: string;
   orderQuantity: number;
   imageFile?: File | null;
