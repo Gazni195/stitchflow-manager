@@ -280,7 +280,6 @@ export function buildTimelineFromWorkflow(
   currentStepId?: string,
 ): TimelineStep[] {
   return wf.steps.map((s) => {
-    const op = getOperation(s.operationId);
     const isCurrent = currentStepId
       ? s.stepId === currentStepId
       : s.status === "in-progress";
@@ -293,22 +292,13 @@ export function buildTimelineFromWorkflow(
           : "pending";
     return {
       key: s.stepId,
-      label: `${s.sequence}. ${s.label ?? op.name}${
-        wf.steps.filter((x) => x.operationId === s.operationId).length > 1 && !s.label
-          ? ""
-          : ""
-      }`.replace(/^(\d+)\. /, (_m, n) => `${n}. `) + "",
+      label: `${s.sequence}. ${stepLabel(s, wf)}`,
       state,
     };
-  }).map((t, i, arr) => {
-    // Prefer stepLabel disambiguation (adds "· Round N" for repeats).
-    const s = wf.steps[i];
-    const label = `${s.sequence}. ${stepLabel(s, wf)}`;
-    return { ...t, label };
   });
 }
-// Silence unused-import when only used above for typing.
-void arr_unused;
+// Keep `getOperation` importable for consumers even if unused here.
+void getOperation;
 
 export function OrderPicker<T extends { code: string; customer: string; quantity: number; progress: number }>({
   orders,
