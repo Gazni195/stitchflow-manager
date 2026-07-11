@@ -113,7 +113,6 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
       name,
       fabric: "",
       color: "",
-      quantity: 0,
     }));
     setD({ ...d, productType: pt, parts });
   }
@@ -148,8 +147,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
       (p) =>
         p.name.trim().length > 0 &&
         p.fabric.trim().length > 0 &&
-        p.color.trim().length > 0 &&
-        p.quantity > 0,
+        p.color.trim().length > 0,
     );
   const step1Valid = !!d.productType && partsValid;
   const step2Valid = d.code.trim() && d.name.trim() && d.customer.trim();
@@ -177,7 +175,6 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
           name: p.name.trim(),
           fabric: p.fabric.trim(),
           color: p.color.trim(),
-          quantity: p.quantity,
         })),
         color: d.color.trim(),
         orderQuantity: d.orderQuantity,
