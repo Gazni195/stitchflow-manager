@@ -1,121 +1,98 @@
 ## Goal
 
-Replace the fixed 12-stage workflow with per-design, configurable workflows where operations can repeat, be skipped, or reordered. Every workflow step becomes a first-class tracked entity.
+Replace the current in-memory/seeded workflow model with a real production workflow engine backed by Lovable Cloud. Each design has its own Sample Workflow, built up during sample development. Approving the sample snapshots it as the Bulk Workflow. The Bulk Workflow stays editable until bulk production begins, then locks. New designs come from a full Create Design wizard (with image upload). All demo/hardcoded design data is removed.
 
-## Core architectural changes
+## Data model (Lovable Cloud / Postgres)
 
-### 1. Operation Catalog (`src/lib/operations.ts` — new)
-A flat, non-sequential registry of available operations the factory can perform. Operations are building blocks, not stages.
+Tables in `public`, all with RLS + explicit GRANTs.
 
-```ts
-export type OperationId =
-  | "sample-creation" | "material-selection" | "sample-making" | "costing" | "sample-approval"
-  | "cutting" | "handwork" | "stitching" | "qc" | "packing" | "barcode" | "ready-stock";
+- **designs**
+  - `id uuid pk`, `code text unique`, `name text`, `customer text`, `category text`, `fabric text`, `color text`, `order_quantity int`, `image_path text` (storage key), `status text` — one of `draft | sampling | sample_approved | in_production | completed`, `created_by uuid`, timestamps.
+- **operations_catalog** (seeded, read-only for users)
+  - `id text pk` (e.g. `cutting`), `name`, `short`, `category`, `repeatable bool`, `sort int`.
+- **design_workflows**
+  - `id uuid pk`, `design_id uuid fk`, `kind text check in ('sample','bulk')`, `locked bool default false`, `created_at`, unique `(design_id, kind)`.
+- **workflow_steps**
+  - `id uuid pk`, `workflow_id uuid fk`, `operation_id text fk`, `sequence int`, `label text null`, `status text check in ('pending','in-progress','completed','skipped') default 'pending'`, `assigned_to text`, `input_quantity int`, `output_quantity int`, `wastage_quantity int`, `start_date date`, `end_date date`, `remarks text`, timestamps. Index `(workflow_id, sequence)`.
 
-export type Operation = {
-  id: OperationId;
-  name: string;          // "Bulk Stitching"
-  short: string;         // "Stitching"
-  icon: LucideIcon;
-  route: string;         // module route used to log work
-  category: "Sample" | "Bulk" | "Finishing";
-  repeatable: boolean;   // stitching/handwork = true
-};
-```
+Storage bucket `design-images` (public read, authenticated write).
 
-No ordering, no `step` number. `WORKFLOW` in `src/lib/workflow.ts` is deleted; anything that imported it now imports from `operations.ts`.
+RLS: authenticated users can CRUD their org's rows (single-tenant for now → `auth.uid() = created_by` on designs, workflow rows joined via design ownership through a `has_design_access(design_id)` SECURITY DEFINER helper). Service role bypass as usual.
 
-### 2. Design Workflow Model (`src/lib/design-workflow.ts` — new)
-Each design owns an ordered list of workflow steps. Same operation can appear multiple times — each instance is a distinct step with its own tracking.
+## Server functions (`src/lib/*.functions.ts`)
 
-```ts
-export type StepStatus = "pending" | "in-progress" | "completed" | "skipped";
+All go through `requireSupabaseAuth`.
 
-export type WorkflowStep = {
-  stepId: string;             // stable uuid, unique per design
-  operationId: OperationId;
-  sequence: number;           // position in this design's flow
-  label?: string;             // optional override ("Stitching — Round 2")
-  status: StepStatus;
-  assignedTo?: string;        // team or worker
-  quantity?: number;
-  startDate?: string;
-  endDate?: string;
-  remarks?: string;
-};
+- `designs.functions.ts`: `listDesigns`, `getDesign(code)`, `createDesign(input)`, `updateDesign`, `uploadDesignImage` (returns signed upload URL or accepts base64 → stores in bucket).
+- `workflows.functions.ts`:
+  - `getWorkflows(designId)` → `{ sample, bulk }`
+  - `upsertSampleStep`, `addStep(workflowId, operationId, atIndex)`, `removeStep`, `moveStep(stepId, dir)`, `reorderSteps(workflowId, orderedIds)`, `duplicateStep`, `renameStep`, `toggleSkip`, `updateStepFields` (assigned/quantities/dates/remarks/status).
+  - `approveSample(designId)` — server-side snapshot: copy sample steps → new bulk workflow, set `designs.status = 'sample_approved'`.
+  - `startBulkProduction(designId)` — locks the bulk workflow, sets status `in_production`.
+- `operations.functions.ts`: `listOperations()` from catalog table.
 
-export type DesignWorkflow = {
-  designCode: string;
-  steps: WorkflowStep[];
-};
-```
+Client-side reads use TanStack Query with `ensureQueryData` in loaders.
 
-Helpers:
-- `getWorkflow(code)` — returns the design's step list (mock store for now).
-- `getCurrentStep(wf)` / `getNextStep(wf, fromStepId)` — always compute from configured steps, never a global constant.
-- `updateStep(wf, stepId, patch)` — immutable update.
-- `addStep`, `removeStep`, `moveStep`, `duplicateStep` — used by the configurator.
+## Frontend changes
 
-Mock data seeds 2–3 designs with different flows (matching the user's Design A/B/C examples) so the UI has realistic variety.
+### 1. Remove demo data
+- Delete seeded designs from `src/lib/designs.ts` and the seed block in `src/lib/design-workflow.ts`. Keep the operation catalog as a fallback until the DB catalog loads (single source of truth: DB, but the static list mirrors it for icon/route lookup).
+- `SAMPLE_ORDERS` in `production/ui.tsx` becomes a live query for in-production designs (or is removed from module screens in favor of an actual design picker driven by DB rows).
 
-### 3. Workflow Configurator (`src/routes/designs.$code.workflow.tsx` — new)
-Production-manager screen to build/edit a design's workflow.
+### 2. New Design wizard (`/designs/new`)
+Multi-step form:
+1. Basics — code (auto-suggested), name, customer, category.
+2. Specs — fabric, color, order quantity.
+3. Image upload — drop zone → uploads to `design-images` bucket.
+4. Sample workflow starter — optional; user can add first few operations now or later.
+Submit → `createDesign` → redirect to `/designs/<code>`.
 
-- Left/top: current ordered step list (draggable cards with up/down buttons — no dnd library, just reorder controls to stay dependency-free).
-- Right/bottom: "Add operation" palette listing all operations from the catalog; tapping one appends a step.
-- Per step: rename label, delete, duplicate (for repeated operations), toggle "skip".
-- Save action persists to the mock store.
+### 3. Design Details (`/designs/$code`)
+- Two-tab "Workflow" section: **Sample Workflow** and **Bulk Workflow**.
+- Sample tab: always editable while `status !== 'sample_approved'`. Big "Approve Sample & Generate Bulk Workflow" CTA.
+- Bulk tab: appears after approval; editable while `status === 'sample_approved'`; shows "Start Bulk Production" CTA that locks it. After lock, read-only with progress.
+- Both tabs render the shared **Workflow Configurator** component.
 
-Link from `designs.$code.tsx` header: "Configure Workflow".
+### 4. Workflow Configurator (`src/components/workflow/Configurator.tsx`)
+Uses `@dnd-kit/core` + `@dnd-kit/sortable`.
+- Vertical sortable list of step cards (drag handle, sequence #, operation name, status pill, quantities summary).
+- Per card: edit label, duplicate, skip toggle, delete, expand to edit assigned/quantities/dates/remarks.
+- Bottom "Add Operation" palette (chips grouped by category) → inserts at end or at a chosen "+" slot between existing cards.
+- All mutations optimistic via TanStack Query + `invalidateQueries`.
+- Disabled when workflow is `locked`.
 
-### 4. Design Details rework (`src/routes/designs.$code.tsx`)
-Progress list is driven by the design's own `steps` (not the global WORKFLOW). Shows repeats correctly ("Stitching · Round 2"), skipped steps dimmed, current step highlighted.
+### 5. Production modules
+Each module screen (`cutting`, `handwork`, `stitching`, `qc`, `packing`, `barcode`, `stock`) keeps the `useStageChrome` hook but sources the workflow from DB via `getWorkflows(designId).bulk`. Saving a step calls `updateStepFields`. "Next" navigation reads the DB sequence.
 
-### 5. Stage / module screens become operation-agnostic
-Today every module (`cutting.tsx`, `stitching.tsx`, `handwork.tsx`, `qc.tsx`, `packing.tsx`, `barcode.tsx`, `stock.tsx`) hardcodes:
-- its position ("Step 8 of 12"),
-- the "Continue to X" next-stage link,
-- a fixed timeline via `buildTimeline(...)`.
-
-Changes:
-- Each module reads the selected order/design, looks up its workflow, and finds the **current step** matching that operation (by `stepId` from a query param `?step=<stepId>` when navigated from the design page, otherwise the first non-completed step of that operation type).
-- Header subtitle becomes `Step {sequence} of {total} · {category}` derived from the design's workflow.
-- The "Continue to …" button uses `getNextStep(wf, currentStepId)` — routes to that operation's module with `?step=<nextStepId>`. If no next step, shows "Finish workflow".
-- The bottom timeline renders the design's actual step list, not the global one. `buildTimeline` in `src/components/production/ui.tsx` is rewritten to accept `(steps, currentStepId)` and render dynamically, including repeats.
-- Save/Complete buttons call `updateStep(...)` on the mock store with quantity/assigned/dates/remarks/status.
-
-### 6. Dashboard (`src/routes/index.tsx`) + AppShell nav
-- Dashboard's "workflow stages" grid becomes an "Operations" grid sourced from the operation catalog (no numbered steps).
-- Sidebar/bottom nav keeps the same top-level entries (Dashboard, Designs, Samples, plus a few key operation shortcuts) but drops any "Step N of 12" phrasing.
-
-### 7. Shared production UI (`src/components/production/ui.tsx`)
-- `buildTimeline(currentTitle)` → replaced by `buildTimelineFromWorkflow(steps, currentStepId)`.
-- `ProductionTimeline` renders `{sequence}. {label ?? operation.name}` and supports repeated operations + skipped state.
-- `SAMPLE_ORDERS` gains a `designCode` link so modules can resolve the correct workflow.
+### 6. Dashboard & list
+- `/designs` lists rows from DB, empty state → "Create your first design" CTA.
+- Dashboard KPIs become live counts (designs in each status).
 
 ## Files touched
 
 New:
-- `src/lib/operations.ts`
-- `src/lib/design-workflow.ts`
-- `src/routes/designs.$code.workflow.tsx`
+- Migration files for tables + storage bucket + RLS + GRANTs + operation catalog seed.
+- `src/lib/designs.functions.ts`, `src/lib/workflows.functions.ts`, `src/lib/operations.functions.ts`.
+- `src/routes/designs.new.tsx` (wizard).
+- `src/components/workflow/Configurator.tsx`, `StepCard.tsx`, `AddOperationPalette.tsx`.
 
 Rewritten:
-- `src/lib/workflow.ts` — thin shim re-exporting from `operations.ts` during migration, then deleted once callers move (done in same pass).
-- `src/components/production/ui.tsx` — dynamic timeline + workflow-aware helpers.
-- `src/routes/designs.$code.tsx` — workflow-driven progress + link to configurator.
-- `src/routes/index.tsx` — operation grid.
-- `src/routes/cutting.tsx`, `handwork.tsx`, `stitching.tsx`, `qc.tsx`, `packing.tsx`, `barcode.tsx`, `stock.tsx` — read/write via `design-workflow` helpers; dynamic subtitle, next-step button, timeline.
-- `src/components/AppShell.tsx` — remove "12-stage" language, keep nav.
-- `src/components/StagePage.tsx` — becomes an operation-based placeholder for sample-stage routes still using it.
+- `src/lib/designs.ts` → thin types + query hooks (no mock data).
+- `src/lib/design-workflow.ts` → server-backed helpers + query hooks (no seed).
+- `src/routes/designs.index.tsx`, `src/routes/designs.$code.tsx`, `src/routes/designs.$code.workflow.tsx` (becomes redirect into the details tab, or removed).
+- `src/routes/index.tsx` (live KPIs).
+- `src/components/production/ui.tsx` (drop `SAMPLE_ORDERS`).
+- All production module routes (DB-backed step reads/writes).
 
-Out of scope (kept as-is for this pass):
-- Persistence beyond an in-memory mock store. When Cloud is enabled later, `design-workflow.ts` swaps its store for Supabase-backed reads/writes without changing callers.
-- Drag-and-drop reordering (up/down buttons are enough for now).
-- Role-based access control on the configurator.
+Dependency: `bun add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities`.
+
+## Out of scope for this pass
+- Multi-tenant orgs / role-based permissions (Production Manager vs operator). All authenticated users can edit for now; noted in a follow-up.
+- Real-time collaboration on the configurator (single-user optimistic updates only).
+- ERPNext sync.
 
 ## Technical notes
-
-- Step identity uses `crypto.randomUUID()` at creation. Route deep-links carry `?step=<uuid>` so a module knows *which* instance of a repeated operation it's logging against.
-- All workflow reads/writes go through pure helpers in `design-workflow.ts` — modules never mutate structures directly, making the future Supabase swap mechanical.
-- `getNextStep` skips over `status === "skipped"` and stops at the first `pending` step after the current one.
+- `approveSample` runs in a single SQL transaction (RPC) so the snapshot is atomic.
+- `locked` on bulk workflows is enforced by both an RLS/CHECK trigger and the client (disabled UI). Modules can still write step **execution** fields (status/quantities/dates/remarks) on a locked workflow — the lock only blocks structural changes (add/remove/reorder/rename/skip).
+- Step identity remains UUID so deep links (`?step=<uuid>`) keep working.
+- Image upload goes through a signed-URL flow to keep the service role out of the client.
