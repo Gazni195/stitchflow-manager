@@ -119,7 +119,7 @@ function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => 
   }
 
   const partsValid = d.parts.every(
-    (p) => p.name.trim() && p.fabric.trim() && p.color.trim() && p.quantity > 0,
+    (p) => p.name.trim() && p.fabric.trim() && p.color.trim(),
   );
   const valid =
     d.code.trim() &&
@@ -145,7 +145,6 @@ function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => 
           name: p.name.trim(),
           fabric: p.fabric.trim(),
           color: p.color.trim(),
-          quantity: p.quantity,
         })),
         color: d.color.trim(),
         orderQuantity: d.orderQuantity,
@@ -262,15 +261,9 @@ function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => 
                         className="flex-1 rounded-lg bg-transparent px-2 py-1.5 text-sm font-semibold outline-none focus:bg-muted/40"
                       />
                     </div>
-                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <PartField label="Fabric" value={p.fabric} onChange={(v) => updatePart(p.id, { fabric: v })} />
                       <PartField label="Color" value={p.color} onChange={(v) => updatePart(p.id, { color: v })} />
-                      <PartField
-                        label="Quantity"
-                        type="number"
-                        value={p.quantity ? String(p.quantity) : ""}
-                        onChange={(v) => updatePart(p.id, { quantity: Math.max(0, Number(v) || 0) })}
-                      />
                     </div>
                   </div>
                 ))}

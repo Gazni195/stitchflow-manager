@@ -113,7 +113,6 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
       name,
       fabric: "",
       color: "",
-      quantity: 0,
     }));
     setD({ ...d, productType: pt, parts });
   }
@@ -123,7 +122,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
       ...d,
       parts: [
         ...d.parts,
-        { id: uid(), name: "", fabric: "", color: "", quantity: 0 },
+        { id: uid(), name: "", fabric: "", color: "" },
       ],
     });
   }
@@ -148,8 +147,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
       (p) =>
         p.name.trim().length > 0 &&
         p.fabric.trim().length > 0 &&
-        p.color.trim().length > 0 &&
-        p.quantity > 0,
+        p.color.trim().length > 0,
     );
   const step1Valid = !!d.productType && partsValid;
   const step2Valid = d.code.trim() && d.name.trim() && d.customer.trim();
@@ -177,7 +175,6 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
           name: p.name.trim(),
           fabric: p.fabric.trim(),
           color: p.color.trim(),
-          quantity: p.quantity,
         })),
         color: d.color.trim(),
         orderQuantity: d.orderQuantity,
@@ -337,7 +334,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
                           </div>
                         </div>
 
-                        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                           <PartField
                             label="Fabric"
                             placeholder="Silk Chanderi"
@@ -349,17 +346,6 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
                             placeholder="Ivory"
                             value={p.color}
                             onChange={(v) => updatePart(p.id, { color: v })}
-                          />
-                          <PartField
-                            label="Quantity"
-                            placeholder="0"
-                            type="number"
-                            value={p.quantity ? String(p.quantity) : ""}
-                            onChange={(v) =>
-                              updatePart(p.id, {
-                                quantity: Math.max(0, Number(v) || 0),
-                              })
-                            }
                           />
                         </div>
                       </div>
