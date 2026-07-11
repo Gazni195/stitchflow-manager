@@ -226,7 +226,7 @@ export function useUpdateDesign() {
 
       const { data, error } = await supabase
         .from("designs")
-        .update(patch)
+        .update(patch as never)
         .eq("id", input.id)
         .select("*")
         .single();
