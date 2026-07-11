@@ -1,14 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import {
-  Search, Shirt, Users, Cog, Calendar, Save, CheckCircle2, ArrowRight, FileText,
+  Search, Shirt, Users, Cog, Calendar, Save, CheckCircle2, FileText,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { WORKFLOW } from "@/lib/workflow";
 import {
   SectionHeader, MiniStat, Field, SelectField, NumField, ReadStat, BigStat,
-  ProductionTimeline, OrderPicker, SAMPLE_ORDERS, buildTimeline,
+  OrderPicker, SAMPLE_ORDERS,
 } from "@/components/production/ui";
+import { useStageChrome, NextStepButton, StageTimelineCard } from "@/components/production/stage-chrome";
 
 export const Route = createFileRoute("/stitching")({ component: BulkStitchingPage });
 
