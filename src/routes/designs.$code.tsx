@@ -229,13 +229,6 @@ function Fact({
   );
 }
 
-function stageState(design: Design, step: number): "done" | "current" | "pending" {
-  const currentStep = Math.max(1, Math.round((design.progress / 100) * WORKFLOW.length));
-  if (design.progress >= 100) return "done";
-  if (step < currentStep) return "done";
-  if (step === currentStep) return "current";
-  return "pending";
-}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
