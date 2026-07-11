@@ -179,25 +179,50 @@ function BulkHandWorkPage() {
 
         {/* 2. Select Part */}
         <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <SectionHeader icon={<Hand className="h-4 w-4" />} title="Select Part" />
+          <SectionHeader
+            icon={<Hand className="h-4 w-4" />}
+            title="Select Part"
+            hint={`Fabric: ${partFabric}`}
+          />
           <div className="mt-3 flex flex-wrap gap-2">
-            {PARTS.map((name) => {
-              const active = part === name;
+            {orderParts.map((p) => {
+              const active = part === p.name;
               return (
                 <button
-                  key={name}
-                  onClick={() => setPart(name)}
+                  key={p.name}
+                  onClick={() => setPart(p.name)}
                   className={cn(
-                    "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                    "flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
                     active
                       ? "border-primary bg-primary text-primary-foreground shadow-sm"
                       : "border-border bg-background text-foreground hover:border-primary/40",
                   )}
                 >
-                  {name}
+                  <span>{p.name}</span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                      active
+                        ? "bg-white/20 text-primary-foreground"
+                        : "bg-primary-soft text-primary",
+                    )}
+                  >
+                    {p.fabric}
+                  </span>
                 </button>
               );
             })}
+            <button
+              onClick={() => setPart("Custom")}
+              className={cn(
+                "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                part === "Custom"
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : "border-border bg-background text-foreground hover:border-primary/40",
+              )}
+            >
+              Custom
+            </button>
           </div>
           {part === "Custom" && (
             <input
@@ -208,6 +233,7 @@ function BulkHandWorkPage() {
             />
           )}
         </section>
+
 
         {/* 3. Hand Work Details */}
         <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
