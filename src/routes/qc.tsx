@@ -1,14 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import {
-  Search, ShieldCheck, User, Calendar, Save, CheckCircle2, ArrowRight, FileText, Plus, Trash2, AlertTriangle,
+  Search, ShieldCheck, User, Calendar, Save, CheckCircle2, Plus, Trash2, AlertTriangle,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { WORKFLOW } from "@/lib/workflow";
 import {
   SectionHeader, MiniStat, Field, SelectField, NumField, ReadStat, BigStat,
-  ProductionTimeline, OrderPicker, SAMPLE_ORDERS, buildTimeline,
+  OrderPicker, SAMPLE_ORDERS,
 } from "@/components/production/ui";
+import { useStageChrome, NextStepButton, StageTimelineCard } from "@/components/production/stage-chrome";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/qc")({ component: QualityCheckPage });
@@ -57,9 +57,10 @@ function QualityCheckPage() {
       ...rs,
       { id: `r${Date.now()}`, part: PARTS[0], checked: 0, passed: 0, rejected: 0, reason: "Stitch Issue", decision: "Pass" },
     ]);
+  const chrome = useStageChrome(selectedCode, "qc");
 
   return (
-    <AppShell title="Quality Check" subtitle={`Step 9 of ${WORKFLOW.length} · Finishing`}>
+    <AppShell title="Quality Check" subtitle={chrome.subtitle}>
       <div className="grid gap-5">
         <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
           <SectionHeader icon={<Search className="h-4 w-4" />} title="Production Order" hint="Search by design code" />
@@ -175,15 +176,11 @@ function QualityCheckPage() {
           <button className="inline-flex items-center justify-center gap-2 rounded-2xl bg-success px-4 py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90">
             <CheckCircle2 className="h-4 w-4" /> Complete QC
           </button>
-          <Link to="/packing" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90">
-            Continue to Packaging <ArrowRight className="h-4 w-4" />
-          </Link>
+          <NextStepButton next={chrome.next} />
         </section>
 
-        <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <SectionHeader icon={<FileText className="h-4 w-4" />} title="Production Timeline" />
-          <ProductionTimeline steps={buildTimeline("Quality Check")} currentIcon={ShieldCheck} />
-        </section>
+        <StageTimelineCard chrome={chrome} currentIcon={ShieldCheck} />
+
       </div>
     </AppShell>
   );

@@ -1,14 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import {
-  Search, Package, Users, Save, CheckCircle2, ArrowRight, FileText, Box, ShoppingBag, Gift, Sparkles,
+  Search, Package, Users, Save, CheckCircle2, FileText, Box, ShoppingBag, Gift, Sparkles,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { WORKFLOW } from "@/lib/workflow";
 import {
   SectionHeader, MiniStat, SelectField, NumField, ReadStat, BigStat,
-  ProductionTimeline, OrderPicker, SAMPLE_ORDERS, buildTimeline,
+  OrderPicker, SAMPLE_ORDERS,
 } from "@/components/production/ui";
+import { useStageChrome, NextStepButton, StageTimelineCard } from "@/components/production/stage-chrome";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/packing")({ component: PackagingPage });
