@@ -9,12 +9,13 @@ import {
   OrderPicker, SAMPLE_ORDERS,
 } from "@/components/production/ui";
 import { useStageChrome, NextStepButton, StageTimelineCard } from "@/components/production/stage-chrome";
+import { getOrderParts, getPartFabric } from "@/lib/production-parts";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/qc")({ component: QualityCheckPage });
 
 const INSPECTORS = ["Anita Sharma", "Vikram Rao", "Neha Iyer", "Rakesh Gupta"];
-const PARTS = ["Front Body", "Back Body", "Sleeve", "Pant", "Dupatta"];
+
 const REASONS = ["Stitch Issue", "Measurement Issue", "Fabric Defect", "Hand Work Defect", "Other"] as const;
 const DECISIONS = ["Pass", "Rework", "Reject"] as const;
 
