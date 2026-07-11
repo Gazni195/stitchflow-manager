@@ -3,6 +3,7 @@ import { Menu, Bell, Search, LayoutDashboard, Shirt, FlaskConical, Factory, Ware
 import { useState, type ReactNode } from "react";
 import { WORKFLOW } from "@/lib/workflow";
 import { cn } from "@/lib/utils";
+import { useRequireAuth } from "@/hooks/use-auth";
 
 const PRIMARY_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -25,6 +26,7 @@ export function AppShell({
 }) {
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useRequireAuth();
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -90,6 +92,16 @@ export function AppShell({
               <div className="ml-1 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-primary-glow text-sm font-bold text-primary-foreground shadow-sm">
                 FL
               </div>
+              <button
+                aria-label="Sign out"
+                onClick={async () => {
+                  const { supabase } = await import("@/integrations/supabase/client");
+                  await supabase.auth.signOut();
+                }}
+                className="hidden rounded-xl px-2 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground sm:inline-flex"
+              >
+                Sign out
+              </button>
             </div>
           </div>
         </header>
