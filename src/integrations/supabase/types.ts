@@ -62,6 +62,8 @@ export type Database = {
           image_path: string | null
           name: string
           order_quantity: number
+          parts: Json
+          product_type: string
           status: string
           updated_at: string
         }
@@ -77,6 +79,8 @@ export type Database = {
           image_path?: string | null
           name: string
           order_quantity?: number
+          parts?: Json
+          product_type?: string
           status?: string
           updated_at?: string
         }
@@ -92,6 +96,8 @@ export type Database = {
           image_path?: string | null
           name?: string
           order_quantity?: number
+          parts?: Json
+          product_type?: string
           status?: string
           updated_at?: string
         }
