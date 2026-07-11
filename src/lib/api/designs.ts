@@ -11,7 +11,6 @@ type DbDesign = {
   category: string;
   product_type: string;
   parts: unknown;
-  fabric: string;
   color: string;
   order_quantity: number;
   image_path: string | null;
