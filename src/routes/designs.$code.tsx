@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { DesignActionsMenu } from "@/components/DesignActionsMenu";
 import { useRequireAuth } from "@/hooks/use-auth";
 import { STATUS_LABEL, STATUS_TONE, type Design } from "@/lib/designs";
 import { useDesignByCode } from "@/lib/api/designs";
