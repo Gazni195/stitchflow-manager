@@ -35,9 +35,10 @@ function BulkStitchingPage() {
   const balance = Math.max(0, received - stitched);
   const pct = received ? Math.min(100, Math.round((stitched / received) * 100)) : 0;
   const order = SAMPLE_ORDERS.find((o) => o.code === selectedCode) ?? SAMPLE_ORDERS[0];
+  const chrome = useStageChrome(selectedCode, "stitching");
 
   return (
-    <AppShell title="Bulk Stitching" subtitle={`Step 8 of ${WORKFLOW.length} · Bulk`}>
+    <AppShell title="Bulk Stitching" subtitle={chrome.subtitle}>
       <div className="grid gap-5">
         <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
           <SectionHeader icon={<Search className="h-4 w-4" />} title="Select Production Order" hint="Search by design code" />
@@ -139,15 +140,11 @@ function BulkStitchingPage() {
           <button className="inline-flex items-center justify-center gap-2 rounded-2xl bg-success px-4 py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90">
             <CheckCircle2 className="h-4 w-4" /> Complete Stitching
           </button>
-          <Link to="/qc" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90">
-            Continue to QC <ArrowRight className="h-4 w-4" />
-          </Link>
+          <NextStepButton next={chrome.next} />
         </section>
 
-        <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <SectionHeader icon={<CheckCircle2 className="h-4 w-4" />} title="Production Timeline" />
-          <ProductionTimeline steps={buildTimeline("Bulk Stitching")} currentIcon={Shirt} />
-        </section>
+        <StageTimelineCard chrome={chrome} currentIcon={Shirt} />
+
       </div>
     </AppShell>
   );
