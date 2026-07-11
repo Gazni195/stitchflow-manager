@@ -1,13 +1,13 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
-  Search, QrCode, Printer, RefreshCw, CheckCircle2, ArrowRight, FileText,
+  Search, QrCode, Printer, RefreshCw, CheckCircle2,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { WORKFLOW } from "@/lib/workflow";
 import {
-  SectionHeader, MiniStat, NumField, ProductionTimeline, OrderPicker, SAMPLE_ORDERS, buildTimeline,
+  SectionHeader, MiniStat, NumField, OrderPicker, SAMPLE_ORDERS,
 } from "@/components/production/ui";
+import { useStageChrome, NextStepButton, StageTimelineCard } from "@/components/production/stage-chrome";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/barcode")({ component: BarcodePage });

@@ -4,11 +4,11 @@ import {
   Search, Warehouse, Calendar, Save, CheckCircle2, RefreshCw, FileText, MapPin,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { WORKFLOW } from "@/lib/workflow";
 import {
   SectionHeader, MiniStat, Field, SelectField, NumField, BigStat,
-  ProductionTimeline, OrderPicker, SAMPLE_ORDERS, buildTimeline,
+  OrderPicker, SAMPLE_ORDERS,
 } from "@/components/production/ui";
+import { useStageChrome, StageTimelineCard } from "@/components/production/stage-chrome";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/stock")({ component: ReadyStockPage });

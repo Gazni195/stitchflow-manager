@@ -33,9 +33,10 @@ function PackagingPage() {
   const order = SAMPLE_ORDERS.find((o) => o.code === selectedCode) ?? SAMPLE_ORDERS[0];
   const remaining = Math.max(0, order.quantity - packed);
   const pct = order.quantity ? Math.min(100, Math.round((packed / order.quantity) * 100)) : 0;
+  const chrome = useStageChrome(selectedCode, "packing");
 
   return (
-    <AppShell title="Packaging" subtitle={`Step 10 of ${WORKFLOW.length} · Finishing`}>
+    <AppShell title="Packaging" subtitle={chrome.subtitle}>
       <div className="grid gap-5">
         <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
           <SectionHeader icon={<Search className="h-4 w-4" />} title="Production Order" />
@@ -131,15 +132,11 @@ function PackagingPage() {
           <button className="inline-flex items-center justify-center gap-2 rounded-2xl bg-success px-4 py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90">
             <CheckCircle2 className="h-4 w-4" /> Complete Packaging
           </button>
-          <Link to="/barcode" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90">
-            Continue to Barcode <ArrowRight className="h-4 w-4" />
-          </Link>
+          <NextStepButton next={chrome.next} />
         </section>
 
-        <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <SectionHeader icon={<CheckCircle2 className="h-4 w-4" />} title="Production Timeline" />
-          <ProductionTimeline steps={buildTimeline("Packaging")} currentIcon={Package} />
-        </section>
+        <StageTimelineCard chrome={chrome} currentIcon={Package} />
+
       </div>
     </AppShell>
   );
