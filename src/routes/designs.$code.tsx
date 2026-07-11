@@ -7,11 +7,18 @@ import {
   Palette,
   Pencil,
   Ruler,
+  Settings2,
   Users,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { getDesign, STATUS_TONE, type Design } from "@/lib/designs";
-import { WORKFLOW } from "@/lib/workflow";
+import {
+  useDesignWorkflow,
+  stepLabel,
+  type WorkflowStep,
+  type DesignWorkflow,
+} from "@/lib/design-workflow";
+import { getOperation } from "@/lib/operations";
 
 export const Route = createFileRoute("/designs/$code")({
   loader: ({ params }) => {
