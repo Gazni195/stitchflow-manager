@@ -300,35 +300,67 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
                     {d.parts.map((p, i) => (
                       <div
                         key={p.id}
-                        className="flex items-center gap-2 rounded-2xl border border-border bg-card p-2"
+                        className="rounded-2xl border border-border bg-card p-3"
                       >
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary-soft text-xs font-bold text-primary">
-                          {i + 1}
-                        </span>
-                        <input
-                          value={p.name}
-                          onChange={(e) => renamePart(p.id, e.target.value)}
-                          placeholder="Part name (e.g. Sleeve)"
-                          className="flex-1 rounded-lg bg-transparent px-2 py-1.5 text-sm font-semibold outline-none focus:bg-muted/40"
-                        />
-                        <div className="flex items-center gap-1">
-                          <IconBtn
-                            label="Move up"
-                            disabled={i === 0}
-                            onClick={() => movePart(i, -1)}
-                          >
-                            <ArrowUp className="h-4 w-4" />
-                          </IconBtn>
-                          <IconBtn
-                            label="Move down"
-                            disabled={i === d.parts.length - 1}
-                            onClick={() => movePart(i, 1)}
-                          >
-                            <ArrowDown className="h-4 w-4" />
-                          </IconBtn>
-                          <IconBtn label="Remove" onClick={() => removePart(p.id)} destructive>
-                            <Trash2 className="h-4 w-4" />
-                          </IconBtn>
+                        <div className="flex items-center gap-2">
+                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary-soft text-xs font-bold text-primary">
+                            {i + 1}
+                          </span>
+                          <input
+                            value={p.name}
+                            onChange={(e) => updatePart(p.id, { name: e.target.value })}
+                            placeholder="Part name (e.g. Sleeve)"
+                            className="flex-1 rounded-lg bg-transparent px-2 py-1.5 text-sm font-semibold outline-none focus:bg-muted/40"
+                          />
+                          <div className="flex items-center gap-1">
+                            <IconBtn
+                              label="Move up"
+                              disabled={i === 0}
+                              onClick={() => movePart(i, -1)}
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </IconBtn>
+                            <IconBtn
+                              label="Move down"
+                              disabled={i === d.parts.length - 1}
+                              onClick={() => movePart(i, 1)}
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </IconBtn>
+                            <IconBtn
+                              label="Remove"
+                              onClick={() => removePart(p.id)}
+                              destructive
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </IconBtn>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          <PartField
+                            label="Fabric"
+                            placeholder="Silk Chanderi"
+                            value={p.fabric}
+                            onChange={(v) => updatePart(p.id, { fabric: v })}
+                          />
+                          <PartField
+                            label="Color"
+                            placeholder="Ivory"
+                            value={p.color}
+                            onChange={(v) => updatePart(p.id, { color: v })}
+                          />
+                          <PartField
+                            label="Quantity"
+                            placeholder="0"
+                            type="number"
+                            value={p.quantity ? String(p.quantity) : ""}
+                            onChange={(v) =>
+                              updatePart(p.id, {
+                                quantity: Math.max(0, Number(v) || 0),
+                              })
+                            }
+                          />
                         </div>
                       </div>
                     ))}
