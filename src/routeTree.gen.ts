@@ -23,19 +23,9 @@ import { Route as CostingRouteImport } from './routes/costing'
 import { Route as BarcodeRouteImport } from './routes/barcode'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SampleDevelopmentIndexRouteImport } from './routes/sample-development.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
-import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
 import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
-import { Route as SampleDevelopmentCodeTimelineRouteImport } from './routes/sample-development.$code.timeline'
-import { Route as SampleDevelopmentCodeProductionRouteImport } from './routes/sample-development.$code.production'
-import { Route as SampleDevelopmentCodeNextProcessRouteImport } from './routes/sample-development.$code.next-process'
-import { Route as SampleDevelopmentCodeMaterialsRouteImport } from './routes/sample-development.$code.materials'
-import { Route as SampleDevelopmentCodeCostRouteImport } from './routes/sample-development.$code.cost'
-import { Route as SampleDevelopmentCodeApprovedRouteImport } from './routes/sample-development.$code.approved'
-import { Route as SampleDevelopmentCodeApprovalRouteImport } from './routes/sample-development.$code.approval'
 import { Route as DesignsCodeWorkflowRouteImport } from './routes/designs.$code.workflow'
-import { Route as SampleDevelopmentCodeStepStepIdRouteImport } from './routes/sample-development.$code.step.$stepId'
 
 const StockRoute = StockRouteImport.update({
   id: '/stock',
@@ -107,19 +97,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SampleDevelopmentIndexRoute = SampleDevelopmentIndexRouteImport.update({
-  id: '/sample-development/',
-  path: '/sample-development/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DesignsIndexRoute = DesignsIndexRouteImport.update({
   id: '/designs/',
   path: '/designs/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SampleDevelopmentCodeRoute = SampleDevelopmentCodeRouteImport.update({
-  id: '/sample-development/$code',
-  path: '/sample-development/$code',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DesignsCodeRoute = DesignsCodeRouteImport.update({
@@ -127,59 +107,11 @@ const DesignsCodeRoute = DesignsCodeRouteImport.update({
   path: '/designs/$code',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SampleDevelopmentCodeTimelineRoute =
-  SampleDevelopmentCodeTimelineRouteImport.update({
-    id: '/timeline',
-    path: '/timeline',
-    getParentRoute: () => SampleDevelopmentCodeRoute,
-  } as any)
-const SampleDevelopmentCodeProductionRoute =
-  SampleDevelopmentCodeProductionRouteImport.update({
-    id: '/production',
-    path: '/production',
-    getParentRoute: () => SampleDevelopmentCodeRoute,
-  } as any)
-const SampleDevelopmentCodeNextProcessRoute =
-  SampleDevelopmentCodeNextProcessRouteImport.update({
-    id: '/next-process',
-    path: '/next-process',
-    getParentRoute: () => SampleDevelopmentCodeRoute,
-  } as any)
-const SampleDevelopmentCodeMaterialsRoute =
-  SampleDevelopmentCodeMaterialsRouteImport.update({
-    id: '/materials',
-    path: '/materials',
-    getParentRoute: () => SampleDevelopmentCodeRoute,
-  } as any)
-const SampleDevelopmentCodeCostRoute =
-  SampleDevelopmentCodeCostRouteImport.update({
-    id: '/cost',
-    path: '/cost',
-    getParentRoute: () => SampleDevelopmentCodeRoute,
-  } as any)
-const SampleDevelopmentCodeApprovedRoute =
-  SampleDevelopmentCodeApprovedRouteImport.update({
-    id: '/approved',
-    path: '/approved',
-    getParentRoute: () => SampleDevelopmentCodeRoute,
-  } as any)
-const SampleDevelopmentCodeApprovalRoute =
-  SampleDevelopmentCodeApprovalRouteImport.update({
-    id: '/approval',
-    path: '/approval',
-    getParentRoute: () => SampleDevelopmentCodeRoute,
-  } as any)
 const DesignsCodeWorkflowRoute = DesignsCodeWorkflowRouteImport.update({
   id: '/workflow',
   path: '/workflow',
   getParentRoute: () => DesignsCodeRoute,
 } as any)
-const SampleDevelopmentCodeStepStepIdRoute =
-  SampleDevelopmentCodeStepStepIdRouteImport.update({
-    id: '/step/$stepId',
-    path: '/step/$stepId',
-    getParentRoute: () => SampleDevelopmentCodeRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -197,18 +129,8 @@ export interface FileRoutesByFullPath {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
-  '/sample-development/$code': typeof SampleDevelopmentCodeRouteWithChildren
   '/designs/': typeof DesignsIndexRoute
-  '/sample-development/': typeof SampleDevelopmentIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
-  '/sample-development/$code/approval': typeof SampleDevelopmentCodeApprovalRoute
-  '/sample-development/$code/approved': typeof SampleDevelopmentCodeApprovedRoute
-  '/sample-development/$code/cost': typeof SampleDevelopmentCodeCostRoute
-  '/sample-development/$code/materials': typeof SampleDevelopmentCodeMaterialsRoute
-  '/sample-development/$code/next-process': typeof SampleDevelopmentCodeNextProcessRoute
-  '/sample-development/$code/production': typeof SampleDevelopmentCodeProductionRoute
-  '/sample-development/$code/timeline': typeof SampleDevelopmentCodeTimelineRoute
-  '/sample-development/$code/step/$stepId': typeof SampleDevelopmentCodeStepStepIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -226,18 +148,8 @@ export interface FileRoutesByTo {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
-  '/sample-development/$code': typeof SampleDevelopmentCodeRouteWithChildren
   '/designs': typeof DesignsIndexRoute
-  '/sample-development': typeof SampleDevelopmentIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
-  '/sample-development/$code/approval': typeof SampleDevelopmentCodeApprovalRoute
-  '/sample-development/$code/approved': typeof SampleDevelopmentCodeApprovedRoute
-  '/sample-development/$code/cost': typeof SampleDevelopmentCodeCostRoute
-  '/sample-development/$code/materials': typeof SampleDevelopmentCodeMaterialsRoute
-  '/sample-development/$code/next-process': typeof SampleDevelopmentCodeNextProcessRoute
-  '/sample-development/$code/production': typeof SampleDevelopmentCodeProductionRoute
-  '/sample-development/$code/timeline': typeof SampleDevelopmentCodeTimelineRoute
-  '/sample-development/$code/step/$stepId': typeof SampleDevelopmentCodeStepStepIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -256,18 +168,8 @@ export interface FileRoutesById {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
-  '/sample-development/$code': typeof SampleDevelopmentCodeRouteWithChildren
   '/designs/': typeof DesignsIndexRoute
-  '/sample-development/': typeof SampleDevelopmentIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
-  '/sample-development/$code/approval': typeof SampleDevelopmentCodeApprovalRoute
-  '/sample-development/$code/approved': typeof SampleDevelopmentCodeApprovedRoute
-  '/sample-development/$code/cost': typeof SampleDevelopmentCodeCostRoute
-  '/sample-development/$code/materials': typeof SampleDevelopmentCodeMaterialsRoute
-  '/sample-development/$code/next-process': typeof SampleDevelopmentCodeNextProcessRoute
-  '/sample-development/$code/production': typeof SampleDevelopmentCodeProductionRoute
-  '/sample-development/$code/timeline': typeof SampleDevelopmentCodeTimelineRoute
-  '/sample-development/$code/step/$stepId': typeof SampleDevelopmentCodeStepStepIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -287,18 +189,8 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
-    | '/sample-development/$code'
     | '/designs/'
-    | '/sample-development/'
     | '/designs/$code/workflow'
-    | '/sample-development/$code/approval'
-    | '/sample-development/$code/approved'
-    | '/sample-development/$code/cost'
-    | '/sample-development/$code/materials'
-    | '/sample-development/$code/next-process'
-    | '/sample-development/$code/production'
-    | '/sample-development/$code/timeline'
-    | '/sample-development/$code/step/$stepId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -316,18 +208,8 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
-    | '/sample-development/$code'
     | '/designs'
-    | '/sample-development'
     | '/designs/$code/workflow'
-    | '/sample-development/$code/approval'
-    | '/sample-development/$code/approved'
-    | '/sample-development/$code/cost'
-    | '/sample-development/$code/materials'
-    | '/sample-development/$code/next-process'
-    | '/sample-development/$code/production'
-    | '/sample-development/$code/timeline'
-    | '/sample-development/$code/step/$stepId'
   id:
     | '__root__'
     | '/'
@@ -345,18 +227,8 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
-    | '/sample-development/$code'
     | '/designs/'
-    | '/sample-development/'
     | '/designs/$code/workflow'
-    | '/sample-development/$code/approval'
-    | '/sample-development/$code/approved'
-    | '/sample-development/$code/cost'
-    | '/sample-development/$code/materials'
-    | '/sample-development/$code/next-process'
-    | '/sample-development/$code/production'
-    | '/sample-development/$code/timeline'
-    | '/sample-development/$code/step/$stepId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -375,9 +247,7 @@ export interface RootRouteChildren {
   StitchingRoute: typeof StitchingRoute
   StockRoute: typeof StockRoute
   DesignsCodeRoute: typeof DesignsCodeRouteWithChildren
-  SampleDevelopmentCodeRoute: typeof SampleDevelopmentCodeRouteWithChildren
   DesignsIndexRoute: typeof DesignsIndexRoute
-  SampleDevelopmentIndexRoute: typeof SampleDevelopmentIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -480,25 +350,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sample-development/': {
-      id: '/sample-development/'
-      path: '/sample-development'
-      fullPath: '/sample-development/'
-      preLoaderRoute: typeof SampleDevelopmentIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/designs/': {
       id: '/designs/'
       path: '/designs'
       fullPath: '/designs/'
       preLoaderRoute: typeof DesignsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sample-development/$code': {
-      id: '/sample-development/$code'
-      path: '/sample-development/$code'
-      fullPath: '/sample-development/$code'
-      preLoaderRoute: typeof SampleDevelopmentCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/designs/$code': {
@@ -508,68 +364,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignsCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sample-development/$code/timeline': {
-      id: '/sample-development/$code/timeline'
-      path: '/timeline'
-      fullPath: '/sample-development/$code/timeline'
-      preLoaderRoute: typeof SampleDevelopmentCodeTimelineRouteImport
-      parentRoute: typeof SampleDevelopmentCodeRoute
-    }
-    '/sample-development/$code/production': {
-      id: '/sample-development/$code/production'
-      path: '/production'
-      fullPath: '/sample-development/$code/production'
-      preLoaderRoute: typeof SampleDevelopmentCodeProductionRouteImport
-      parentRoute: typeof SampleDevelopmentCodeRoute
-    }
-    '/sample-development/$code/next-process': {
-      id: '/sample-development/$code/next-process'
-      path: '/next-process'
-      fullPath: '/sample-development/$code/next-process'
-      preLoaderRoute: typeof SampleDevelopmentCodeNextProcessRouteImport
-      parentRoute: typeof SampleDevelopmentCodeRoute
-    }
-    '/sample-development/$code/materials': {
-      id: '/sample-development/$code/materials'
-      path: '/materials'
-      fullPath: '/sample-development/$code/materials'
-      preLoaderRoute: typeof SampleDevelopmentCodeMaterialsRouteImport
-      parentRoute: typeof SampleDevelopmentCodeRoute
-    }
-    '/sample-development/$code/cost': {
-      id: '/sample-development/$code/cost'
-      path: '/cost'
-      fullPath: '/sample-development/$code/cost'
-      preLoaderRoute: typeof SampleDevelopmentCodeCostRouteImport
-      parentRoute: typeof SampleDevelopmentCodeRoute
-    }
-    '/sample-development/$code/approved': {
-      id: '/sample-development/$code/approved'
-      path: '/approved'
-      fullPath: '/sample-development/$code/approved'
-      preLoaderRoute: typeof SampleDevelopmentCodeApprovedRouteImport
-      parentRoute: typeof SampleDevelopmentCodeRoute
-    }
-    '/sample-development/$code/approval': {
-      id: '/sample-development/$code/approval'
-      path: '/approval'
-      fullPath: '/sample-development/$code/approval'
-      preLoaderRoute: typeof SampleDevelopmentCodeApprovalRouteImport
-      parentRoute: typeof SampleDevelopmentCodeRoute
-    }
     '/designs/$code/workflow': {
       id: '/designs/$code/workflow'
       path: '/workflow'
       fullPath: '/designs/$code/workflow'
       preLoaderRoute: typeof DesignsCodeWorkflowRouteImport
       parentRoute: typeof DesignsCodeRoute
-    }
-    '/sample-development/$code/step/$stepId': {
-      id: '/sample-development/$code/step/$stepId'
-      path: '/step/$stepId'
-      fullPath: '/sample-development/$code/step/$stepId'
-      preLoaderRoute: typeof SampleDevelopmentCodeStepStepIdRouteImport
-      parentRoute: typeof SampleDevelopmentCodeRoute
     }
   }
 }
@@ -585,33 +385,6 @@ const DesignsCodeRouteChildren: DesignsCodeRouteChildren = {
 const DesignsCodeRouteWithChildren = DesignsCodeRoute._addFileChildren(
   DesignsCodeRouteChildren,
 )
-
-interface SampleDevelopmentCodeRouteChildren {
-  SampleDevelopmentCodeApprovalRoute: typeof SampleDevelopmentCodeApprovalRoute
-  SampleDevelopmentCodeApprovedRoute: typeof SampleDevelopmentCodeApprovedRoute
-  SampleDevelopmentCodeCostRoute: typeof SampleDevelopmentCodeCostRoute
-  SampleDevelopmentCodeMaterialsRoute: typeof SampleDevelopmentCodeMaterialsRoute
-  SampleDevelopmentCodeNextProcessRoute: typeof SampleDevelopmentCodeNextProcessRoute
-  SampleDevelopmentCodeProductionRoute: typeof SampleDevelopmentCodeProductionRoute
-  SampleDevelopmentCodeTimelineRoute: typeof SampleDevelopmentCodeTimelineRoute
-  SampleDevelopmentCodeStepStepIdRoute: typeof SampleDevelopmentCodeStepStepIdRoute
-}
-
-const SampleDevelopmentCodeRouteChildren: SampleDevelopmentCodeRouteChildren = {
-  SampleDevelopmentCodeApprovalRoute: SampleDevelopmentCodeApprovalRoute,
-  SampleDevelopmentCodeApprovedRoute: SampleDevelopmentCodeApprovedRoute,
-  SampleDevelopmentCodeCostRoute: SampleDevelopmentCodeCostRoute,
-  SampleDevelopmentCodeMaterialsRoute: SampleDevelopmentCodeMaterialsRoute,
-  SampleDevelopmentCodeNextProcessRoute: SampleDevelopmentCodeNextProcessRoute,
-  SampleDevelopmentCodeProductionRoute: SampleDevelopmentCodeProductionRoute,
-  SampleDevelopmentCodeTimelineRoute: SampleDevelopmentCodeTimelineRoute,
-  SampleDevelopmentCodeStepStepIdRoute: SampleDevelopmentCodeStepStepIdRoute,
-}
-
-const SampleDevelopmentCodeRouteWithChildren =
-  SampleDevelopmentCodeRoute._addFileChildren(
-    SampleDevelopmentCodeRouteChildren,
-  )
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -629,9 +402,7 @@ const rootRouteChildren: RootRouteChildren = {
   StitchingRoute: StitchingRoute,
   StockRoute: StockRoute,
   DesignsCodeRoute: DesignsCodeRouteWithChildren,
-  SampleDevelopmentCodeRoute: SampleDevelopmentCodeRouteWithChildren,
   DesignsIndexRoute: DesignsIndexRoute,
-  SampleDevelopmentIndexRoute: SampleDevelopmentIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

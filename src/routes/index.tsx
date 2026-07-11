@@ -215,7 +215,7 @@ function Dashboard() {
 function ActiveDesignCard({ design }: { design: Design }) {
   const { data: workflows = [] } = useWorkflows(design.id);
   const { data: catalog = [] } = useOperationCatalog();
-  const { stage, currentStepLabel, progressPct, continueTo } = getDesignLifecycle(
+  const { stage, currentStepLabel, progressPct, tab } = getDesignLifecycle(
     workflows,
     catalog,
   );
@@ -273,8 +273,9 @@ function ActiveDesignCard({ design }: { design: Design }) {
         </div>
 
         <Link
-          to={continueTo}
+          to="/designs/$code"
           params={{ code: design.code }}
+          search={{ tab }}
           className="mt-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
         >
           Continue <ArrowRight className="h-4 w-4" />

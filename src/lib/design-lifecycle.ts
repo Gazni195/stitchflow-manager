@@ -1,8 +1,9 @@
 // Derives a Design's current lifecycle stage/step/progress from its
 // workflows. A "Sample" is not a separate entity — it's the sample-kind
 // workflow that lives on the Design, same as bulk production is the
-// bulk-kind workflow. This is the single source of truth for both so
-// every screen (Dashboard, Design Details, Sample Development) agrees.
+// bulk-kind workflow. This is the single source of truth so every screen
+// (Dashboard, Design module) agrees. There is only one Design page —
+// /designs/$code — with the current stage's tab pre-selected.
 import { stepLabel, type DesignWorkflow, type WorkflowStep } from "@/lib/api/workflows";
 import type { CatalogOperation } from "@/lib/api/operations";
 
@@ -13,6 +14,16 @@ export type LifecycleStage =
   | "Quality Check"
   | "Packing"
   | "Ready Stock";
+
+export type DesignModuleTab =
+  | "overview"
+  | "parts"
+  | "materials"
+  | "sample"
+  | "production"
+  | "costing"
+  | "documents"
+  | "history";
 
 const STAGE_BY_OPERATION: Record<string, LifecycleStage> = {
   "fabric-selection": "Sample Development",
@@ -35,12 +46,21 @@ const STAGE_BY_OPERATION: Record<string, LifecycleStage> = {
   "ready-stock": "Ready Stock",
 };
 
+const TAB_BY_STAGE: Record<LifecycleStage, DesignModuleTab> = {
+  "Sample Development": "sample",
+  "Sample Approval": "sample",
+  "Bulk Production": "production",
+  "Quality Check": "production",
+  Packing: "production",
+  "Ready Stock": "production",
+};
+
 export type DesignLifecycle = {
   stage: LifecycleStage;
   currentStepLabel: string;
   progressPct: number;
-  /** Route pattern for the "Continue" action — always design-keyed. */
-  continueTo: "/sample-development/$code" | "/designs/$code";
+  /** Which Design-module tab shows this design's current stage. */
+  tab: DesignModuleTab;
 };
 
 export function getDesignLifecycle(
@@ -56,7 +76,7 @@ export function getDesignLifecycle(
       stage: "Sample Development",
       currentStepLabel: "Not started",
       progressPct: 0,
-      continueTo: "/sample-development/$code",
+      tab: "sample",
     };
   }
 
@@ -78,6 +98,6 @@ export function getDesignLifecycle(
     stage,
     currentStepLabel: stepLabel(current, active.steps, op?.name ?? current.operationId),
     progressPct,
-    continueTo: active.kind === "bulk" ? "/designs/$code" : "/sample-development/$code",
+    tab: TAB_BY_STAGE[stage],
   };
 }

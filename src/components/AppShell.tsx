@@ -5,7 +5,6 @@ import {
   Search,
   LayoutDashboard,
   Shirt,
-  FlaskConical,
   Factory,
   Warehouse,
   X,
@@ -23,7 +22,6 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/u
 const PRIMARY_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/designs", label: "Designs", icon: Shirt },
-  { to: "/sample-development", label: "Samples", icon: FlaskConical },
   { to: "/stitching", label: "Production", icon: Factory },
   { to: "/stock", label: "Stock", icon: Warehouse },
 ] as const;
@@ -126,19 +124,14 @@ export function AppShell({
         <main className="mx-auto max-w-6xl px-4 pb-32 pt-5 sm:px-6 lg:pb-10">{children}</main>
       </div>
 
-      {/* Mobile bottom nav: Home / Samples / + / Production / More */}
+      {/* Mobile bottom nav: Home / Designs / + / Stock / More */}
       <nav
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur lg:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <ul className="relative grid grid-cols-5">
           <BottomNavLink to="/" label="Home" icon={LayoutDashboard} pathname={pathname} exact />
-          <BottomNavLink
-            to="/sample-development"
-            label="Samples"
-            icon={FlaskConical}
-            pathname={pathname}
-          />
+          <BottomNavLink to="/designs" label="Designs" icon={Shirt} pathname={pathname} />
           <li className="flex items-center justify-center">
             <button
               aria-label="New design"
@@ -148,7 +141,7 @@ export function AppShell({
               <Plus className="h-6 w-6" />
             </button>
           </li>
-          <BottomNavLink to="/designs" label="Production" icon={Factory} pathname={pathname} />
+          <BottomNavLink to="/stock" label="Stock" icon={Warehouse} pathname={pathname} />
           <li>
             <button
               onClick={() => setMoreOpen(true)}
