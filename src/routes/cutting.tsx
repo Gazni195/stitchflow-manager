@@ -448,6 +448,16 @@ function BulkCuttingPage() {
   );
 }
 
+function BigStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl bg-white/15 p-3 backdrop-blur">
+      <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">{label}</p>
+      <p className="mt-0.5 text-xl font-extrabold">{value}</p>
+    </div>
+  );
+}
+
+
 function SectionHeader({
   icon,
   title,
