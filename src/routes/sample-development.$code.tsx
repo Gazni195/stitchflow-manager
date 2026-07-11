@@ -72,7 +72,10 @@ function DesignSamplePage() {
     );
   }
 
-  return <DesignSample design={design} />;
+  // Remount the whole subtree per design so each panel's local state
+  // (materials rows, costing, approvals, active tab) starts fresh instead
+  // of carrying over stale data keyed by the previous design's part ids.
+  return <DesignSample key={design.id} design={design} />;
 }
 
 function DesignSample({ design }: { design: Design }) {
@@ -294,7 +297,14 @@ function MaterialsPanel({ design }: { design: Design }) {
           </thead>
           <tbody>
             {design.parts.map((p) => {
-              const row = rows.find((r) => r.partId === p.id)!;
+              const row = rows.find((r) => r.partId === p.id) ?? {
+                partId: p.id,
+                fabric: p.fabric,
+                color: p.color,
+                consumption: 1,
+                rate: 0,
+                selected: true,
+              };
               const perPiece = row.consumption * row.rate;
               return (
                 <tr key={p.id} className="border-t border-border">
