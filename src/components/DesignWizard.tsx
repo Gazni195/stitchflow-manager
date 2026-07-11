@@ -108,12 +108,12 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
   }
 
   function pickProductType(pt: ProductType) {
-    const parts = DEFAULT_PARTS[pt].map((name) => ({ id: uid(), name }));
+    const parts = DEFAULT_PARTS[pt].map((name) => ({ id: uid(), name, fabric: "" }));
     setD({ ...d, productType: pt, parts });
   }
 
   function addPart() {
-    setD({ ...d, parts: [...d.parts, { id: uid(), name: "" }] });
+    setD({ ...d, parts: [...d.parts, { id: uid(), name: "", fabric: "" }] });
   }
   function removePart(id: string) {
     setD({ ...d, parts: d.parts.filter((p) => p.id !== id) });
