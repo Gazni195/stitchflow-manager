@@ -133,7 +133,7 @@ function BulkStitchingPage() {
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wider opacity-80">Stitching Summary</p>
               <p className="mt-1 text-2xl font-extrabold">{pct}% Complete</p>
-              <p className="text-xs opacity-80">{part} · {line}</p>
+              <p className="text-xs opacity-80">{part} · {partFabric} · {line}</p>
             </div>
             <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white/15 backdrop-blur">
               <Shirt className="h-7 w-7" />
