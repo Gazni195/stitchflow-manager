@@ -396,12 +396,6 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
           {step === 3 && (
             <div className="grid gap-4">
               <Text
-                label="Fabric"
-                placeholder="Silk Chanderi"
-                value={d.fabric}
-                onChange={(v) => setD({ ...d, fabric: v })}
-              />
-              <Text
                 label="Color"
                 placeholder="Ivory"
                 value={d.color}
