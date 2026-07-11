@@ -108,18 +108,30 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
   }
 
   function pickProductType(pt: ProductType) {
-    const parts = DEFAULT_PARTS[pt].map((name) => ({ id: uid(), name, fabric: "" }));
+    const parts = DEFAULT_PARTS[pt].map((name) => ({
+      id: uid(),
+      name,
+      fabric: "",
+      color: "",
+      quantity: 0,
+    }));
     setD({ ...d, productType: pt, parts });
   }
 
   function addPart() {
-    setD({ ...d, parts: [...d.parts, { id: uid(), name: "", fabric: "" }] });
+    setD({
+      ...d,
+      parts: [
+        ...d.parts,
+        { id: uid(), name: "", fabric: "", color: "", quantity: 0 },
+      ],
+    });
   }
   function removePart(id: string) {
     setD({ ...d, parts: d.parts.filter((p) => p.id !== id) });
   }
-  function renamePart(id: string, name: string) {
-    setD({ ...d, parts: d.parts.map((p) => (p.id === id ? { ...p, name } : p)) });
+  function updatePart(id: string, patch: Partial<DesignPart>) {
+    setD({ ...d, parts: d.parts.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
   }
   function movePart(idx: number, dir: -1 | 1) {
     const next = [...d.parts];
@@ -131,10 +143,17 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
 
   const step0Valid = !!d.category;
   const partsValid =
-    d.parts.length > 0 && d.parts.every((p) => p.name.trim().length > 0);
+    d.parts.length > 0 &&
+    d.parts.every(
+      (p) =>
+        p.name.trim().length > 0 &&
+        p.fabric.trim().length > 0 &&
+        p.color.trim().length > 0 &&
+        p.quantity > 0,
+    );
   const step1Valid = !!d.productType && partsValid;
   const step2Valid = d.code.trim() && d.name.trim() && d.customer.trim();
-  const step3Valid = d.fabric.trim() && d.color.trim() && d.orderQuantity > 0;
+  const step3Valid = d.color.trim() && d.orderQuantity > 0;
 
   const stepTitle = [
     "Category",
@@ -153,7 +172,13 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
         customer: d.customer.trim(),
         category: d.category,
         productType: d.productType || "",
-        parts: d.parts.map((p) => ({ id: p.id, name: p.name.trim(), fabric: (p.fabric ?? d.fabric ?? "").trim() })),
+        parts: d.parts.map((p) => ({
+          id: p.id,
+          name: p.name.trim(),
+          fabric: p.fabric.trim(),
+          color: p.color.trim(),
+          quantity: p.quantity,
+        })),
         color: d.color.trim(),
         orderQuantity: d.orderQuantity,
         imageFile: d.imageFile,
@@ -275,35 +300,67 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
                     {d.parts.map((p, i) => (
                       <div
                         key={p.id}
-                        className="flex items-center gap-2 rounded-2xl border border-border bg-card p-2"
+                        className="rounded-2xl border border-border bg-card p-3"
                       >
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary-soft text-xs font-bold text-primary">
-                          {i + 1}
-                        </span>
-                        <input
-                          value={p.name}
-                          onChange={(e) => renamePart(p.id, e.target.value)}
-                          placeholder="Part name (e.g. Sleeve)"
-                          className="flex-1 rounded-lg bg-transparent px-2 py-1.5 text-sm font-semibold outline-none focus:bg-muted/40"
-                        />
-                        <div className="flex items-center gap-1">
-                          <IconBtn
-                            label="Move up"
-                            disabled={i === 0}
-                            onClick={() => movePart(i, -1)}
-                          >
-                            <ArrowUp className="h-4 w-4" />
-                          </IconBtn>
-                          <IconBtn
-                            label="Move down"
-                            disabled={i === d.parts.length - 1}
-                            onClick={() => movePart(i, 1)}
-                          >
-                            <ArrowDown className="h-4 w-4" />
-                          </IconBtn>
-                          <IconBtn label="Remove" onClick={() => removePart(p.id)} destructive>
-                            <Trash2 className="h-4 w-4" />
-                          </IconBtn>
+                        <div className="flex items-center gap-2">
+                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary-soft text-xs font-bold text-primary">
+                            {i + 1}
+                          </span>
+                          <input
+                            value={p.name}
+                            onChange={(e) => updatePart(p.id, { name: e.target.value })}
+                            placeholder="Part name (e.g. Sleeve)"
+                            className="flex-1 rounded-lg bg-transparent px-2 py-1.5 text-sm font-semibold outline-none focus:bg-muted/40"
+                          />
+                          <div className="flex items-center gap-1">
+                            <IconBtn
+                              label="Move up"
+                              disabled={i === 0}
+                              onClick={() => movePart(i, -1)}
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </IconBtn>
+                            <IconBtn
+                              label="Move down"
+                              disabled={i === d.parts.length - 1}
+                              onClick={() => movePart(i, 1)}
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </IconBtn>
+                            <IconBtn
+                              label="Remove"
+                              onClick={() => removePart(p.id)}
+                              destructive
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </IconBtn>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          <PartField
+                            label="Fabric"
+                            placeholder="Silk Chanderi"
+                            value={p.fabric}
+                            onChange={(v) => updatePart(p.id, { fabric: v })}
+                          />
+                          <PartField
+                            label="Color"
+                            placeholder="Ivory"
+                            value={p.color}
+                            onChange={(v) => updatePart(p.id, { color: v })}
+                          />
+                          <PartField
+                            label="Quantity"
+                            placeholder="0"
+                            type="number"
+                            value={p.quantity ? String(p.quantity) : ""}
+                            onChange={(v) =>
+                              updatePart(p.id, {
+                                quantity: Math.max(0, Number(v) || 0),
+                              })
+                            }
+                          />
                         </div>
                       </div>
                     ))}
@@ -338,12 +395,6 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
 
           {step === 3 && (
             <div className="grid gap-4">
-              <Text
-                label="Fabric"
-                placeholder="Silk Chanderi"
-                value={d.fabric}
-                onChange={(v) => setD({ ...d, fabric: v })}
-              />
               <Text
                 label="Color"
                 placeholder="Ivory"
@@ -514,5 +565,35 @@ function IconBtn({
     >
       {children}
     </button>
+  );
+}
+
+function PartField({
+  label,
+  placeholder,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  placeholder?: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: "text" | "number";
+}) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        {label}
+      </span>
+      <input
+        type={type}
+        min={type === "number" ? 0 : undefined}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:border-primary"
+      />
+    </label>
   );
 }
