@@ -108,18 +108,30 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
   }
 
   function pickProductType(pt: ProductType) {
-    const parts = DEFAULT_PARTS[pt].map((name) => ({ id: uid(), name, fabric: "" }));
+    const parts = DEFAULT_PARTS[pt].map((name) => ({
+      id: uid(),
+      name,
+      fabric: "",
+      color: "",
+      quantity: 0,
+    }));
     setD({ ...d, productType: pt, parts });
   }
 
   function addPart() {
-    setD({ ...d, parts: [...d.parts, { id: uid(), name: "", fabric: "" }] });
+    setD({
+      ...d,
+      parts: [
+        ...d.parts,
+        { id: uid(), name: "", fabric: "", color: "", quantity: 0 },
+      ],
+    });
   }
   function removePart(id: string) {
     setD({ ...d, parts: d.parts.filter((p) => p.id !== id) });
   }
-  function renamePart(id: string, name: string) {
-    setD({ ...d, parts: d.parts.map((p) => (p.id === id ? { ...p, name } : p)) });
+  function updatePart(id: string, patch: Partial<DesignPart>) {
+    setD({ ...d, parts: d.parts.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
   }
   function movePart(idx: number, dir: -1 | 1) {
     const next = [...d.parts];
