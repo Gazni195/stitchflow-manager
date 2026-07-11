@@ -213,13 +213,13 @@ function BulkCuttingPage() {
             title="Cutting Details"
           />
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Field icon={<Barcode className="h-4 w-4" />} label="Fabric Barcode" value={fabricBarcode} onChange={setFabricBarcode} />
             <Field
               icon={<Barcode className="h-4 w-4" />}
               label="Fabric Barcode"
               value={fabricBarcode}
               onChange={setFabricBarcode}
             />
+
             <Field
               icon={<Calendar className="h-4 w-4" />}
               label="Cutting Date"
