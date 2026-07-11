@@ -165,6 +165,70 @@ export function useCreateDesign() {
   });
 }
 
+export type UpdateDesignInput = {
+  id: string;
+  code: string;
+  name: string;
+  customer: string;
+  category: string;
+  productType: string;
+  parts: DesignPart[];
+  color: string;
+  orderQuantity: number;
+};
+
+export function useUpdateDesign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateDesignInput): Promise<Design> => {
+      const { data, error } = await supabase
+        .from("designs")
+        .update({
+          code: input.code,
+          name: input.name,
+          customer: input.customer,
+          category: input.category,
+          product_type: input.productType,
+          parts: input.parts.map((p) => ({
+            id: p.id,
+            name: p.name,
+            fabric: p.fabric,
+            color: p.color,
+            quantity: p.quantity,
+          })),
+          color: input.color,
+          order_quantity: input.orderQuantity,
+        })
+        .eq("id", input.id)
+        .select("*")
+        .single();
+      if (error) throw error;
+      return mapDesign(data as DbDesign);
+    },
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: ["designs"] });
+      qc.invalidateQueries({ queryKey: ["design", "by-code", d.code] });
+    },
+  });
+}
+
+export function useDeleteDesign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (design: Pick<Design, "id" | "status" | "imagePath">): Promise<void> => {
+      if (design.status !== "draft") {
+        throw new Error("Only draft designs can be deleted.");
+      }
+      const { error } = await supabase.from("designs").delete().eq("id", design.id);
+      if (error) throw error;
+      if (design.imagePath) {
+        await supabase.storage.from("design-images").remove([design.imagePath]);
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["designs"] }),
+  });
+}
+
 export function useDesignImageUrl(path: string | null | undefined) {
   return useQuery({
     queryKey: ["design-image", path],

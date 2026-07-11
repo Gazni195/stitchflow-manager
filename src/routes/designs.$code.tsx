@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { DesignActionsMenu } from "@/components/DesignActionsMenu";
 import { useRequireAuth } from "@/hooks/use-auth";
 import { STATUS_LABEL, STATUS_TONE, type Design } from "@/lib/designs";
 import { useDesignByCode } from "@/lib/api/designs";
@@ -88,13 +89,16 @@ function DesignDetails({ design }: { design: Design }) {
       title={design.name}
       subtitle={`${design.code} · ${design.customer}`}
       action={
-        <Link
-          to="/designs/$code/workflow"
-          params={{ code: design.code }}
-          className="hidden items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 sm:inline-flex"
-        >
-          <Settings2 className="h-4 w-4" /> Configure Workflow
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/designs/$code/workflow"
+            params={{ code: design.code }}
+            className="hidden items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 sm:inline-flex"
+          >
+            <Settings2 className="h-4 w-4" /> Configure Workflow
+          </Link>
+          <DesignActionsMenu design={design} />
+        </div>
       }
     >
       <div className="grid gap-5">
