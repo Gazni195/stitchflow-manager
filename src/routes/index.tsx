@@ -1,206 +1,196 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  ArrowRight,
-  ArrowUpRight,
-  ClipboardList,
-  Factory,
-  ShieldAlert,
-  Warehouse,
-  type LucideIcon,
-} from "lucide-react";
+import { Plus, ArrowRight, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { WORKFLOW } from "@/lib/workflow";
+import { DesignImage } from "@/components/DesignImage";
+import { useDesigns } from "@/lib/api/designs";
+import { STATUS_LABEL, STATUS_TONE, type Design } from "@/lib/designs";
+import { useMemo, useState } from "react";
 
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Dashboard — Fawri Lifestyle" },
+      { name: "description", content: "Your samples at a glance." },
+    ],
+  }),
   component: Dashboard,
 });
 
-type Tone = "primary" | "info" | "warning" | "success";
+type Filter = "in_progress" | "completed" | "on_hold";
 
-type Stat = {
-  label: string;
-  value: string;
-  delta: string;
-  hint: string;
-  icon: LucideIcon;
-  to: string;
-  tone: Tone;
-};
-
-const STATS: Stat[] = [
-  {
-    label: "Total Orders",
-    value: "128",
-    delta: "+12 this week",
-    hint: "Across all clients",
-    icon: ClipboardList,
-    to: "/samples",
-    tone: "primary",
-  },
-  {
-    label: "In Production",
-    value: "42",
-    delta: "8 lines active",
-    hint: "Cutting · Handwork · Stitching",
-    icon: Factory,
-    to: "/stitching",
-    tone: "info",
-  },
-  {
-    label: "QC Pending",
-    value: "17",
-    delta: "3 urgent",
-    hint: "Awaiting inspection",
-    icon: ShieldAlert,
-    to: "/qc",
-    tone: "warning",
-  },
-  {
-    label: "Ready Stock",
-    value: "1,248",
-    delta: "+96 today",
-    hint: "Packed & barcoded",
-    icon: Warehouse,
-    to: "/stock",
-    tone: "success",
-  },
+const FILTERS: { id: Filter; label: string; tone: string }[] = [
+  { id: "in_progress", label: "In Progress", tone: "bg-primary-soft text-primary" },
+  { id: "completed", label: "Completed", tone: "bg-success/15 text-success" },
+  { id: "on_hold", label: "On Hold", tone: "bg-warning/15 text-warning" },
 ];
 
-function Dashboard() {
-  return (
-    <AppShell title="Dashboard" subtitle="Fawri Lifestyle · Production overview">
-      <div className="grid gap-6">
-        {/* Hero */}
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-primary-glow p-6 text-primary-foreground shadow-lg sm:p-8">
-          <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-          <div className="absolute -bottom-24 -left-10 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-          <div className="relative">
-            <p className="text-xs font-semibold uppercase tracking-widest opacity-80">
-              Good day
-            </p>
-            <h2 className="mt-2 max-w-xl text-2xl font-extrabold tracking-tight sm:text-3xl">
-              Here's how production is moving today.
-            </h2>
-            <p className="mt-2 max-w-xl text-sm opacity-90">
-              4 stages need your attention. Tap a card to jump straight in.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Link
-                to="/qc"
-                className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold backdrop-blur transition hover:bg-white/25"
-              >
-                Review QC <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                to="/stitching"
-                className="inline-flex items-center gap-2 rounded-xl bg-background px-4 py-2.5 text-sm font-semibold text-foreground shadow-sm hover:opacity-90"
-              >
-                Production Line
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        {/* KPI cards */}
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {STATS.map((s) => (
-            <StatCard key={s.label} stat={s} />
-          ))}
-        </section>
-
-        {/* Workflow shortcuts */}
-        <section>
-          <div className="mb-3 flex items-end justify-between">
-            <div>
-              <h3 className="text-lg font-bold tracking-tight">Production Workflow</h3>
-              <p className="text-sm text-muted-foreground">
-                Tap any stage to open its work board.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {WORKFLOW.map((stage) => {
-              const Icon = stage.icon;
-              return (
-                <Link
-                  key={stage.id}
-                  to={stage.to}
-                  className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
-                >
-                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary-soft text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
-                        {String(stage.step).padStart(2, "0")}
-                      </span>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {stage.phase}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 truncate text-base font-bold">{stage.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {stage.description}
-                    </p>
-                  </div>
-                  <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground transition group-hover:text-primary" />
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      </div>
-    </AppShell>
-  );
+// Deterministic mock "designer" + progress for UI-first pass.
+function mockMeta(d: Design, i: number) {
+  const designers = ["Rifa", "Sameer", "Rifa", "Anaya", "Rohan"];
+  const progresses = [45, 100, 20, 65, 80, 30];
+  return {
+    designer: designers[i % designers.length],
+    progress: d.status === "completed" ? 100 : progresses[i % progresses.length],
+  };
 }
 
-function StatCard({ stat }: { stat: Stat }) {
-  const Icon = stat.icon;
-  // All four cards use lavender gradients — varied depth/tint per tone so
-  // they stay a cohesive brand family without looking identical.
-  const gradient =
-    stat.tone === "primary"
-      ? "from-[oklch(0.55_0.24_293)] via-[oklch(0.62_0.22_293)] to-[oklch(0.78_0.14_300)]"
-      : stat.tone === "info"
-        ? "from-[oklch(0.48_0.22_285)] via-[oklch(0.58_0.22_290)] to-[oklch(0.72_0.16_298)]"
-        : stat.tone === "warning"
-          ? "from-[oklch(0.60_0.22_310)] via-[oklch(0.68_0.20_305)] to-[oklch(0.82_0.14_320)]"
-          : "from-[oklch(0.52_0.20_280)] via-[oklch(0.62_0.20_288)] to-[oklch(0.80_0.14_295)]";
+function bucketOf(d: Design): Filter {
+  if (d.status === "completed") return "completed";
+  if (d.status === "draft") return "on_hold";
+  return "in_progress";
+}
+
+function Dashboard() {
+  const { data: designs = [], isLoading } = useDesigns();
+  const [filter, setFilter] = useState<Filter>("in_progress");
+
+  const counts = useMemo(() => {
+    const c: Record<Filter, number> = { in_progress: 0, completed: 0, on_hold: 0 };
+    designs.forEach((d) => (c[bucketOf(d)] += 1));
+    // Ensure at least the mockup-ish presence even with sparse data
+    return {
+      in_progress: c.in_progress || 7,
+      completed: c.completed || 18,
+      on_hold: c.on_hold || 3,
+    };
+  }, [designs]);
+
+  const filtered = designs.filter((d) => bucketOf(d) === filter);
 
   return (
-    <Link
-      to={stat.to}
-      className={
-        "group relative overflow-hidden rounded-3xl bg-gradient-to-br p-5 text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-0.5 hover:shadow-xl " +
-        gradient
-      }
-    >
-      <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/15 blur-2xl transition group-hover:bg-white/25" />
-      <div className="absolute -bottom-10 -left-6 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+    <AppShell title="Dashboard" subtitle="Fawri Lifestyle">
+      <div className="grid gap-6">
+        {/* Greeting */}
+        <section>
+          <h2 className="text-2xl font-extrabold tracking-tight">
+            Hello, Rifa <span aria-hidden>👋</span>
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Here's what's happening today
+          </p>
+        </section>
 
-      <div className="relative flex items-start justify-between">
-        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/20 backdrop-blur">
-          <Icon className="h-5 w-5" />
-        </div>
-        <ArrowUpRight className="h-5 w-5 opacity-70 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:opacity-100" />
-      </div>
+        {/* Status filter chips */}
+        <section className="grid grid-cols-3 gap-3">
+          {FILTERS.map((f) => {
+            const active = filter === f.id;
+            return (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                className={
+                  "rounded-2xl border p-3 text-left transition " +
+                  (active
+                    ? "border-primary bg-primary-soft shadow-sm"
+                    : "border-border bg-card hover:border-primary/30")
+                }
+              >
+                <span
+                  className={
+                    "inline-block rounded-full px-2 py-0.5 text-[10px] font-bold " +
+                    f.tone
+                  }
+                >
+                  {f.label}
+                </span>
+                <p className="mt-2 text-2xl font-extrabold tracking-tight">
+                  {counts[f.id]}
+                </p>
+              </button>
+            );
+          })}
+        </section>
 
-      <div className="relative mt-6">
-        <p className="text-xs font-semibold uppercase tracking-widest opacity-85">
-          {stat.label}
-        </p>
-        <p className="mt-1 text-4xl font-extrabold leading-none tracking-tight">
-          {stat.value}
-        </p>
-        <div className="mt-3 flex items-center justify-between text-[11px] font-medium">
-          <span className="rounded-full bg-white/20 px-2 py-0.5 backdrop-blur">
-            {stat.delta}
-          </span>
-          <span className="truncate pl-2 opacity-80">{stat.hint}</span>
-        </div>
+        {/* My Samples */}
+        <section>
+          <div className="mb-3 flex items-end justify-between">
+            <h3 className="text-lg font-bold tracking-tight">My Samples</h3>
+            <Link
+              to="/sample-development"
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              View All
+            </Link>
+          </div>
+
+          {isLoading ? (
+            <div className="grid place-items-center py-16 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-border bg-card p-10 text-center">
+              <p className="text-sm text-muted-foreground">
+                No samples in this bucket yet.
+              </p>
+              <Link
+                to="/designs"
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+              >
+                Go to Designs <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          ) : (
+            <ul className="grid gap-3">
+              {filtered.map((d, i) => {
+                const meta = mockMeta(d, i);
+                return (
+                  <li key={d.id}>
+                    <Link
+                      to="/sample-development/$code"
+                      params={{ code: d.code }}
+                      className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm transition hover:border-primary/40 hover:shadow-md"
+                    >
+                      <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-primary-soft">
+                        <DesignImage path={d.imagePath} alt={d.name} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-[11px] font-bold tracking-wider text-muted-foreground">
+                            {d.code}
+                          </p>
+                        </div>
+                        <p className="truncate text-base font-extrabold">
+                          {d.name}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          Designer: {meta.designer}
+                        </p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <span
+                            className={
+                              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold " +
+                              STATUS_TONE[d.status]
+                            }
+                          >
+                            {STATUS_LABEL[d.status]}
+                          </span>
+                          <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-primary to-primary-glow"
+                              style={{ width: `${meta.progress}%` }}
+                            />
+                          </div>
+                          <span className="w-9 shrink-0 text-right text-[11px] font-bold text-muted-foreground">
+                            {meta.progress}%
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        {/* + New Sample */}
+        <Link
+          to="/designs"
+          className="fixed bottom-20 right-5 z-30 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/30 hover:opacity-90 lg:static lg:w-fit lg:self-end"
+        >
+          <Plus className="h-4 w-4" /> New Sample
+        </Link>
       </div>
-    </Link>
+    </AppShell>
   );
 }
