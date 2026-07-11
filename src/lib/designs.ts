@@ -8,7 +8,7 @@ export type DesignStatus =
   | "in_production"
   | "completed";
 
-export type DesignPart = { id: string; name: string };
+export type DesignPart = { id: string; name: string; fabric: string };
 
 export type Design = {
   id: string;
@@ -18,7 +18,6 @@ export type Design = {
   category: string;
   productType: string;
   parts: DesignPart[];
-  fabric: string;
   color: string;
   orderQuantity: number;
   imagePath: string | null;
