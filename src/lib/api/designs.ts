@@ -47,7 +47,6 @@ function mapDesign(r: DbDesign): Design {
     category: r.category,
     productType: r.product_type,
     parts: normalizeParts(r.parts),
-    fabric: r.fabric,
     color: r.color,
     orderQuantity: r.order_quantity,
     imagePath: r.image_path,
