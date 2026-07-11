@@ -93,12 +93,16 @@ function QualityCheckPage() {
                   <div className="flex items-center gap-2">
                     <select value={r.part} onChange={(e) => update(r.id, { part: e.target.value })}
                       className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm font-bold outline-none focus:border-primary">
-                      {PARTS.map((p) => <option key={p} value={p}>{p}</option>)}
+                      {orderParts.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
                     </select>
+                    <span className="rounded-full bg-primary-soft px-2.5 py-1 text-[10px] font-semibold text-primary">
+                      {getPartFabric(selectedCode, r.part)}
+                    </span>
                     <button onClick={() => remove(r.id)} className="grid h-9 w-9 place-items-center rounded-xl border border-border text-destructive hover:bg-destructive/10">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
+
 
                   <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <NumField label="Checked" value={r.checked} onChange={(v) => update(r.id, { checked: v })} tone="primary" />
