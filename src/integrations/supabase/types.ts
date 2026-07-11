@@ -14,13 +14,197 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      design_workflows: {
+        Row: {
+          created_at: string
+          design_id: string
+          id: string
+          kind: string
+          locked: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          design_id: string
+          id?: string
+          kind: string
+          locked?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          design_id?: string
+          id?: string
+          kind?: string
+          locked?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_workflows_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      designs: {
+        Row: {
+          category: string
+          code: string
+          color: string
+          created_at: string
+          created_by: string
+          customer: string
+          fabric: string
+          id: string
+          image_path: string | null
+          name: string
+          order_quantity: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          code: string
+          color?: string
+          created_at?: string
+          created_by: string
+          customer?: string
+          fabric?: string
+          id?: string
+          image_path?: string | null
+          name: string
+          order_quantity?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          code?: string
+          color?: string
+          created_at?: string
+          created_by?: string
+          customer?: string
+          fabric?: string
+          id?: string
+          image_path?: string | null
+          name?: string
+          order_quantity?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      operations_catalog: {
+        Row: {
+          category: string
+          id: string
+          name: string
+          repeatable: boolean
+          short: string
+          sort: number
+        }
+        Insert: {
+          category: string
+          id: string
+          name: string
+          repeatable?: boolean
+          short: string
+          sort?: number
+        }
+        Update: {
+          category?: string
+          id?: string
+          name?: string
+          repeatable?: boolean
+          short?: string
+          sort?: number
+        }
+        Relationships: []
+      }
+      workflow_steps: {
+        Row: {
+          assigned_to: string | null
+          created_at: string
+          end_date: string | null
+          id: string
+          input_quantity: number | null
+          label: string | null
+          operation_id: string
+          output_quantity: number | null
+          remarks: string | null
+          sequence: number
+          start_date: string | null
+          status: string
+          updated_at: string
+          wastage_quantity: number | null
+          workflow_id: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          input_quantity?: number | null
+          label?: string | null
+          operation_id: string
+          output_quantity?: number | null
+          remarks?: string | null
+          sequence: number
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+          wastage_quantity?: number | null
+          workflow_id: string
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          input_quantity?: number | null
+          label?: string | null
+          operation_id?: string
+          output_quantity?: number | null
+          remarks?: string | null
+          sequence?: number
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+          wastage_quantity?: number | null
+          workflow_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_steps_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "operations_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_steps_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "design_workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      approve_sample: { Args: { _design_id: string }; Returns: string }
+      has_design_access: { Args: { _design_id: string }; Returns: boolean }
+      has_workflow_access: { Args: { _workflow_id: string }; Returns: boolean }
+      start_bulk_production: {
+        Args: { _design_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
