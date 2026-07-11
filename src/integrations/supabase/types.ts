@@ -57,7 +57,6 @@ export type Database = {
           created_at: string
           created_by: string
           customer: string
-          fabric: string
           id: string
           image_path: string | null
           name: string
@@ -74,7 +73,6 @@ export type Database = {
           created_at?: string
           created_by: string
           customer?: string
-          fabric?: string
           id?: string
           image_path?: string | null
           name: string
@@ -91,7 +89,6 @@ export type Database = {
           created_at?: string
           created_by?: string
           customer?: string
-          fabric?: string
           id?: string
           image_path?: string | null
           name?: string
