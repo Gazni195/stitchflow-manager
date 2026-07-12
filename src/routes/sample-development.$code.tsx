@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   ChevronDown,
   Clock,
@@ -18,6 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
 import { Switch } from "@/components/ui/switch";
@@ -38,17 +40,43 @@ export const Route = createFileRoute("/sample-development/$code")({
 
 type TabId = "status" | "materials" | "making" | "costing" | "approval";
 
-const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
-  { id: "status", label: "Sample Status", icon: Sparkles },
-  { id: "materials", label: "Material Selection", icon: Layers },
-  { id: "making", label: "Sample Making", icon: Scissors },
-  { id: "costing", label: "Costing", icon: Coins },
-  { id: "approval", label: "Approval", icon: FileCheck2 },
+const TABS: {
+  id: TabId;
+  label: string;
+  icon: LucideIcon;
+}[] = [
+  {
+    id: "status",
+    label: "Sample Status",
+    icon: Sparkles,
+  },
+  {
+    id: "materials",
+    label: "Material Selection",
+    icon: Layers,
+  },
+  {
+    id: "making",
+    label: "Sample Making",
+    icon: Scissors,
+  },
+  {
+    id: "costing",
+    label: "Costing",
+    icon: Coins,
+  },
+  {
+    id: "approval",
+    label: "Approval",
+    icon: FileCheck2,
+  },
 ];
 
 function DesignSamplePage() {
   useRequireAuth();
+
   const { code } = Route.useParams();
+
   const { data: design, isLoading } = useDesignByCode(code);
 
   if (isLoading) {
@@ -68,51 +96,66 @@ function DesignSamplePage() {
           <p className="text-sm text-muted-foreground">
             No design with code <span className="font-semibold">{code}</span>.
           </p>
+
           <Link
             to="/designs"
             className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
           >
-            <ArrowLeft className="h-4 w-4" /> Back to designs
+            <ArrowLeft className="h-4 w-4" />
+            Back to designs
           </Link>
         </div>
       </AppShell>
     );
   }
 
-  // Remount the whole subtree per design so each panel's local state
-  // (materials rows, costing, approvals, active tab) starts fresh instead
-  // of carrying over stale data keyed by the previous design's part ids.
   return <DesignSample key={design.id} design={design} />;
 }
 
 function DesignSample({ design }: { design: Design }) {
   const [tab, setTab] = useState<TabId>("status");
+
   const { data: workflows, isLoading: wfLoading } = useWorkflows(design.id);
-  const sample = workflows?.find((w) => w.kind === "sample");
-  const bulk = workflows?.find((w) => w.kind === "bulk");
-  const qc = useQueryClient();
+
+  const sample = workflows?.find((workflow) => workflow.kind === "sample");
+
+  const bulk = workflows?.find((workflow) => workflow.kind === "bulk");
+
+  const queryClient = useQueryClient();
+
   const creatingRef = useRef(false);
 
-  // Auto-create a sample workflow when the design has none yet.
   useEffect(() => {
     if (wfLoading || !workflows) return;
     if (sample || bulk) return;
     if (creatingRef.current) return;
+
     creatingRef.current = true;
-    (async () => {
-      const { error } = await supabase
-        .from("design_workflows")
-        .insert({ design_id: design.id, kind: "sample", locked: false });
+
+    async function createSampleWorkflow() {
+      const { error } = await supabase.from("design_workflows").insert({
+        design_id: design.id,
+        kind: "sample",
+        locked: false,
+      });
+
       if (!error) {
-        qc.invalidateQueries({ queryKey: ["workflows", design.id] });
+        queryClient.invalidateQueries({
+          queryKey: ["workflows", design.id],
+        });
       }
+
       creatingRef.current = false;
-    })();
-  }, [wfLoading, workflows, sample, bulk, design.id, qc]);
+    }
+
+    createSampleWorkflow();
+  }, [wfLoading, workflows, sample, bulk, design.id, queryClient]);
 
   const stage: "In Development" | "Ready for Review" | "Approved" = bulk
     ? "Approved"
-    : sample && sample.steps.length > 0 && sample.steps.every((s) => s.status === "completed" || s.status === "skipped")
+    : sample &&
+        sample.steps.length > 0 &&
+        sample.steps.every((step) => step.status === "completed" || step.status === "skipped")
       ? "Ready for Review"
       : "In Development";
 
@@ -128,6 +171,7 @@ function DesignSample({ design }: { design: Design }) {
           className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3 sm:py-2.5 sm:text-sm sm:font-semibold sm:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
+
           <span className="hidden sm:inline">Design</span>
         </Link>
       }
@@ -137,31 +181,33 @@ function DesignSample({ design }: { design: Design }) {
           to="/sample-development"
           className="inline-flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" /> All samples
+          <ArrowLeft className="h-4 w-4" />
+          All samples
         </Link>
 
-        {/* Mockup-style summary: image hero + facts + workflow progress dots */}
         <SampleHeader design={design} stage={stage} />
 
-        {/* Tabs */}
         <section>
           <div className="flex gap-2 overflow-x-auto border-b border-border">
-            {TABS.map((t) => {
-              const Icon = t.icon;
-              const isActive = tab === t.id;
+            {TABS.map((item) => {
+              const Icon = item.icon;
+
+              const active = tab === item.id;
+
               return (
                 <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
+                  key={item.id}
+                  onClick={() => setTab(item.id)}
                   className={
                     "inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition " +
-                    (isActive
+                    (active
                       ? "border-primary text-primary"
                       : "border-transparent text-muted-foreground hover:text-foreground")
                   }
                 >
                   <Icon className="h-4 w-4" />
-                  {t.label}
+
+                  {item.label}
                 </button>
               );
             })}
@@ -169,9 +215,13 @@ function DesignSample({ design }: { design: Design }) {
 
           <div className="pt-5">
             {tab === "status" && <StatusPanel design={design} stage={stage} />}
+
             {tab === "materials" && <MaterialsPanel design={design} onCompleted={() => setTab("making")} />}
-            {tab === "making" && <SampleMakingPanel design={design} />}
+
+            {tab === "making" && <SampleMakingPanel design={design} onContinueToCosting={() => setTab("costing")} />}
+
             {tab === "costing" && <CostingPanel design={design} />}
+
             {tab === "approval" && <ApprovalPanel design={design} />}
           </div>
         </section>
@@ -180,33 +230,62 @@ function DesignSample({ design }: { design: Design }) {
   );
 }
 
-/* ---------- Status ---------- */
+/* =========================================================
+   STATUS
+========================================================= */
 
 function StatusPanel({ design, stage }: { design: Design; stage: "In Development" | "Ready for Review" | "Approved" }) {
-  const steps: { id: string; label: string; icon: LucideIcon }[] = [
-    { id: "Requested", label: "Requested", icon: Sparkles },
-    { id: "In Development", label: "In Development", icon: Clock },
-    { id: "Ready for Review", label: "Ready for Review", icon: FileCheck2 },
-    { id: "Approved", label: "Approved", icon: CheckCircle2 },
+  const steps: {
+    id: string;
+    label: string;
+    icon: LucideIcon;
+  }[] = [
+    {
+      id: "Requested",
+      label: "Requested",
+      icon: Sparkles,
+    },
+    {
+      id: "In Development",
+      label: "In Development",
+      icon: Clock,
+    },
+    {
+      id: "Ready for Review",
+      label: "Ready for Review",
+      icon: FileCheck2,
+    },
+    {
+      id: "Approved",
+      label: "Approved",
+      icon: CheckCircle2,
+    },
   ];
-  const currentIdx = steps.findIndex((s) => s.id === stage);
+
+  const currentIndex = steps.findIndex((step) => step.id === stage);
+
   return (
     <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <h3 className="text-base font-bold">Sample lifecycle</h3>
+
         <span className="rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary">{stage}</span>
       </div>
+
       <ol className="mt-5 space-y-4">
-        {steps.map((step, i) => {
-          const done = i < currentIdx || stage === "Approved";
-          const current = i === currentIdx && stage !== "Approved";
+        {steps.map((step, index) => {
+          const completed = index < currentIndex || stage === "Approved";
+
+          const current = index === currentIndex && stage !== "Approved";
+
           const Icon = step.icon;
+
           return (
             <li key={step.id} className="flex items-start gap-3">
               <div
                 className={
                   "grid h-9 w-9 shrink-0 place-items-center rounded-xl " +
-                  (done
+                  (completed
                     ? "bg-primary text-primary-foreground"
                     : current
                       ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
@@ -215,10 +294,12 @@ function StatusPanel({ design, stage }: { design: Design; stage: "In Development
               >
                 <Icon className="h-4 w-4" />
               </div>
+
               <div>
                 <p className="text-sm font-semibold">{step.label}</p>
+
                 <p className="text-xs text-muted-foreground">
-                  {done ? "Completed" : current ? "In progress" : "Pending"}
+                  {completed ? "Completed" : current ? "In progress" : "Pending"}
                 </p>
               </div>
             </li>
@@ -229,6 +310,7 @@ function StatusPanel({ design, stage }: { design: Design; stage: "In Development
       {design.notes && (
         <div className="mt-5 rounded-2xl border border-border bg-background p-4">
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Notes</p>
+
           <p className="mt-1 text-sm">{design.notes}</p>
         </div>
       )}
@@ -236,17 +318,9 @@ function StatusPanel({ design, stage }: { design: Design; stage: "In Development
   );
 }
 
-/* ---------- Materials (Phase 1: flexible Material Groups, manual entry) ---------- */
-//
-// Material Groups are independent of the design's garment parts. Top/Pant/
-// Shawl are always-present defaults — enable/disable only, never deleted.
-// Lining/Lace/Accessories are optional and start disabled; users can also
-// add fully custom groups, which behave the same way (enable/disable, no
-// delete). Every row's fields (code/name/quantity/unit) mirror what an
-// ERPNext stock item search would eventually return, and `source` is ready
-// to flip from "manual" to "erpnext" per row — so a later inventory
-// integration can autofill these same fields instead of manual typing,
-// without changing this UI. No stock/lot lookup is implemented yet.
+/* =========================================================
+   MATERIAL SELECTION
+========================================================= */
 
 type MaterialSource = "manual" | "erpnext";
 
@@ -271,7 +345,13 @@ type MaterialGroupState = {
 const UNIT_OPTIONS = ["Meter", "Pcs", "Yard", "Kg", "Set", "Roll"];
 
 function newGroup(name: string, enabled: boolean, expanded = false): MaterialGroupState {
-  return { id: crypto.randomUUID(), name, enabled, expanded, rows: [] };
+  return {
+    id: crypto.randomUUID(),
+    name,
+    enabled,
+    expanded,
+    rows: [],
+  };
 }
 
 function newRow(): MaterialRowState {
@@ -289,62 +369,101 @@ function newRow(): MaterialRowState {
 function initialGroups(): MaterialGroupState[] {
   return [
     newGroup("Top", true, true),
-    newGroup("Pant", true, false),
-    newGroup("Shawl", true, false),
-    newGroup("Lining", false, false),
-    newGroup("Lace", false, false),
-    newGroup("Accessories", false, false),
+    newGroup("Pant", true),
+    newGroup("Shawl", true),
+    newGroup("Lining", false),
+    newGroup("Lace", false),
+    newGroup("Accessories", false),
   ];
 }
 
 function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: () => void }) {
   const [groups, setGroups] = useState<MaterialGroupState[]>(initialGroups);
+
   const [customName, setCustomName] = useState("");
+
   const { data: workflows } = useWorkflows(design.id);
+
   const updateStep = useUpdateStep(design.id);
 
   function updateGroup(id: string, patch: Partial<MaterialGroupState>) {
-    setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+    setGroups((previous) => previous.map((group) => (group.id === id ? { ...group, ...patch } : group)));
   }
+
   function addGroup(name: string) {
     const trimmed = name.trim();
+
     if (!trimmed) return;
-    setGroups((prev) => {
-      if (prev.some((g) => g.name.toLowerCase() === trimmed.toLowerCase())) return prev;
-      return [...prev, newGroup(trimmed, true, true)];
+
+    setGroups((previous) => {
+      const exists = previous.some((group) => group.name.toLowerCase() === trimmed.toLowerCase());
+
+      if (exists) return previous;
+
+      return [...previous, newGroup(trimmed, true, true)];
     });
   }
+
   function addRow(groupId: string) {
-    setGroups((prev) =>
-      prev.map((g) => (g.id === groupId ? { ...g, expanded: true, rows: [...g.rows, newRow()] } : g)),
-    );
-  }
-  function updateRow(groupId: string, rowId: string, patch: Partial<MaterialRowState>) {
-    setGroups((prev) =>
-      prev.map((g) =>
-        g.id === groupId ? { ...g, rows: g.rows.map((r) => (r.id === rowId ? { ...r, ...patch } : r)) } : g,
+    setGroups((previous) =>
+      previous.map((group) =>
+        group.id === groupId
+          ? {
+              ...group,
+              expanded: true,
+              rows: [...group.rows, newRow()],
+            }
+          : group,
       ),
     );
   }
-  function removeRow(groupId: string, rowId: string) {
-    setGroups((prev) => prev.map((g) => (g.id === groupId ? { ...g, rows: g.rows.filter((r) => r.id !== rowId) } : g)));
+
+  function updateRow(groupId: string, rowId: string, patch: Partial<MaterialRowState>) {
+    setGroups((previous) =>
+      previous.map((group) =>
+        group.id === groupId
+          ? {
+              ...group,
+              rows: group.rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)),
+            }
+          : group,
+      ),
+    );
   }
 
-  const enabledGroups = groups.filter((g) => g.enabled);
-  const allRequiredMaterialsSaved =
-    enabledGroups.length > 0 && enabledGroups.every((g) => g.rows.length > 0 && g.rows.every((r) => !r.editing));
+  function removeRow(groupId: string, rowId: string) {
+    setGroups((previous) =>
+      previous.map((group) =>
+        group.id === groupId
+          ? {
+              ...group,
+              rows: group.rows.filter((row) => row.id !== rowId),
+            }
+          : group,
+      ),
+    );
+  }
 
-  // The real, saved sample workflow may or may not include a Fabric/Material
-  // Selection step (workflows are user-configured). When it does, completing
-  // here marks that step done in the same data Sample Making reads its "next
-  // operation" from — so workflow progress and the Sample Making tab both
-  // reflect this automatically, with no separate hardcoded state.
+  const enabledGroups = groups.filter((group) => group.enabled);
+
+  const allRequiredMaterialsSaved =
+    enabledGroups.length > 0 &&
+    enabledGroups.every((group) => group.rows.length > 0 && group.rows.every((row) => !row.editing));
+
   async function completeMaterialSelection() {
-    const sample = workflows?.find((w) => w.kind === "sample");
-    const step = sample?.steps.find((s) => s.operationId === "fabric-selection");
+    const sample = workflows?.find((workflow) => workflow.kind === "sample");
+
+    const step = sample?.steps.find((item) => item.operationId === "fabric-selection");
+
     if (step && step.status !== "completed") {
-      await updateStep.mutateAsync({ stepId: step.id, patch: { status: "completed" } });
+      await updateStep.mutateAsync({
+        stepId: step.id,
+        patch: {
+          status: "completed",
+        },
+      });
     }
+
     onCompleted();
   }
 
@@ -354,7 +473,11 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
         <MaterialGroupCard
           key={group.id}
           group={group}
-          onToggleExpanded={() => updateGroup(group.id, { expanded: !group.expanded })}
+          onToggleExpanded={() =>
+            updateGroup(group.id, {
+              expanded: !group.expanded,
+            })
+          }
           onToggleEnabled={(enabled) => updateGroup(group.id, { enabled })}
           onAddRow={() => addRow(group.id)}
           onUpdateRow={(rowId, patch) => updateRow(group.id, rowId, patch)}
@@ -364,28 +487,31 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
 
       <div className="rounded-2xl border border-dashed border-border bg-card p-3">
         <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">+ Add Material Group</p>
+
         <div className="mt-2 flex gap-2">
           <input
             value={customName}
-            onChange={(e) => setCustomName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
+            onChange={(event) => setCustomName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
                 addGroup(customName);
                 setCustomName("");
               }
             }}
-            placeholder="Custom group e.g. Interlining, Embroidery, Dupatta Border"
+            placeholder="Custom group e.g. Interlining, Embroidery"
             className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
           />
+
           <button
             onClick={() => {
               addGroup(customName);
               setCustomName("");
             }}
             disabled={!customName.trim()}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground shadow-sm disabled:opacity-50"
           >
-            <Plus className="h-4 w-4" /> Add
+            <Plus className="h-4 w-4" />
+            Add
           </button>
         </div>
       </div>
@@ -393,12 +519,14 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
       {allRequiredMaterialsSaved ? (
         <div className="rounded-2xl border border-success/30 bg-success/5 p-4">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 text-xs font-bold text-success">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Material Selection Completed
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Material Selection Completed
           </span>
+
           <button
             onClick={completeMaterialSelection}
             disabled={updateStep.isPending}
-            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground"
           >
             {updateStep.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Complete Material Selection & Continue
@@ -442,20 +570,24 @@ function MaterialGroupCard({
               "h-4 w-4 shrink-0 text-muted-foreground transition-transform " + (group.expanded ? "rotate-180" : "")
             }
           />
+
           <span className="truncate text-sm font-semibold">{group.name}</span>
+
           <span className="shrink-0 text-xs text-muted-foreground">
-            ({group.rows.length} Material{group.rows.length === 1 ? "" : "s"})
+            ({group.rows.length} Material
+            {group.rows.length === 1 ? "" : "s"})
           </span>
         </button>
+
         <Switch
           checked={group.enabled}
           onCheckedChange={onToggleEnabled}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
           aria-label={group.enabled ? `Disable ${group.name}` : `Enable ${group.name}`}
         />
       </div>
 
-      {group.expanded && (
+      {group.expanded && group.enabled && (
         <div className="grid gap-2 border-t border-border p-3">
           {group.rows.length === 0 ? (
             <p className="rounded-xl border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
@@ -471,11 +603,13 @@ function MaterialGroupCard({
               />
             ))
           )}
+
           <button
             onClick={onAddRow}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-background py-2 text-xs font-semibold text-primary hover:bg-primary-soft/40"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-background py-2 text-xs font-semibold text-primary"
           >
-            <Plus className="h-3.5 w-3.5" /> Add Material
+            <Plus className="h-3.5 w-3.5" />
+            Add Material
           </button>
         </div>
       )}
@@ -499,23 +633,21 @@ function MaterialRowItem({
       <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{row.materialName}</p>
+
           <p className="truncate text-[11px] text-muted-foreground">
             {row.materialCode} · {row.quantity} {row.unit}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+
+        <div className="flex items-center gap-1">
           <button
             onClick={() => onChange({ editing: true })}
-            aria-label="Edit material"
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-primary"
+            className="rounded-lg p-1.5 text-muted-foreground hover:text-primary"
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
-          <button
-            onClick={onDelete}
-            aria-label="Delete material"
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          >
+
+          <button onClick={onDelete} className="rounded-lg p-1.5 text-muted-foreground hover:text-destructive">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -530,54 +662,67 @@ function MaterialRowItem({
           label="Material Code"
           value={row.materialCode}
           placeholder="MAT-1001"
-          onChange={(v) => onChange({ materialCode: v })}
+          onChange={(value) => onChange({ materialCode: value })}
         />
+
         <CompactField
           label="Material Name"
           value={row.materialName}
           placeholder="Silk Chanderi"
-          onChange={(v) => onChange({ materialName: v })}
+          onChange={(value) => onChange({ materialName: value })}
         />
+
         <label className="block min-w-0">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quantity</span>
+
           <input
             type="number"
             min={0}
             step={0.25}
-            inputMode="decimal"
             value={row.quantity || ""}
-            onChange={(e) => onChange({ quantity: Math.max(0, Number(e.target.value) || 0) })}
+            onChange={(event) =>
+              onChange({
+                quantity: Math.max(0, Number(event.target.value) || 0),
+              })
+            }
             placeholder="0.00"
             className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
           />
         </label>
+
         <label className="block min-w-0">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unit</span>
+
           <select
             value={row.unit}
-            onChange={(e) => onChange({ unit: e.target.value })}
+            onChange={(event) =>
+              onChange({
+                unit: event.target.value,
+              })
+            }
             className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
           >
-            {UNIT_OPTIONS.map((u) => (
-              <option key={u} value={u}>
-                {u}
+            {UNIT_OPTIONS.map((unit) => (
+              <option key={unit} value={unit}>
+                {unit}
               </option>
             ))}
           </select>
         </label>
       </div>
+
       <div className="mt-2 flex gap-2">
         <button
           onClick={() => onChange({ editing: false })}
           disabled={!valid}
-          className="flex-1 rounded-xl bg-primary py-2 text-xs font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex-1 rounded-xl bg-primary py-2 text-xs font-bold text-primary-foreground disabled:opacity-50"
         >
           Save
         </button>
+
         <button
           onClick={onDelete}
-          aria-label="Delete material"
-          className="shrink-0 rounded-xl border border-border bg-background px-3 text-muted-foreground hover:border-destructive/40 hover:text-destructive"
+          className="shrink-0 rounded-xl border border-border bg-background px-3 text-muted-foreground hover:text-destructive"
         >
           <Trash2 className="h-4 w-4" />
         </button>
@@ -594,15 +739,16 @@ function CompactField({
 }: {
   label: string;
   value: string;
-  onChange: (v: string) => void;
+  onChange: (value: string) => void;
   placeholder?: string;
 }) {
   return (
     <label className="block min-w-0">
       <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+
       <input
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
       />
@@ -610,20 +756,9 @@ function CompactField({
   );
 }
 
-/* ---------- Sample Making (Operation Execution) ---------- */
-//
-// The current/next operation is always resolved by reading the design's
-// real, saved sample workflow (workflow_steps ordered by sequence) and
-// finding the first step that isn't completed/skipped — never a hardcoded
-// stage list. Status, assigned worker, remarks, and start/end date persist
-// to that same real data (the same source every other screen reads), so
-// workflow progress stays in sync everywhere automatically.
-//
-// workflow_steps stores start_date/end_date as calendar dates, not precise
-// timestamps, so the live "Started at HH:MM" clock and ticking elapsed
-// counter are tracked client-side for this viewing session. The persisted
-// day-level record (who worked it, which day, remarks, done/not) is real;
-// second-precision timing resets if you reload mid-operation.
+/* =========================================================
+   SAMPLE MAKING
+========================================================= */
 
 const WORKERS = ["Ameen", "Suresh", "Fathima", "Anwar", "Vikas", "Meera"];
 
@@ -635,50 +770,91 @@ type OperationSession = {
 };
 
 function emptySession(): OperationSession {
-  return { worker: "", estimatedMinutes: "", remarks: "", startedAt: null };
+  return {
+    worker: "",
+    estimatedMinutes: "",
+    remarks: "",
+    startedAt: null,
+  };
 }
 
-function formatClock(d: Date): string {
-  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+function formatClock(date: Date) {
+  return date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
-function formatElapsed(startedAt: Date): string {
-  const totalSeconds = Math.max(0, Math.floor((Date.now() - startedAt.getTime()) / 1000));
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(Math.floor(totalSeconds / 3600))}:${pad(Math.floor((totalSeconds % 3600) / 60))}:${pad(totalSeconds % 60)}`;
+function formatElapsed(startedAt: Date) {
+  const seconds = Math.max(0, Math.floor((Date.now() - startedAt.getTime()) / 1000));
+
+  const pad = (value: number) => String(value).padStart(2, "0");
+
+  const hours = Math.floor(seconds / 3600);
+
+  const minutes = Math.floor((seconds % 3600) / 60);
+
+  const remainingSeconds = seconds % 60;
+
+  return `${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`;
 }
 
-function SampleMakingPanel({ design }: { design: Design }) {
+function SampleMakingPanel({ design, onContinueToCosting }: { design: Design; onContinueToCosting: () => void }) {
   const { data: workflows, isLoading } = useWorkflows(design.id);
+
   const { data: catalog = [] } = useOperationCatalog();
+
   const updateStep = useUpdateStep(design.id);
-  const sample = workflows?.find((w) => w.kind === "sample");
+
+  const sample = workflows?.find((workflow) => workflow.kind === "sample");
+
   const ordered = sample ? [...sample.steps].sort((a, b) => a.sequence - b.sequence) : [];
-  const currentIndex = ordered.findIndex((s) => s.status !== "completed" && s.status !== "skipped");
+
+  const currentIndex = ordered.findIndex((step) => step.status !== "completed" && step.status !== "skipped");
+
   const step = currentIndex >= 0 ? ordered[currentIndex] : undefined;
 
   const [sessions, setSessions] = useState<Record<string, OperationSession>>({});
+
   const [, forceTick] = useState(0);
 
-  // Re-render every second so the elapsed-time counter keeps ticking.
   useEffect(() => {
-    const id = setInterval(() => forceTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
+    const interval = window.setInterval(() => {
+      forceTick((value) => value + 1);
+    }, 1000);
+
+    return () => window.clearInterval(interval);
   }, []);
 
-  // A step can already be "in-progress" from an earlier visit; resume
-  // timing from when this screen was reopened rather than showing a
-  // fabricated elapsed figure (see note above on date-only columns).
   useEffect(() => {
-    if (!step || step.status !== "in-progress") return;
-    setSessions((prev) => {
-      if (prev[step.id]?.startedAt) return prev;
-      return { ...prev, [step.id]: { ...(prev[step.id] ?? emptySession()), startedAt: new Date() } };
+    if (!step) return;
+
+    if (step.status !== "in-progress") return;
+
+    setSessions((previous) => {
+      if (previous[step.id]?.startedAt) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [step.id]: {
+          ...(previous[step.id] ?? emptySession()),
+          worker: step.assignedTo ?? "",
+          startedAt: new Date(),
+        },
+      };
     });
-  }, [step?.id, step?.status]);
+  }, [step?.id, step?.status, step?.assignedTo]);
 
   function patchSession(stepId: string, patch: Partial<OperationSession>) {
-    setSessions((prev) => ({ ...prev, [stepId]: { ...(prev[stepId] ?? emptySession()), ...patch } }));
+    setSessions((previous) => ({
+      ...previous,
+      [stepId]: {
+        ...(previous[stepId] ?? emptySession()),
+        ...patch,
+      },
+    }));
   }
 
   if (isLoading) {
@@ -693,6 +869,7 @@ function SampleMakingPanel({ design }: { design: Design }) {
     return (
       <div className="rounded-3xl border border-dashed border-border bg-card p-8 text-center">
         <p className="text-sm text-muted-foreground">No sample workflow steps configured yet.</p>
+
         <Link
           to="/designs/$code/workflow"
           params={{ code: design.code }}
@@ -709,45 +886,77 @@ function SampleMakingPanel({ design }: { design: Design }) {
     return (
       <div className="grid gap-4">
         <WorkflowTimeline steps={ordered} catalog={catalog} />
+
         <div className="rounded-3xl border border-success/30 bg-success/5 p-8 text-center">
-          <CheckCircle2 className="mx-auto h-8 w-8 text-success" />
-          <p className="mt-2 text-sm font-bold text-success">All sample operations are complete</p>
-          <p className="mt-1 text-xs text-muted-foreground">Head to Approval to move this sample forward.</p>
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-success/15 text-success">
+            <CheckCircle2 className="h-9 w-9" />
+          </div>
+
+          <h3 className="mt-4 text-xl font-extrabold tracking-tight">Sample Making Completed</h3>
+
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+            All sample workflow operations have been completed successfully.
+          </p>
+
+          <button
+            onClick={onContinueToCosting}
+            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 py-4 text-base font-bold text-primary-foreground shadow-sm hover:opacity-90 sm:w-auto"
+          >
+            Continue to Costing
+            <ArrowRight className="h-5 w-5" />
+          </button>
         </div>
       </div>
     );
   }
 
   const previous = currentIndex > 0 ? ordered[currentIndex - 1] : undefined;
-  const previousOp = previous ? catalog.find((o) => o.id === previous.operationId) : undefined;
-  const previousName = previous ? previous.label || previousOp?.name || previous.operationId : undefined;
 
-  const op = catalog.find((o) => o.id === step.operationId);
-  const opName = step.label || op?.name || step.operationId;
-  const Icon = op?.icon;
+  const previousOperation = previous ? catalog.find((operation) => operation.id === previous.operationId) : undefined;
+
+  const previousName = previous ? previous.label || previousOperation?.name || previous.operationId : undefined;
+
+  const operation = catalog.find((item) => item.id === step.operationId);
+
+  const operationName = step.label || operation?.name || step.operationId;
+
+  const OperationIcon = operation?.icon;
+
   const session = sessions[step.id] ?? emptySession();
-  const heading = previous?.status === "completed" ? "Next Operation" : "Current Operation";
-  const inProgress = step.status === "in-progress";
-  const stepId = step.id;
 
-  function start() {
+  const inProgress = step.status === "in-progress";
+
+  const heading = previous?.status === "completed" ? "Next Operation" : "Current Operation";
+
+  function startOperation() {
     if (!session.worker) return;
-    patchSession(stepId, { startedAt: new Date() });
+
+    const startedAt = new Date();
+
+    patchSession(step.id, {
+      startedAt,
+    });
+
     updateStep.mutate({
-      stepId,
+      stepId: step.id,
       patch: {
         status: "in-progress",
         assignedTo: session.worker,
         remarks: session.remarks.trim() || null,
-        startDate: new Date().toISOString().slice(0, 10),
+        startDate: startedAt.toISOString().slice(0, 10),
       },
     });
   }
 
-  function complete() {
+  function completeOperation() {
+    const endedAt = new Date();
+
     updateStep.mutate({
-      stepId,
-      patch: { status: "completed", endDate: new Date().toISOString().slice(0, 10) },
+      stepId: step.id,
+      patch: {
+        status: "completed",
+        endDate: endedAt.toISOString().slice(0, 10),
+      },
     });
   }
 
@@ -758,24 +967,30 @@ function SampleMakingPanel({ design }: { design: Design }) {
       <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
         {previous?.status === "completed" && (
           <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 text-xs font-bold text-success">
-            <CheckCircle2 className="h-3.5 w-3.5" /> {previousName} Completed
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {previousName} Completed
           </div>
         )}
 
         <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{heading}</p>
-        <div className="mt-1 flex items-center gap-3">
+
+        <div className="mt-2 flex items-center gap-3">
           <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
-            {Icon ? <Icon className="h-5 w-5" /> : <Scissors className="h-5 w-5" />}
+            {OperationIcon ? <OperationIcon className="h-5 w-5" /> : <Scissors className="h-5 w-5" />}
           </div>
-          <h3 className="truncate text-xl font-extrabold tracking-tight">{opName}</h3>
+
+          <h3 className="truncate text-xl font-extrabold tracking-tight">{operationName}</h3>
         </div>
 
         {inProgress ? (
-          <div className="mt-4 grid gap-4">
+          <div className="mt-5 grid gap-4">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatusTile label="Status" value="🟡 In Progress" />
+              <StatusTile label="Status" value="In Progress" />
+
               <StatusTile label="Worker" value={step.assignedTo || session.worker || "—"} />
-              <StatusTile label="Started" value={session.startedAt ? formatClock(session.startedAt) : "—"} />
+
+              <StatusTile label="Start Time" value={session.startedAt ? formatClock(session.startedAt) : "—"} />
+
               <StatusTile
                 label="Elapsed Time"
                 value={session.startedAt ? formatElapsed(session.startedAt) : "—"}
@@ -784,44 +999,57 @@ function SampleMakingPanel({ design }: { design: Design }) {
             </div>
 
             <button
-              onClick={complete}
+              onClick={completeOperation}
               disabled={updateStep.isPending}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-success px-4 py-4 text-base font-bold text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-success px-4 py-4 text-base font-bold text-white shadow-sm hover:opacity-90 disabled:opacity-60"
             >
-              {updateStep.isPending && <Loader2 className="h-4 w-4 animate-spin" />}✓ Complete Operation
+              {updateStep.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              <CheckCircle2 className="h-5 w-5" />
+              Complete Operation
             </button>
           </div>
         ) : (
-          <div className="mt-4 grid gap-4">
+          <div className="mt-5 grid gap-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                   Assigned Worker
                 </span>
+
                 <select
                   value={session.worker}
-                  onChange={(e) => patchSession(stepId, { worker: e.target.value })}
+                  onChange={(event) =>
+                    patchSession(step.id, {
+                      worker: event.target.value,
+                    })
+                  }
                   className="mt-1.5 w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm font-semibold outline-none focus:border-primary"
                 >
                   <option value="">Select Worker</option>
-                  {WORKERS.map((w) => (
-                    <option key={w} value={w}>
-                      {w}
+
+                  {WORKERS.map((worker) => (
+                    <option key={worker} value={worker}>
+                      {worker}
                     </option>
                   ))}
                 </select>
               </label>
+
               <label className="block">
                 <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                   Estimated Time (Optional)
                 </span>
+
                 <input
                   type="number"
                   min={0}
-                  inputMode="numeric"
                   placeholder="Minutes"
                   value={session.estimatedMinutes}
-                  onChange={(e) => patchSession(stepId, { estimatedMinutes: e.target.value })}
+                  onChange={(event) =>
+                    patchSession(step.id, {
+                      estimatedMinutes: event.target.value,
+                    })
+                  }
                   className="mt-1.5 w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm font-semibold outline-none focus:border-primary"
                 />
               </label>
@@ -831,16 +1059,21 @@ function SampleMakingPanel({ design }: { design: Design }) {
               <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                 Remarks (Optional)
               </span>
+
               <textarea
                 rows={2}
                 value={session.remarks}
-                onChange={(e) => patchSession(stepId, { remarks: e.target.value })}
+                onChange={(event) =>
+                  patchSession(step.id, {
+                    remarks: event.target.value,
+                  })
+                }
                 className="mt-1.5 w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm outline-none focus:border-primary"
               />
             </label>
 
             <button
-              onClick={start}
+              onClick={startOperation}
               disabled={!session.worker || updateStep.isPending}
               className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-base font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -865,26 +1098,31 @@ function WorkflowTimeline({
   return (
     <div className="overflow-x-auto rounded-2xl border border-border bg-card p-3">
       <ol className="flex min-w-max items-start gap-1">
-        {steps.map((s, i) => {
-          const op = catalog.find((o) => o.id === s.operationId);
-          const label = s.label || op?.short || op?.name || s.operationId;
-          const done = s.status === "completed" || s.status === "skipped";
-          const current = s.id === currentStepId;
+        {steps.map((step, index) => {
+          const operation = catalog.find((item) => item.id === step.operationId);
+
+          const label = step.label || operation?.short || operation?.name || step.operationId;
+
+          const completed = step.status === "completed" || step.status === "skipped";
+
+          const current = step.id === currentStepId;
+
           return (
-            <li key={s.id} className="flex items-start gap-1">
+            <li key={step.id} className="flex items-start gap-1">
               <div className="flex w-16 flex-col items-center gap-1">
                 <span
                   className={
                     "grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-bold " +
-                    (done
+                    (completed
                       ? "bg-primary text-primary-foreground"
                       : current
                         ? "bg-primary text-primary-foreground ring-2 ring-primary/20"
                         : "bg-muted text-muted-foreground")
                   }
                 >
-                  {done ? "✓" : i + 1}
+                  {completed ? "✓" : index + 1}
                 </span>
+
                 <span
                   className={
                     "max-w-[64px] truncate text-center text-[9px] font-semibold " +
@@ -894,8 +1132,9 @@ function WorkflowTimeline({
                   {label}
                 </span>
               </div>
-              {i < steps.length - 1 && (
-                <span className={"mt-3.5 h-0.5 w-4 shrink-0 rounded-full " + (done ? "bg-primary" : "bg-muted")} />
+
+              {index < steps.length - 1 && (
+                <span className={"mt-3.5 h-0.5 w-4 shrink-0 rounded-full " + (completed ? "bg-primary" : "bg-muted")} />
               )}
             </li>
           );
@@ -909,28 +1148,41 @@ function StatusTile({ label, value, mono }: { label: string; value: string; mono
   return (
     <div className="rounded-xl border border-border bg-background p-3">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+
       <p className={"mt-1 truncate text-sm font-bold " + (mono ? "font-mono tabular-nums" : "")}>{value}</p>
     </div>
   );
 }
 
-/* ---------- Costing ---------- */
+/* =========================================================
+   COSTING
+========================================================= */
 
 function CostingPanel({ design }: { design: Design }) {
-  const [costs, setCosts] = useState<
-    { id: string; label: string; category: "Material" | "Labor" | "Overhead" | "Other"; amount: number }[]
-  >(() => [
-    { id: "c1", label: "Material (est.)", category: "Material", amount: 0 },
-    { id: "c2", label: "Stitching", category: "Labor", amount: 0 },
-    { id: "c3", label: "Overheads", category: "Overhead", amount: 0 },
+  const [costs, setCosts] = useState([
+    {
+      id: "c1",
+      label: "Material (est.)",
+      category: "Material",
+      amount: 0,
+    },
+    {
+      id: "c2",
+      label: "Stitching",
+      category: "Labor",
+      amount: 0,
+    },
+    {
+      id: "c3",
+      label: "Overheads",
+      category: "Overhead",
+      amount: 0,
+    },
   ]);
 
-  const perPiece = costs.reduce((s, c) => s + c.amount, 0);
+  const perPiece = costs.reduce((total, item) => total + item.amount, 0);
+
   const orderTotal = perPiece * design.orderQuantity;
-  const byCategory = costs.reduce<Record<string, number>>((acc, c) => {
-    acc[c.category] = (acc[c.category] ?? 0) + c.amount;
-    return acc;
-  }, {});
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -938,80 +1190,73 @@ function CostingPanel({ design }: { design: Design }) {
         <table className="w-full min-w-[420px] text-sm">
           <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
-              <th className="p-3 text-left font-semibold">Cost Item</th>
-              <th className="p-3 text-left font-semibold">Category</th>
-              <th className="p-3 text-right font-semibold">Amount (₹/pc)</th>
+              <th className="p-3 text-left">Cost Item</th>
+
+              <th className="p-3 text-left">Category</th>
+
+              <th className="p-3 text-right">Amount (₹/pc)</th>
             </tr>
           </thead>
+
           <tbody>
-            {costs.map((c) => (
-              <tr key={c.id} className="border-t border-border">
-                <td className="p-3 font-semibold">{c.label}</td>
-                <td className="p-3 text-muted-foreground">{c.category}</td>
+            {costs.map((cost) => (
+              <tr key={cost.id} className="border-t border-border">
+                <td className="p-3 font-semibold">{cost.label}</td>
+
+                <td className="p-3 text-muted-foreground">{cost.category}</td>
+
                 <td className="p-3 text-right">
                   <input
                     type="number"
                     min={0}
-                    value={c.amount || ""}
-                    onChange={(e) =>
-                      setCosts((prev) =>
-                        prev.map((x) =>
-                          x.id === c.id ? { ...x, amount: Math.max(0, Number(e.target.value) || 0) } : x,
+                    value={cost.amount || ""}
+                    onChange={(event) =>
+                      setCosts((previous) =>
+                        previous.map((item) =>
+                          item.id === cost.id
+                            ? {
+                                ...item,
+                                amount: Math.max(0, Number(event.target.value) || 0),
+                              }
+                            : item,
                         ),
                       )
                     }
-                    className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-right text-sm outline-none focus:border-primary"
+                    className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-right"
                   />
                 </td>
               </tr>
             ))}
           </tbody>
+
           <tfoot>
             <tr className="border-t border-border bg-primary-soft">
               <td className="p-3 font-bold" colSpan={2}>
                 Total per piece
               </td>
+
               <td className="p-3 text-right text-lg font-extrabold text-primary">₹{perPiece.toLocaleString()}</td>
             </tr>
           </tfoot>
         </table>
       </div>
 
-      <div className="grid gap-3">
-        <div className="rounded-2xl border border-border bg-gradient-to-br from-primary to-primary-glow p-5 text-primary-foreground shadow-md">
-          <p className="text-[11px] font-bold uppercase tracking-widest opacity-85">Order total</p>
-          <p className="mt-1 text-3xl font-extrabold tracking-tight">₹{orderTotal.toLocaleString()}</p>
-          <p className="mt-1 text-xs opacity-85">
-            {design.orderQuantity} pcs × ₹{perPiece.toLocaleString()}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Breakdown</p>
-          <ul className="mt-2 space-y-2 text-sm">
-            {Object.entries(byCategory).map(([cat, amt]) => {
-              const pct = perPiece > 0 ? Math.round((amt / perPiece) * 100) : 0;
-              return (
-                <li key={cat}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">{cat}</span>
-                    <span className="text-muted-foreground">
-                      ₹{amt.toLocaleString()} · {pct}%
-                    </span>
-                  </div>
-                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+      <div className="rounded-2xl border border-border bg-gradient-to-br from-primary to-primary-glow p-5 text-primary-foreground shadow-md">
+        <p className="text-[11px] font-bold uppercase tracking-widest opacity-85">Order total</p>
+
+        <p className="mt-1 text-3xl font-extrabold">₹{orderTotal.toLocaleString()}</p>
+
+        <p className="mt-1 text-xs opacity-85">
+          {design.orderQuantity} pcs × ₹{perPiece.toLocaleString()}
+        </p>
       </div>
     </div>
   );
 }
 
-/* ---------- Approval ---------- */
+/* =========================================================
+   APPROVAL
+========================================================= */
 
 type ApprovalRow = {
   id: string;
@@ -1020,93 +1265,75 @@ type ApprovalRow = {
   status: "Pending" | "Approved" | "Rejected";
 };
 
-const APPROVAL_TONE: Record<ApprovalRow["status"], string> = {
-  Pending: "bg-muted text-muted-foreground",
-  Approved: "bg-success/15 text-success",
-  Rejected: "bg-destructive/15 text-destructive",
-};
-
 function ApprovalPanel({ design }: { design: Design }) {
-  const [approvals, setApprovals] = useState<ApprovalRow[]>(() => [
-    { id: "a1", role: "Designer", name: "—", status: "Pending" },
-    { id: "a2", role: "Merchandiser", name: "—", status: "Pending" },
-    { id: "a3", role: "Production Head", name: "—", status: "Pending" },
-    { id: "a4", role: "Customer", name: design.customer || "—", status: "Pending" },
+  const [approvals, setApprovals] = useState<ApprovalRow[]>([
+    {
+      id: "a1",
+      role: "Designer",
+      name: "—",
+      status: "Pending",
+    },
+    {
+      id: "a2",
+      role: "Merchandiser",
+      name: "—",
+      status: "Pending",
+    },
+    {
+      id: "a3",
+      role: "Production Head",
+      name: "—",
+      status: "Pending",
+    },
+    {
+      id: "a4",
+      role: "Customer",
+      name: design.customer || "—",
+      status: "Pending",
+    },
   ]);
 
-  const approved = approvals.filter((a) => a.status === "Approved").length;
-  const total = approvals.length;
-  const pct = Math.round((approved / total) * 100);
-
   function setStatus(id: string, status: ApprovalRow["status"]) {
-    setApprovals((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
+    setApprovals((previous) => previous.map((approval) => (approval.id === id ? { ...approval, status } : approval)));
   }
 
   return (
-    <div className="grid gap-4">
-      <div className="rounded-2xl border border-border bg-gradient-to-br from-primary-soft to-background p-5">
-        <div className="flex items-center justify-between text-sm">
-          <div>
-            <p className="font-bold">Approval progress</p>
-            <p className="text-xs text-muted-foreground">
-              {approved} of {total} approvers signed off
-            </p>
-          </div>
-          <p className="text-2xl font-extrabold text-primary">{pct}%</p>
-        </div>
-        <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-background">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-primary to-primary-glow"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
+    <ul className="grid gap-3 sm:grid-cols-2">
+      {approvals.map((approval) => (
+        <li key={approval.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <p className="text-[11px] font-bold uppercase text-muted-foreground">{approval.role}</p>
 
-      <ul className="grid gap-3 sm:grid-cols-2">
-        {approvals.map((a) => {
-          const Icon = a.status === "Approved" ? CheckCircle2 : a.status === "Rejected" ? XCircle : Clock;
-          return (
-            <li key={a.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{a.role}</p>
-                  <p className="mt-0.5 truncate text-base font-bold">{a.name}</p>
-                </div>
-                <span
-                  className={
-                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold " +
-                    APPROVAL_TONE[a.status]
-                  }
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {a.status}
-                </span>
-              </div>
-              {a.status === "Pending" && (
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={() => setStatus(a.id, "Approved")}
-                    className="flex-1 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => setStatus(a.id, "Rejected")}
-                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold hover:border-destructive/40 hover:text-destructive"
-                  >
-                    Reject
-                  </button>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+          <p className="mt-1 font-bold">{approval.name}</p>
+
+          <p className="mt-2 text-sm">{approval.status}</p>
+
+          {approval.status === "Pending" && (
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => setStatus(approval.id, "Approved")}
+                className="flex-1 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
+              >
+                Approve
+              </button>
+
+              <button
+                onClick={() => setStatus(approval.id, "Rejected")}
+                className="flex-1 rounded-lg border border-border px-3 py-2 text-xs font-semibold"
+              >
+                <XCircle className="mr-1 inline h-3.5 w-3.5" />
+                Reject
+              </button>
+            </div>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 
-/* ---------- Shared ---------- */
+/* =========================================================
+   SAMPLE HEADER
+========================================================= */
 
 function SampleHeader({
   design,
@@ -1115,24 +1342,27 @@ function SampleHeader({
   design: Design;
   stage: "In Development" | "Ready for Review" | "Approved";
 }) {
-  // Mock financial + designer facts for UI-first pass.
   const targetCostPerPc = 1250;
-  const estMargin = "25%";
+
+  const estimatedMargin = "25%";
+
   const designer = "Rifa";
+
   const createdOn = new Date(design.createdAt).toLocaleDateString(undefined, {
     day: "2-digit",
     month: "short",
     year: "numeric",
   });
 
-  // 7-step workflow dots (per mockup). Mark step 3 as current when In Development.
   const total = 7;
-  const currentIdx = stage === "Approved" ? total : stage === "Ready for Review" ? 5 : 3;
+
+  const currentIndex = stage === "Approved" ? total : stage === "Ready for Review" ? 5 : 3;
 
   return (
     <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
       <div className="relative aspect-[16/10] w-full bg-primary-soft">
         <DesignImage path={design.imagePath} alt={design.name} />
+
         <span
           className={
             "absolute right-3 top-3 rounded-full px-3 py-1 text-[11px] font-bold shadow-sm " +
@@ -1144,49 +1374,58 @@ function SampleHeader({
       </div>
 
       <div className="grid gap-4 p-3 sm:p-5">
-        <div className="min-w-0">
-          <p className="truncate text-[11px] font-bold tracking-widest text-muted-foreground">{design.code}</p>
-          <h2 className="truncate text-xl font-extrabold tracking-tight sm:text-2xl">{design.name}</h2>
+        <div>
+          <p className="text-[11px] font-bold tracking-widest text-muted-foreground">{design.code}</p>
+
+          <h2 className="text-xl font-extrabold sm:text-2xl">{design.name}</h2>
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <Fact label="Order Qty (Planned)" value={`${design.orderQuantity.toLocaleString()} Pcs`} />
+
           <Fact label="Category" value={design.category || "—"} />
+
           <Fact label="Target Cost (Per Pc)" value={`₹${targetCostPerPc.toLocaleString()}`} />
-          <Fact label="Est. Margin" value={estMargin} />
+
+          <Fact label="Est. Margin" value={estimatedMargin} />
+
           <Fact label="Created On" value={createdOn} />
+
           <Fact label="Designer" value={designer} />
         </div>
 
-        <div className="min-w-0 rounded-2xl border border-border bg-background p-3 sm:p-4">
-          <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-sm font-bold">Workflow Progress</p>
-            <p className="shrink-0 text-[11px] font-semibold text-muted-foreground">
-              Step {Math.min(currentIdx, total)} of {total}
+        <div className="rounded-2xl border border-border bg-background p-3">
+          <div className="flex justify-between">
+            <p className="text-sm font-bold">Workflow Progress</p>
+
+            <p className="text-[11px] font-semibold text-muted-foreground">
+              Step {Math.min(currentIndex, total)} of {total}
             </p>
           </div>
-          <ol className="mt-3 flex items-center gap-1 sm:gap-1.5">
-            {Array.from({ length: total }, (_, i) => i + 1).map((n) => {
-              const done = n < currentIdx;
-              const current = n === currentIdx;
+
+          <ol className="mt-3 flex items-center gap-1">
+            {Array.from({ length: total }, (_, index) => index + 1).map((number) => {
+              const completed = number < currentIndex;
+
+              const current = number === currentIndex;
+
               return (
-                <li key={n} className="flex min-w-0 flex-1 items-center gap-1 sm:gap-1.5">
+                <li key={number} className="flex min-w-0 flex-1 items-center gap-1">
                   <span
                     className={
-                      "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold transition sm:h-8 sm:w-8 sm:text-[11px] " +
-                      (done
+                      "grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-bold " +
+                      (completed
                         ? "bg-primary text-primary-foreground"
                         : current
-                          ? "bg-primary text-primary-foreground ring-2 ring-primary/20 sm:ring-4"
+                          ? "bg-primary text-primary-foreground ring-2 ring-primary/20"
                           : "bg-muted text-muted-foreground")
                     }
                   >
-                    {done ? "✓" : n}
+                    {completed ? "✓" : number}
                   </span>
-                  {n < total && (
-                    <span
-                      className={"h-0.5 min-w-0 flex-1 rounded-full " + (n < currentIdx ? "bg-primary" : "bg-muted")}
-                    />
+
+                  {number < total && (
+                    <span className={"h-0.5 min-w-0 flex-1 rounded-full " + (completed ? "bg-primary" : "bg-muted")} />
                   )}
                 </li>
               );
@@ -1197,7 +1436,7 @@ function SampleHeader({
         <Link
           to="/designs/$code/workflow"
           params={{ code: design.code }}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+          className="inline-flex w-full items-center justify-center rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground"
         >
           View Workflow
         </Link>
@@ -1210,6 +1449,7 @@ function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-border bg-background p-3">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+
       <p className="mt-1 truncate text-sm font-bold">{value}</p>
     </div>
   );
