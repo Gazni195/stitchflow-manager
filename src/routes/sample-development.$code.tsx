@@ -1245,6 +1245,10 @@ function WorkflowTimeline({
   onEdit: (stepId: string) => void;
   onReopen: (step: WorkflowStep) => void;
 }) {
+  const totalLabour = history
+    .filter((s) => s.status === "completed")
+    .reduce((sum, s) => sum + stepLabourCost(s, sessions[s.id]), 0);
+
   if (history.length === 0) {
     return (
       <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
@@ -1256,8 +1260,16 @@ function WorkflowTimeline({
 
   return (
     <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
-      <p className="text-sm font-bold">Workflow Timeline</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-bold">Workflow Timeline</p>
+        {totalLabour > 0 && (
+          <span className="rounded-full bg-primary-soft px-3 py-1 text-[11px] font-bold text-primary">
+            Total Labour · {formatCurrency(totalLabour)}
+          </span>
+        )}
+      </div>
       <ul className="mt-3 grid gap-2">
+
         {history.map((step) => (
           <HistoryTimelineRow
             key={step.id}
