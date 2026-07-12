@@ -23,8 +23,8 @@ import { DesignImage } from "@/components/DesignImage";
 import { Switch } from "@/components/ui/switch";
 import { useRequireAuth } from "@/hooks/use-auth";
 import { useDesignByCode } from "@/lib/api/designs";
-import { useOperationCatalog } from "@/lib/api/operations";
-import { useUpdateStep, useWorkflows } from "@/lib/api/workflows";
+import { useOperationCatalog, type CatalogOperation } from "@/lib/api/operations";
+import { useUpdateStep, useWorkflows, type WorkflowStep } from "@/lib/api/workflows";
 import { supabase } from "@/integrations/supabase/client";
 import type { Design } from "@/lib/designs";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/designs";
@@ -610,19 +610,76 @@ function CompactField({
   );
 }
 
-/* ---------- Sample Making ---------- */
+/* ---------- Sample Making (Operation Execution) ---------- */
 //
-// The "current operation" is always resolved by reading the design's real,
-// saved sample workflow (workflow_steps ordered by sequence) and finding the
-// first step that isn't completed/skipped — never a hardcoded stage list.
-// Completing a step here updates the same data every other screen (Design
-// Details, Dashboard progress) already reads, so progress stays in sync.
+// The current/next operation is always resolved by reading the design's
+// real, saved sample workflow (workflow_steps ordered by sequence) and
+// finding the first step that isn't completed/skipped — never a hardcoded
+// stage list. Status, assigned worker, remarks, and start/end date persist
+// to that same real data (the same source every other screen reads), so
+// workflow progress stays in sync everywhere automatically.
+//
+// workflow_steps stores start_date/end_date as calendar dates, not precise
+// timestamps, so the live "Started at HH:MM" clock and ticking elapsed
+// counter are tracked client-side for this viewing session. The persisted
+// day-level record (who worked it, which day, remarks, done/not) is real;
+// second-precision timing resets if you reload mid-operation.
+
+const WORKERS = ["Ameen", "Suresh", "Fathima", "Anwar", "Vikas", "Meera"];
+
+type OperationSession = {
+  worker: string;
+  estimatedMinutes: string;
+  remarks: string;
+  startedAt: Date | null;
+};
+
+function emptySession(): OperationSession {
+  return { worker: "", estimatedMinutes: "", remarks: "", startedAt: null };
+}
+
+function formatClock(d: Date): string {
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function formatElapsed(startedAt: Date): string {
+  const totalSeconds = Math.max(0, Math.floor((Date.now() - startedAt.getTime()) / 1000));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(totalSeconds / 3600))}:${pad(Math.floor((totalSeconds % 3600) / 60))}:${pad(totalSeconds % 60)}`;
+}
 
 function SampleMakingPanel({ design }: { design: Design }) {
   const { data: workflows, isLoading } = useWorkflows(design.id);
   const { data: catalog = [] } = useOperationCatalog();
   const updateStep = useUpdateStep(design.id);
   const sample = workflows?.find((w) => w.kind === "sample");
+  const ordered = sample ? [...sample.steps].sort((a, b) => a.sequence - b.sequence) : [];
+  const currentIndex = ordered.findIndex((s) => s.status !== "completed" && s.status !== "skipped");
+  const step = currentIndex >= 0 ? ordered[currentIndex] : undefined;
+
+  const [sessions, setSessions] = useState<Record<string, OperationSession>>({});
+  const [, forceTick] = useState(0);
+
+  // Re-render every second so the elapsed-time counter keeps ticking.
+  useEffect(() => {
+    const id = setInterval(() => forceTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // A step can already be "in-progress" from an earlier visit; resume
+  // timing from when this screen was reopened rather than showing a
+  // fabricated elapsed figure (see note above on date-only columns).
+  useEffect(() => {
+    if (!step || step.status !== "in-progress") return;
+    setSessions((prev) => {
+      if (prev[step.id]?.startedAt) return prev;
+      return { ...prev, [step.id]: { ...(prev[step.id] ?? emptySession()), startedAt: new Date() } };
+    });
+  }, [step?.id, step?.status]);
+
+  function patchSession(stepId: string, patch: Partial<OperationSession>) {
+    setSessions((prev) => ({ ...prev, [stepId]: { ...(prev[stepId] ?? emptySession()), ...patch } }));
+  }
 
   if (isLoading) {
     return (
@@ -648,49 +705,211 @@ function SampleMakingPanel({ design }: { design: Design }) {
     );
   }
 
-  const ordered = [...sample.steps].sort((a, b) => a.sequence - b.sequence);
-  const next = ordered.find((s) => s.status !== "completed" && s.status !== "skipped");
-
-  if (!next) {
+  if (!step) {
     return (
-      <div className="rounded-3xl border border-success/30 bg-success/5 p-8 text-center">
-        <CheckCircle2 className="mx-auto h-8 w-8 text-success" />
-        <p className="mt-2 text-sm font-bold text-success">All sample steps are complete</p>
-        <p className="mt-1 text-xs text-muted-foreground">Head to Approval to move this sample forward.</p>
+      <div className="grid gap-4">
+        <WorkflowTimeline steps={ordered} catalog={catalog} />
+        <div className="rounded-3xl border border-success/30 bg-success/5 p-8 text-center">
+          <CheckCircle2 className="mx-auto h-8 w-8 text-success" />
+          <p className="mt-2 text-sm font-bold text-success">All sample operations are complete</p>
+          <p className="mt-1 text-xs text-muted-foreground">Head to Approval to move this sample forward.</p>
+        </div>
       </div>
     );
   }
 
-  const op = catalog.find((o) => o.id === next.operationId);
-  const opName = next.label || op?.name || next.operationId;
-  const Icon = op?.icon;
-  const nextStepId = next.id;
+  const previous = currentIndex > 0 ? ordered[currentIndex - 1] : undefined;
+  const previousOp = previous ? catalog.find((o) => o.id === previous.operationId) : undefined;
+  const previousName = previous ? previous.label || previousOp?.name || previous.operationId : undefined;
 
-  function startOperation() {
-    updateStep.mutate({ stepId: nextStepId, patch: { status: "completed" } });
+  const op = catalog.find((o) => o.id === step.operationId);
+  const opName = step.label || op?.name || step.operationId;
+  const Icon = op?.icon;
+  const session = sessions[step.id] ?? emptySession();
+  const heading = previous?.status === "completed" ? "Next Operation" : "Current Operation";
+  const inProgress = step.status === "in-progress";
+  const stepId = step.id;
+
+  function start() {
+    if (!session.worker) return;
+    patchSession(stepId, { startedAt: new Date() });
+    updateStep.mutate({
+      stepId,
+      patch: {
+        status: "in-progress",
+        assignedTo: session.worker,
+        remarks: session.remarks.trim() || null,
+        startDate: new Date().toISOString().slice(0, 10),
+      },
+    });
+  }
+
+  function complete() {
+    updateStep.mutate({
+      stepId,
+      patch: { status: "completed", endDate: new Date().toISOString().slice(0, 10) },
+    });
   }
 
   return (
-    <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Current Operation</p>
-      <div className="mt-2 flex items-center gap-3">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
-          {Icon ? <Icon className="h-5 w-5" /> : <Scissors className="h-5 w-5" />}
-        </div>
-        <h3 className="truncate text-xl font-extrabold tracking-tight">{opName}</h3>
-      </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        Step {next.sequence} of {ordered.length}
-      </p>
+    <div className="grid gap-4">
+      <WorkflowTimeline steps={ordered} catalog={catalog} currentStepId={step.id} />
 
-      <button
-        onClick={startOperation}
-        disabled={updateStep.isPending}
-        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {updateStep.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-        Start {opName}
-      </button>
+      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+        {previous?.status === "completed" && (
+          <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 text-xs font-bold text-success">
+            <CheckCircle2 className="h-3.5 w-3.5" /> {previousName} Completed
+          </div>
+        )}
+
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{heading}</p>
+        <div className="mt-1 flex items-center gap-3">
+          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
+            {Icon ? <Icon className="h-5 w-5" /> : <Scissors className="h-5 w-5" />}
+          </div>
+          <h3 className="truncate text-xl font-extrabold tracking-tight">{opName}</h3>
+        </div>
+
+        {inProgress ? (
+          <div className="mt-4 grid gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatusTile label="Status" value="🟡 In Progress" />
+              <StatusTile label="Worker" value={step.assignedTo || session.worker || "—"} />
+              <StatusTile label="Started" value={session.startedAt ? formatClock(session.startedAt) : "—"} />
+              <StatusTile
+                label="Elapsed Time"
+                value={session.startedAt ? formatElapsed(session.startedAt) : "—"}
+                mono
+              />
+            </div>
+
+            <button
+              onClick={complete}
+              disabled={updateStep.isPending}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-success px-4 py-4 text-base font-bold text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {updateStep.isPending && <Loader2 className="h-4 w-4 animate-spin" />}✓ Complete Operation
+            </button>
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Assigned Worker
+                </span>
+                <select
+                  value={session.worker}
+                  onChange={(e) => patchSession(stepId, { worker: e.target.value })}
+                  className="mt-1.5 w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm font-semibold outline-none focus:border-primary"
+                >
+                  <option value="">Select Worker</option>
+                  {WORKERS.map((w) => (
+                    <option key={w} value={w}>
+                      {w}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Estimated Time (Optional)
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  placeholder="Minutes"
+                  value={session.estimatedMinutes}
+                  onChange={(e) => patchSession(stepId, { estimatedMinutes: e.target.value })}
+                  className="mt-1.5 w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm font-semibold outline-none focus:border-primary"
+                />
+              </label>
+            </div>
+
+            <label className="block">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                Remarks (Optional)
+              </span>
+              <textarea
+                rows={2}
+                value={session.remarks}
+                onChange={(e) => patchSession(stepId, { remarks: e.target.value })}
+                className="mt-1.5 w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm outline-none focus:border-primary"
+              />
+            </label>
+
+            <button
+              onClick={start}
+              disabled={!session.worker || updateStep.isPending}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-base font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {updateStep.isPending && <Loader2 className="h-4 w-4 animate-spin" />}▶ Start Operation
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WorkflowTimeline({
+  steps,
+  catalog,
+  currentStepId,
+}: {
+  steps: WorkflowStep[];
+  catalog: CatalogOperation[];
+  currentStepId?: string;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-border bg-card p-3">
+      <ol className="flex min-w-max items-start gap-1">
+        {steps.map((s, i) => {
+          const op = catalog.find((o) => o.id === s.operationId);
+          const label = s.label || op?.short || op?.name || s.operationId;
+          const done = s.status === "completed" || s.status === "skipped";
+          const current = s.id === currentStepId;
+          return (
+            <li key={s.id} className="flex items-start gap-1">
+              <div className="flex w-16 flex-col items-center gap-1">
+                <span
+                  className={
+                    "grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-bold " +
+                    (done
+                      ? "bg-primary text-primary-foreground"
+                      : current
+                        ? "bg-primary text-primary-foreground ring-2 ring-primary/20"
+                        : "bg-muted text-muted-foreground")
+                  }
+                >
+                  {done ? "✓" : i + 1}
+                </span>
+                <span
+                  className={
+                    "max-w-[64px] truncate text-center text-[9px] font-semibold " +
+                    (current ? "text-primary" : "text-muted-foreground")
+                  }
+                >
+                  {label}
+                </span>
+              </div>
+              {i < steps.length - 1 && (
+                <span className={"mt-3.5 h-0.5 w-4 shrink-0 rounded-full " + (done ? "bg-primary" : "bg-muted")} />
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+function StatusTile({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="rounded-xl border border-border bg-background p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={"mt-1 truncate text-sm font-bold " + (mono ? "font-mono tabular-nums" : "")}>{value}</p>
     </div>
   );
 }
