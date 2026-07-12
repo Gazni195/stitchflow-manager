@@ -281,8 +281,9 @@ function MaterialsPanel({ design }: { design: Design }) {
   }
 
   return (
-    <div className="grid gap-4">
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="grid gap-4">
+      <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
+        <table className="w-full min-w-[640px] text-sm">
         <table className="w-full text-sm">
           <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
