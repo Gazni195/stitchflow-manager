@@ -1428,18 +1428,47 @@ function HistoryTimelineRow({
   }
 
   const workers = session?.workers.length ? session.workers : parseWorkers(step.assignedTo);
-  const duration = session?.startedAt && session?.completedAt ? formatHM(elapsedMs(session, session.completedAt)) : "—";
-  const start = session?.startedAt ? formatClock(session.startedAt) : step.startDate || "—";
-  const end = session?.completedAt ? formatClock(session.completedAt) : step.endDate || "—";
+  const durationSecs = stepDurationSeconds(step, session);
+  const duration = formatDurationSeconds(durationSecs);
+  const start =
+    formatIsoClock(step.startedAt) ?? (session?.startedAt ? formatClock(session.startedAt) : step.startDate || "—");
+  const end =
+    formatIsoClock(step.completedAt) ?? (session?.completedAt ? formatClock(session.completedAt) : step.endDate || "—");
+  const isCompleted = step.status === "completed";
+  const labour = isCompleted ? stepLabourCost(step, session) : 0;
+  const rate = step.hourlyRate || DEFAULT_HOURLY_RATE;
 
   return (
     <li className="rounded-xl border border-border bg-background p-3">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold">✓ {opName}</p>
           <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-            {workers.length ? `Workers: ${workers.join(", ")}` : "Unassigned"} · {start} → {end} · {duration}
+            {workers.length ? `Workers: ${workers.join(", ")}` : "Unassigned"}
           </p>
+          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] sm:grid-cols-4">
+            <div>
+              <span className="block font-semibold text-muted-foreground">Started</span>
+              <span className="font-bold">{start}</span>
+            </div>
+            <div>
+              <span className="block font-semibold text-muted-foreground">Completed</span>
+              <span className="font-bold">{end}</span>
+            </div>
+            <div>
+              <span className="block font-semibold text-muted-foreground">Duration</span>
+              <span className="font-bold">{duration}</span>
+            </div>
+            {isCompleted && (
+              <div>
+                <span className="block font-semibold text-muted-foreground">Labour Cost</span>
+                <span className="font-bold text-primary">
+                  {formatCurrency(labour)}
+                  <span className="ml-1 text-[10px] font-medium text-muted-foreground">@ ₹{rate}/hr</span>
+                </span>
+              </div>
+            )}
+          </div>
         </div>
         <span className="shrink-0 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">
           {step.status === "skipped" ? "Skipped" : "Completed"}
