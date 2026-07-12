@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
-  ChevronRight,
+  ChevronDown,
   Clock,
   Coins,
   FileCheck2,
@@ -19,6 +19,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
+import { Switch } from "@/components/ui/switch";
 import { useRequireAuth } from "@/hooks/use-auth";
 import { useDesignByCode } from "@/lib/api/designs";
 import { useWorkflows } from "@/lib/api/workflows";
@@ -233,9 +234,11 @@ function StatusPanel({ design, stage }: { design: Design; stage: "In Development
 
 /* ---------- Materials (Phase 1: flexible Material Groups, manual entry) ---------- */
 //
-// Material Groups are independent of the design's garment parts — a design
-// isn't limited to Top/Pant/Shawl, and a group isn't limited to matching a
-// part name. Every row's fields (code/name/quantity/unit) mirror what an
+// Material Groups are independent of the design's garment parts. Top/Pant/
+// Shawl are always-present defaults — enable/disable only, never deleted.
+// Lining/Lace/Accessories are optional and start disabled; users can also
+// add fully custom groups, which behave the same way (enable/disable, no
+// delete). Every row's fields (code/name/quantity/unit) mirror what an
 // ERPNext stock item search would eventually return, and `source` is ready
 // to flip from "manual" to "erpnext" per row — so a later inventory
 // integration can autofill these same fields instead of manual typing,
@@ -256,16 +259,15 @@ type MaterialRowState = {
 type MaterialGroupState = {
   id: string;
   name: string;
+  enabled: boolean;
   expanded: boolean;
   rows: MaterialRowState[];
 };
 
-const DEFAULT_GROUP_NAMES = ["Top", "Pant", "Shawl"];
-const SUGGESTED_GROUP_NAMES = ["Lining", "Lace", "Accessories"];
 const UNIT_OPTIONS = ["Meter", "Pcs", "Yard", "Kg", "Set", "Roll"];
 
-function newGroup(name: string, expanded = false): MaterialGroupState {
-  return { id: crypto.randomUUID(), name, expanded, rows: [] };
+function newGroup(name: string, enabled: boolean, expanded = false): MaterialGroupState {
+  return { id: crypto.randomUUID(), name, enabled, expanded, rows: [] };
 }
 
 function newRow(): MaterialRowState {
@@ -280,24 +282,30 @@ function newRow(): MaterialRowState {
   };
 }
 
+function initialGroups(): MaterialGroupState[] {
+  return [
+    newGroup("Top", true, true),
+    newGroup("Pant", true, false),
+    newGroup("Shawl", true, false),
+    newGroup("Lining", false, false),
+    newGroup("Lace", false, false),
+    newGroup("Accessories", false, false),
+  ];
+}
+
 function MaterialsPanel() {
-  const [groups, setGroups] = useState<MaterialGroupState[]>(() =>
-    DEFAULT_GROUP_NAMES.map((name, i) => newGroup(name, i === 0)),
-  );
+  const [groups, setGroups] = useState<MaterialGroupState[]>(initialGroups);
   const [customName, setCustomName] = useState("");
 
   function updateGroup(id: string, patch: Partial<MaterialGroupState>) {
     setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
-  }
-  function removeGroup(id: string) {
-    setGroups((prev) => prev.filter((g) => g.id !== id));
   }
   function addGroup(name: string) {
     const trimmed = name.trim();
     if (!trimmed) return;
     setGroups((prev) => {
       if (prev.some((g) => g.name.toLowerCase() === trimmed.toLowerCase())) return prev;
-      return [...prev, newGroup(trimmed, true)];
+      return [...prev, newGroup(trimmed, true, true)];
     });
   }
   function addRow(groupId: string) {
@@ -316,17 +324,14 @@ function MaterialsPanel() {
     setGroups((prev) => prev.map((g) => (g.id === groupId ? { ...g, rows: g.rows.filter((r) => r.id !== rowId) } : g)));
   }
 
-  const existingNames = new Set(groups.map((g) => g.name.toLowerCase()));
-  const suggestions = SUGGESTED_GROUP_NAMES.filter((n) => !existingNames.has(n.toLowerCase()));
-
   return (
-    <div className="grid gap-2.5">
+    <div className="grid gap-2">
       {groups.map((group) => (
         <MaterialGroupCard
           key={group.id}
           group={group}
-          onToggle={() => updateGroup(group.id, { expanded: !group.expanded })}
-          onRemove={() => removeGroup(group.id)}
+          onToggleExpanded={() => updateGroup(group.id, { expanded: !group.expanded })}
+          onToggleEnabled={(enabled) => updateGroup(group.id, { enabled })}
           onAddRow={() => addRow(group.id)}
           onUpdateRow={(rowId, patch) => updateRow(group.id, rowId, patch)}
           onRemoveRow={(rowId) => removeRow(group.id, rowId)}
@@ -335,21 +340,6 @@ function MaterialsPanel() {
 
       <div className="rounded-2xl border border-dashed border-border bg-card p-3">
         <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">+ Add Material Group</p>
-
-        {suggestions.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {suggestions.map((name) => (
-              <button
-                key={name}
-                onClick={() => addGroup(name)}
-                className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:border-primary/40 hover:text-primary"
-              >
-                + {name}
-              </button>
-            ))}
-          </div>
-        )}
-
         <div className="mt-2 flex gap-2">
           <input
             value={customName}
@@ -381,40 +371,44 @@ function MaterialsPanel() {
 
 function MaterialGroupCard({
   group,
-  onToggle,
-  onRemove,
+  onToggleExpanded,
+  onToggleEnabled,
   onAddRow,
   onUpdateRow,
   onRemoveRow,
 }: {
   group: MaterialGroupState;
-  onToggle: () => void;
-  onRemove: () => void;
+  onToggleExpanded: () => void;
+  onToggleEnabled: (enabled: boolean) => void;
   onAddRow: () => void;
   onUpdateRow: (rowId: string, patch: Partial<MaterialRowState>) => void;
   onRemoveRow: (rowId: string) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="flex items-center gap-1 pr-2">
-        <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 p-3 text-left">
-          <ChevronRight
+    <div
+      className={
+        "overflow-hidden rounded-2xl border border-border bg-card transition-opacity " +
+        (group.enabled ? "" : "opacity-60")
+      }
+    >
+      <div className="flex h-12 items-center gap-2 px-3">
+        <button onClick={onToggleExpanded} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          <ChevronDown
             className={
-              "h-4 w-4 shrink-0 text-muted-foreground transition-transform " + (group.expanded ? "rotate-90" : "")
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform " + (group.expanded ? "rotate-180" : "")
             }
           />
-          <span className="truncate text-sm font-bold">{group.name}</span>
-          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-            {group.rows.length}
+          <span className="truncate text-sm font-semibold">{group.name}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            ({group.rows.length} Material{group.rows.length === 1 ? "" : "s"})
           </span>
         </button>
-        <button
-          onClick={onRemove}
-          aria-label={`Remove ${group.name} group`}
-          className="shrink-0 rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        <Switch
+          checked={group.enabled}
+          onCheckedChange={onToggleEnabled}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={group.enabled ? `Disable ${group.name}` : `Enable ${group.name}`}
+        />
       </div>
 
       {group.expanded && (
@@ -437,7 +431,7 @@ function MaterialGroupCard({
             onClick={onAddRow}
             className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-background py-2 text-xs font-semibold text-primary hover:bg-primary-soft/40"
           >
-            <Plus className="h-3.5 w-3.5" /> Add Material Row
+            <Plus className="h-3.5 w-3.5" /> Add Material
           </button>
         </div>
       )}
@@ -487,7 +481,7 @@ function MaterialRowItem({
 
   return (
     <div className="rounded-xl border border-primary/30 bg-primary-soft/30 p-2.5">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <CompactField
           label="Material Code"
           value={row.materialCode}
@@ -500,8 +494,6 @@ function MaterialRowItem({
           placeholder="Silk Chanderi"
           onChange={(v) => onChange({ materialName: v })}
         />
-      </div>
-      <div className="mt-2 grid grid-cols-2 gap-2">
         <label className="block min-w-0">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quantity</span>
           <input
