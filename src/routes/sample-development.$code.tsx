@@ -767,7 +767,7 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
           next[s.id] = {
             ...(next[s.id] ?? emptySession()),
             workers: next[s.id]?.workers.length ? next[s.id].workers : parseWorkers(s.assignedTo),
-            startedAt: new Date(),
+            startedAt: s.startedAt ? new Date(s.startedAt) : new Date(),
             pausedAt: null,
             pausedMs: 0,
           };
