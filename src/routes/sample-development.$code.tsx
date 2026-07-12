@@ -708,15 +708,8 @@ function formatMs(ms: number): string {
   return `${pad(Math.floor(totalSeconds / 3600))}:${pad(Math.floor((totalSeconds % 3600) / 60))}:${pad(totalSeconds % 60)}`;
 }
 
-// Friendly "1h 30m" — used for finished durations in the Workflow Timeline.
-function formatHM(ms: number): string {
-  const totalMinutes = Math.max(0, Math.round(ms / 60000));
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
-}
+
+
 
 // Elapsed time excluding any paused stretches: frozen at pausedAt while
 // paused, frozen at completedAt once done, otherwise counts up to `at`.
@@ -734,6 +727,48 @@ function operationName(step: WorkflowStep, catalog: CatalogOperation[]): string 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+const DEFAULT_HOURLY_RATE = 150;
+
+// Duration in seconds preferring persisted actuals, falling back to live session.
+function stepDurationSeconds(step: WorkflowStep, session: OperationSession | undefined): number | null {
+  if (step.durationSeconds != null) return step.durationSeconds;
+  if (step.startedAt && step.completedAt) {
+    return Math.max(0, Math.round((new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime()) / 1000));
+  }
+  if (session?.startedAt && session?.completedAt) {
+    return Math.max(0, Math.round(elapsedMs(session, session.completedAt) / 1000));
+  }
+  return null;
+}
+
+function stepLabourCost(step: WorkflowStep, session?: OperationSession): number {
+  const secs = stepDurationSeconds(step, session);
+  if (secs == null) return 0;
+  const rate = step.hourlyRate || DEFAULT_HOURLY_RATE;
+  return (secs / 3600) * rate;
+}
+
+function formatCurrency(n: number): string {
+  return `₹${Math.round(n).toLocaleString()}`;
+}
+
+function formatIsoClock(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return formatClock(d);
+}
+
+function formatDurationSeconds(seconds: number | null): string {
+  if (seconds == null) return "—";
+  const minutes = Math.max(0, Math.round(seconds / 60));
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 
 function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue: () => void }) {
   const { data: workflows, isLoading } = useWorkflows(design.id);
@@ -767,7 +802,7 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
           next[s.id] = {
             ...(next[s.id] ?? emptySession()),
             workers: next[s.id]?.workers.length ? next[s.id].workers : parseWorkers(s.assignedTo),
-            startedAt: new Date(),
+            startedAt: s.startedAt ? new Date(s.startedAt) : new Date(),
             pausedAt: null,
             pausedMs: 0,
           };
@@ -808,7 +843,8 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       ? `Est. ${session.estimatedHours.trim()} hr${session.estimatedHours.trim() === "1" ? "" : "s"}`
       : "";
     const remarks = [hoursNote, session.remarks.trim()].filter(Boolean).join(" · ");
-    patchSession(step.id, { startedAt: new Date(), pausedAt: null, pausedMs: 0, completedAt: null });
+    const now = new Date();
+    patchSession(step.id, { startedAt: now, pausedAt: null, pausedMs: 0, completedAt: null });
     updateStep.mutate({
       stepId: step.id,
       patch: {
@@ -816,6 +852,9 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
         assignedTo: joinWorkers(session.workers),
         remarks: remarks || null,
         startDate: today(),
+        startedAt: now.toISOString(),
+        completedAt: null,
+        durationSeconds: null,
       },
     });
   }
@@ -834,17 +873,39 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   function cancel(step: WorkflowStep) {
     if (!window.confirm(`Cancel "${operationName(step, catalog)}"? It will move back to Pending.`)) return;
     patchSession(step.id, { startedAt: null, pausedAt: null, pausedMs: 0, completedAt: null });
-    updateStep.mutate({ stepId: step.id, patch: { status: "pending", startDate: null } });
+    updateStep.mutate({
+      stepId: step.id,
+      patch: { status: "pending", startDate: null, startedAt: null, completedAt: null, durationSeconds: null },
+    });
   }
 
   function complete(step: WorkflowStep) {
-    patchSession(step.id, { completedAt: new Date(), pausedAt: null });
-    updateStep.mutate({ stepId: step.id, patch: { status: "completed", endDate: today() } });
+    const session = sessions[step.id] ?? emptySession();
+    const now = new Date();
+    const startedAtIso = step.startedAt ?? session.startedAt?.toISOString() ?? now.toISOString();
+    const durationSeconds = Math.max(
+      0,
+      Math.round((now.getTime() - new Date(startedAtIso).getTime() - session.pausedMs) / 1000),
+    );
+    patchSession(step.id, { completedAt: now, pausedAt: null });
+    updateStep.mutate({
+      stepId: step.id,
+      patch: {
+        status: "completed",
+        endDate: today(),
+        completedAt: now.toISOString(),
+        startedAt: startedAtIso,
+        durationSeconds,
+      },
+    });
   }
 
   function reopen(step: WorkflowStep) {
     patchSession(step.id, { startedAt: null, pausedAt: null, pausedMs: 0, completedAt: null });
-    updateStep.mutate({ stepId: step.id, patch: { status: "pending", endDate: null } });
+    updateStep.mutate({
+      stepId: step.id,
+      patch: { status: "pending", endDate: null, completedAt: null, durationSeconds: null },
+    });
   }
 
   function removeStep(step: WorkflowStep) {
@@ -1177,6 +1238,10 @@ function WorkflowTimeline({
   onEdit: (stepId: string) => void;
   onReopen: (step: WorkflowStep) => void;
 }) {
+  const totalLabour = history
+    .filter((s) => s.status === "completed")
+    .reduce((sum, s) => sum + stepLabourCost(s, sessions[s.id]), 0);
+
   if (history.length === 0) {
     return (
       <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
@@ -1188,8 +1253,16 @@ function WorkflowTimeline({
 
   return (
     <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
-      <p className="text-sm font-bold">Workflow Timeline</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-bold">Workflow Timeline</p>
+        {totalLabour > 0 && (
+          <span className="rounded-full bg-primary-soft px-3 py-1 text-[11px] font-bold text-primary">
+            Total Labour · {formatCurrency(totalLabour)}
+          </span>
+        )}
+      </div>
       <ul className="mt-3 grid gap-2">
+
         {history.map((step) => (
           <HistoryTimelineRow
             key={step.id}
@@ -1348,18 +1421,47 @@ function HistoryTimelineRow({
   }
 
   const workers = session?.workers.length ? session.workers : parseWorkers(step.assignedTo);
-  const duration = session?.startedAt && session?.completedAt ? formatHM(elapsedMs(session, session.completedAt)) : "—";
-  const start = session?.startedAt ? formatClock(session.startedAt) : step.startDate || "—";
-  const end = session?.completedAt ? formatClock(session.completedAt) : step.endDate || "—";
+  const durationSecs = stepDurationSeconds(step, session);
+  const duration = formatDurationSeconds(durationSecs);
+  const start =
+    formatIsoClock(step.startedAt) ?? (session?.startedAt ? formatClock(session.startedAt) : step.startDate || "—");
+  const end =
+    formatIsoClock(step.completedAt) ?? (session?.completedAt ? formatClock(session.completedAt) : step.endDate || "—");
+  const isCompleted = step.status === "completed";
+  const labour = isCompleted ? stepLabourCost(step, session) : 0;
+  const rate = step.hourlyRate || DEFAULT_HOURLY_RATE;
 
   return (
     <li className="rounded-xl border border-border bg-background p-3">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold">✓ {opName}</p>
           <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-            {workers.length ? `Workers: ${workers.join(", ")}` : "Unassigned"} · {start} → {end} · {duration}
+            {workers.length ? `Workers: ${workers.join(", ")}` : "Unassigned"}
           </p>
+          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] sm:grid-cols-4">
+            <div>
+              <span className="block font-semibold text-muted-foreground">Started</span>
+              <span className="font-bold">{start}</span>
+            </div>
+            <div>
+              <span className="block font-semibold text-muted-foreground">Completed</span>
+              <span className="font-bold">{end}</span>
+            </div>
+            <div>
+              <span className="block font-semibold text-muted-foreground">Duration</span>
+              <span className="font-bold">{duration}</span>
+            </div>
+            {isCompleted && (
+              <div>
+                <span className="block font-semibold text-muted-foreground">Labour Cost</span>
+                <span className="font-bold text-primary">
+                  {formatCurrency(labour)}
+                  <span className="ml-1 text-[10px] font-medium text-muted-foreground">@ ₹{rate}/hr</span>
+                </span>
+              </div>
+            )}
+          </div>
         </div>
         <span className="shrink-0 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">
           {step.status === "skipped" ? "Skipped" : "Completed"}
@@ -1616,17 +1718,41 @@ function StatusTile({ label, value, mono }: { label: string; value: string; mono
 /* ---------- Costing ---------- */
 
 function CostingPanel({ design }: { design: Design }) {
+  const { data: workflows } = useWorkflows(design.id);
+  const sample = workflows?.find((w) => w.kind === "sample");
+  const completedSteps = (sample?.steps ?? []).filter((s) => s.status === "completed");
+  // Total labour cost across the order = sum of per-operation labour costs.
+  const labourTotal = completedSteps.reduce((sum, s) => sum + stepLabourCost(s), 0);
+  const labourPerPiece = design.orderQuantity > 0 ? labourTotal / design.orderQuantity : 0;
+
   const [costs, setCosts] = useState<
-    { id: string; label: string; category: "Material" | "Labor" | "Overhead" | "Other"; amount: number }[]
+    { id: string; label: string; category: "Material" | "Labor" | "Overhead" | "Other"; amount: number; readOnly?: boolean }[]
   >(() => [
     { id: "c1", label: "Material (est.)", category: "Material", amount: 0 },
-    { id: "c2", label: "Stitching", category: "Labor", amount: 0 },
     { id: "c3", label: "Overheads", category: "Overhead", amount: 0 },
   ]);
 
-  const perPiece = costs.reduce((s, c) => s + c.amount, 0);
+  // Merge auto labour with manual rows for display + totals.
+  const rows: {
+    id: string;
+    label: string;
+    category: "Material" | "Labor" | "Overhead" | "Other";
+    amount: number;
+    readOnly?: boolean;
+  }[] = [
+    ...costs.filter((c) => c.category !== "Labor"),
+    {
+      id: "labour-auto",
+      label: `Labour (Auto · ${completedSteps.length} op${completedSteps.length === 1 ? "" : "s"})`,
+      category: "Labor" as const,
+      amount: labourPerPiece,
+      readOnly: true,
+    },
+  ];
+
+  const perPiece = rows.reduce((s, c) => s + c.amount, 0);
   const orderTotal = perPiece * design.orderQuantity;
-  const byCategory = costs.reduce<Record<string, number>>((acc, c) => {
+  const byCategory = rows.reduce<Record<string, number>>((acc, c) => {
     acc[c.category] = (acc[c.category] ?? 0) + c.amount;
     return acc;
   }, {});
@@ -1643,24 +1769,30 @@ function CostingPanel({ design }: { design: Design }) {
             </tr>
           </thead>
           <tbody>
-            {costs.map((c) => (
+            {rows.map((c) => (
               <tr key={c.id} className="border-t border-border">
                 <td className="p-3 font-semibold">{c.label}</td>
                 <td className="p-3 text-muted-foreground">{c.category}</td>
                 <td className="p-3 text-right">
-                  <input
-                    type="number"
-                    min={0}
-                    value={c.amount || ""}
-                    onChange={(e) =>
-                      setCosts((prev) =>
-                        prev.map((x) =>
-                          x.id === c.id ? { ...x, amount: Math.max(0, Number(e.target.value) || 0) } : x,
-                        ),
-                      )
-                    }
-                    className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-right text-sm outline-none focus:border-primary"
-                  />
+                  {c.readOnly ? (
+                    <span className="inline-flex w-28 items-center justify-end rounded-lg bg-primary-soft px-2 py-1.5 text-right text-sm font-bold text-primary">
+                      ₹{c.amount.toFixed(2)}
+                    </span>
+                  ) : (
+                    <input
+                      type="number"
+                      min={0}
+                      value={c.amount || ""}
+                      onChange={(e) =>
+                        setCosts((prev) =>
+                          prev.map((x) =>
+                            x.id === c.id ? { ...x, amount: Math.max(0, Number(e.target.value) || 0) } : x,
+                          ),
+                        )
+                      }
+                      className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-right text-sm outline-none focus:border-primary"
+                    />
+                  )}
                 </td>
               </tr>
             ))}
@@ -1670,11 +1802,32 @@ function CostingPanel({ design }: { design: Design }) {
               <td className="p-3 font-bold" colSpan={2}>
                 Total per piece
               </td>
-              <td className="p-3 text-right text-lg font-extrabold text-primary">₹{perPiece.toLocaleString()}</td>
+              <td className="p-3 text-right text-lg font-extrabold text-primary">₹{perPiece.toFixed(2)}</td>
             </tr>
           </tfoot>
         </table>
+
+        {completedSteps.length > 0 && (
+          <div className="border-t border-border p-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Labour Breakdown (Auto)
+            </p>
+            <ul className="mt-2 grid gap-1.5 text-sm">
+              {completedSteps.map((s) => (
+                <li key={s.id} className="flex items-center justify-between">
+                  <span className="truncate font-semibold">{s.label || s.operationId}</span>
+                  <span className="shrink-0 text-muted-foreground">{formatCurrency(stepLabourCost(s))}</span>
+                </li>
+              ))}
+              <li className="mt-1 flex items-center justify-between border-t border-border pt-2">
+                <span className="font-bold">Total Labour Cost</span>
+                <span className="font-extrabold text-primary">{formatCurrency(labourTotal)}</span>
+              </li>
+            </ul>
+          </div>
+        )}
       </div>
+
 
       <div className="grid gap-3">
         <div className="rounded-2xl border border-border bg-gradient-to-br from-primary to-primary-glow p-5 text-primary-foreground shadow-md">

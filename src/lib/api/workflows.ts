@@ -19,6 +19,10 @@ export type WorkflowStep = {
   startDate: string | null;
   endDate: string | null;
   remarks: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  durationSeconds: number | null;
+  hourlyRate: number;
 };
 
 export type DesignWorkflow = {
@@ -43,6 +47,10 @@ type DbStep = {
   start_date: string | null;
   end_date: string | null;
   remarks: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  hourly_rate: number | string | null;
 };
 
 function mapStep(r: DbStep): WorkflowStep {
@@ -60,8 +68,13 @@ function mapStep(r: DbStep): WorkflowStep {
     startDate: r.start_date,
     endDate: r.end_date,
     remarks: r.remarks,
+    startedAt: r.started_at,
+    completedAt: r.completed_at,
+    durationSeconds: r.duration_seconds,
+    hourlyRate: r.hourly_rate == null ? 150 : Number(r.hourly_rate),
   };
 }
+
 
 export function useWorkflows(designId: string | undefined) {
   return useQuery({
@@ -146,6 +159,10 @@ export function useUpdateStep(designId: string) {
       if (p.startDate !== undefined) dbPatch.start_date = p.startDate;
       if (p.endDate !== undefined) dbPatch.end_date = p.endDate;
       if (p.remarks !== undefined) dbPatch.remarks = p.remarks;
+      if (p.startedAt !== undefined) dbPatch.started_at = p.startedAt;
+      if (p.completedAt !== undefined) dbPatch.completed_at = p.completedAt;
+      if (p.durationSeconds !== undefined) dbPatch.duration_seconds = p.durationSeconds;
+      if (p.hourlyRate !== undefined) dbPatch.hourly_rate = p.hourlyRate;
       const { error } = await (supabase.from("workflow_steps") as unknown as { update: (p: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: unknown }> } })
         .update(dbPatch).eq("id", v.stepId);
       if (error) throw error;
