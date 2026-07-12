@@ -29,7 +29,7 @@ export function AppShell({
   useRequireAuth();
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
         <SidebarContent pathname={pathname} onNavigate={() => setOpen(false)} />
@@ -69,9 +69,7 @@ export function AppShell({
               </button>
               <div className="min-w-0">
                 <h1 className="truncate text-lg font-bold sm:text-xl">{title}</h1>
-                {subtitle && (
-                  <p className="truncate text-xs text-muted-foreground sm:text-sm">{subtitle}</p>
-                )}
+                {subtitle && <p className="truncate text-xs text-muted-foreground sm:text-sm">{subtitle}</p>}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -113,8 +111,7 @@ export function AppShell({
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur lg:hidden">
         <ul className="grid grid-cols-5">
           {PRIMARY_NAV.map((item) => {
-            const active =
-              item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
+            const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
             const Icon = item.icon;
             return (
               <li key={item.to}>
@@ -169,13 +166,10 @@ function SidebarContent({
       )}
 
       <div className="mt-6 px-3">
-        <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Overview
-        </p>
+        <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Overview</p>
         <ul className="space-y-1">
           {PRIMARY_NAV.map((item) => {
-            const active =
-              item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
+            const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
             const Icon = item.icon;
             return (
               <li key={item.to}>
@@ -199,9 +193,7 @@ function SidebarContent({
       </div>
 
       <div className="mt-6 px-3">
-        <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Workflow
-        </p>
+        <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Workflow</p>
         <ul className="space-y-0.5">
           {WORKFLOW.map((stage) => {
             const active = pathname.startsWith(stage.to);
@@ -242,9 +234,7 @@ function SidebarContent({
       <div className="mt-auto px-5 py-5">
         <div className="rounded-2xl border border-border bg-gradient-to-br from-primary-soft to-background p-4">
           <p className="text-xs font-semibold text-accent-foreground">ERPNext Sync</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            API integration coming soon.
-          </p>
+          <p className="mt-1 text-[11px] text-muted-foreground">API integration coming soon.</p>
         </div>
       </div>
     </div>
