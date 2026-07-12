@@ -47,6 +47,19 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "approval", label: "Approval", icon: FileCheck2 },
 ];
 
+// Standard sample-stage operations (real ids from operations_catalog) that
+// every new sample workflow starts with, so Sample Making always has a
+// real operation to run instead of requiring manual setup first. Users can
+// still reorder/add/remove via Configure Workflow — this is just the seed.
+const DEFAULT_SAMPLE_OPERATIONS = [
+  "fabric-selection",
+  "sample-cutting",
+  "sample-handwork",
+  "sample-stitching",
+  "sample-qc",
+  "sample-approval",
+];
+
 function DesignSamplePage() {
   useRequireAuth();
   const { code } = Route.useParams();
@@ -94,17 +107,41 @@ function DesignSample({ design }: { design: Design }) {
   const qc = useQueryClient();
   const creatingRef = useRef(false);
 
-  // Auto-create a sample workflow when the design has none yet.
+  // Auto-create a sample workflow (and its default operations) when the
+  // design has none yet, and backfill defaults if the workflow row exists
+  // but has no steps — so Sample Making always has a real operation to run
+  // instead of requiring manual setup on every new design.
   useEffect(() => {
     if (wfLoading || !workflows) return;
-    if (sample || bulk) return;
+    if (bulk) return;
     if (creatingRef.current) return;
+    if (sample && sample.steps.length > 0) return;
+
     creatingRef.current = true;
     (async () => {
-      const { error } = await supabase
-        .from("design_workflows")
-        .insert({ design_id: design.id, kind: "sample", locked: false });
-      if (!error) {
+      let workflowId = sample?.id;
+      if (!workflowId) {
+        const { data: wf, error } = await supabase
+          .from("design_workflows")
+          .insert({ design_id: design.id, kind: "sample", locked: false })
+          .select("id")
+          .single();
+        if (error || !wf) {
+          creatingRef.current = false;
+          return;
+        }
+        workflowId = wf.id;
+      }
+
+      const { error: stepsError } = await supabase.from("workflow_steps").insert(
+        DEFAULT_SAMPLE_OPERATIONS.map((operationId, i) => ({
+          workflow_id: workflowId,
+          operation_id: operationId,
+          sequence: i + 1,
+          status: "pending",
+        })),
+      );
+      if (!stepsError) {
         qc.invalidateQueries({ queryKey: ["workflows", design.id] });
       }
       creatingRef.current = false;
