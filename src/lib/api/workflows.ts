@@ -159,6 +159,10 @@ export function useUpdateStep(designId: string) {
       if (p.startDate !== undefined) dbPatch.start_date = p.startDate;
       if (p.endDate !== undefined) dbPatch.end_date = p.endDate;
       if (p.remarks !== undefined) dbPatch.remarks = p.remarks;
+      if (p.startedAt !== undefined) dbPatch.started_at = p.startedAt;
+      if (p.completedAt !== undefined) dbPatch.completed_at = p.completedAt;
+      if (p.durationSeconds !== undefined) dbPatch.duration_seconds = p.durationSeconds;
+      if (p.hourlyRate !== undefined) dbPatch.hourly_rate = p.hourlyRate;
       const { error } = await (supabase.from("workflow_steps") as unknown as { update: (p: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: unknown }> } })
         .update(dbPatch).eq("id", v.stepId);
       if (error) throw error;
