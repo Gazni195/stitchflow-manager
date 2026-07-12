@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export type WorkflowKind = "sample" | "bulk";
-export type StepStatus = "pending" | "in-progress" | "completed" | "skipped";
+export type StepStatus = "pending" | "in-progress" | "completed" | "skipped" | "deleted";
 
 export type WorkflowStep = {
   id: string;
