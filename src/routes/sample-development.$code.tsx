@@ -11,6 +11,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Scissors,
   Sparkles,
   Trash2,
   XCircle,
@@ -22,7 +23,8 @@ import { DesignImage } from "@/components/DesignImage";
 import { Switch } from "@/components/ui/switch";
 import { useRequireAuth } from "@/hooks/use-auth";
 import { useDesignByCode } from "@/lib/api/designs";
-import { useWorkflows } from "@/lib/api/workflows";
+import { useOperationCatalog } from "@/lib/api/operations";
+import { useUpdateStep, useWorkflows } from "@/lib/api/workflows";
 import { supabase } from "@/integrations/supabase/client";
 import type { Design } from "@/lib/designs";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/designs";
@@ -34,11 +36,12 @@ export const Route = createFileRoute("/sample-development/$code")({
   component: DesignSamplePage,
 });
 
-type TabId = "status" | "materials" | "costing" | "approval";
+type TabId = "status" | "materials" | "making" | "costing" | "approval";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "status", label: "Sample Status", icon: Sparkles },
   { id: "materials", label: "Material Selection", icon: Layers },
+  { id: "making", label: "Sample Making", icon: Scissors },
   { id: "costing", label: "Costing", icon: Coins },
   { id: "approval", label: "Approval", icon: FileCheck2 },
 ];
@@ -166,7 +169,8 @@ function DesignSample({ design }: { design: Design }) {
 
           <div className="pt-5">
             {tab === "status" && <StatusPanel design={design} stage={stage} />}
-            {tab === "materials" && <MaterialsPanel />}
+            {tab === "materials" && <MaterialsPanel design={design} onCompleted={() => setTab("making")} />}
+            {tab === "making" && <SampleMakingPanel design={design} />}
             {tab === "costing" && <CostingPanel design={design} />}
             {tab === "approval" && <ApprovalPanel design={design} />}
           </div>
@@ -293,9 +297,11 @@ function initialGroups(): MaterialGroupState[] {
   ];
 }
 
-function MaterialsPanel() {
+function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: () => void }) {
   const [groups, setGroups] = useState<MaterialGroupState[]>(initialGroups);
   const [customName, setCustomName] = useState("");
+  const { data: workflows } = useWorkflows(design.id);
+  const updateStep = useUpdateStep(design.id);
 
   function updateGroup(id: string, patch: Partial<MaterialGroupState>) {
     setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
@@ -322,6 +328,24 @@ function MaterialsPanel() {
   }
   function removeRow(groupId: string, rowId: string) {
     setGroups((prev) => prev.map((g) => (g.id === groupId ? { ...g, rows: g.rows.filter((r) => r.id !== rowId) } : g)));
+  }
+
+  const enabledGroups = groups.filter((g) => g.enabled);
+  const allRequiredMaterialsSaved =
+    enabledGroups.length > 0 && enabledGroups.every((g) => g.rows.length > 0 && g.rows.every((r) => !r.editing));
+
+  // The real, saved sample workflow may or may not include a Fabric/Material
+  // Selection step (workflows are user-configured). When it does, completing
+  // here marks that step done in the same data Sample Making reads its "next
+  // operation" from — so workflow progress and the Sample Making tab both
+  // reflect this automatically, with no separate hardcoded state.
+  async function completeMaterialSelection() {
+    const sample = workflows?.find((w) => w.kind === "sample");
+    const step = sample?.steps.find((s) => s.operationId === "fabric-selection");
+    if (step && step.status !== "completed") {
+      await updateStep.mutateAsync({ stepId: step.id, patch: { status: "completed" } });
+    }
+    onCompleted();
   }
 
   return (
@@ -365,6 +389,26 @@ function MaterialsPanel() {
           </button>
         </div>
       </div>
+
+      {allRequiredMaterialsSaved ? (
+        <div className="rounded-2xl border border-success/30 bg-success/5 p-4">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 text-xs font-bold text-success">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Material Selection Completed
+          </span>
+          <button
+            onClick={completeMaterialSelection}
+            disabled={updateStep.isPending}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {updateStep.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Complete Material Selection & Continue
+          </button>
+        </div>
+      ) : (
+        <p className="text-center text-[11px] text-muted-foreground">
+          Save at least one material in every enabled group to continue.
+        </p>
+      )}
     </div>
   );
 }
@@ -563,6 +607,91 @@ function CompactField({
         className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
       />
     </label>
+  );
+}
+
+/* ---------- Sample Making ---------- */
+//
+// The "current operation" is always resolved by reading the design's real,
+// saved sample workflow (workflow_steps ordered by sequence) and finding the
+// first step that isn't completed/skipped — never a hardcoded stage list.
+// Completing a step here updates the same data every other screen (Design
+// Details, Dashboard progress) already reads, so progress stays in sync.
+
+function SampleMakingPanel({ design }: { design: Design }) {
+  const { data: workflows, isLoading } = useWorkflows(design.id);
+  const { data: catalog = [] } = useOperationCatalog();
+  const updateStep = useUpdateStep(design.id);
+  const sample = workflows?.find((w) => w.kind === "sample");
+
+  if (isLoading) {
+    return (
+      <div className="grid place-items-center py-16 text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!sample || sample.steps.length === 0) {
+    return (
+      <div className="rounded-3xl border border-dashed border-border bg-card p-8 text-center">
+        <p className="text-sm text-muted-foreground">No sample workflow steps configured yet.</p>
+        <Link
+          to="/designs/$code/workflow"
+          params={{ code: design.code }}
+          search={{ kind: "sample" }}
+          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+        >
+          Configure Workflow
+        </Link>
+      </div>
+    );
+  }
+
+  const ordered = [...sample.steps].sort((a, b) => a.sequence - b.sequence);
+  const next = ordered.find((s) => s.status !== "completed" && s.status !== "skipped");
+
+  if (!next) {
+    return (
+      <div className="rounded-3xl border border-success/30 bg-success/5 p-8 text-center">
+        <CheckCircle2 className="mx-auto h-8 w-8 text-success" />
+        <p className="mt-2 text-sm font-bold text-success">All sample steps are complete</p>
+        <p className="mt-1 text-xs text-muted-foreground">Head to Approval to move this sample forward.</p>
+      </div>
+    );
+  }
+
+  const op = catalog.find((o) => o.id === next.operationId);
+  const opName = next.label || op?.name || next.operationId;
+  const Icon = op?.icon;
+  const nextStepId = next.id;
+
+  function startOperation() {
+    updateStep.mutate({ stepId: nextStepId, patch: { status: "completed" } });
+  }
+
+  return (
+    <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Current Operation</p>
+      <div className="mt-2 flex items-center gap-3">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
+          {Icon ? <Icon className="h-5 w-5" /> : <Scissors className="h-5 w-5" />}
+        </div>
+        <h3 className="truncate text-xl font-extrabold tracking-tight">{opName}</h3>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Step {next.sequence} of {ordered.length}
+      </p>
+
+      <button
+        onClick={startOperation}
+        disabled={updateStep.isPending}
+        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {updateStep.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+        Start {opName}
+      </button>
+    </div>
   );
 }
 
