@@ -735,6 +735,48 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+const DEFAULT_HOURLY_RATE = 150;
+
+// Duration in seconds preferring persisted actuals, falling back to live session.
+function stepDurationSeconds(step: WorkflowStep, session: OperationSession | undefined): number | null {
+  if (step.durationSeconds != null) return step.durationSeconds;
+  if (step.startedAt && step.completedAt) {
+    return Math.max(0, Math.round((new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime()) / 1000));
+  }
+  if (session?.startedAt && session?.completedAt) {
+    return Math.max(0, Math.round(elapsedMs(session, session.completedAt) / 1000));
+  }
+  return null;
+}
+
+function stepLabourCost(step: WorkflowStep, session?: OperationSession): number {
+  const secs = stepDurationSeconds(step, session);
+  if (secs == null) return 0;
+  const rate = step.hourlyRate || DEFAULT_HOURLY_RATE;
+  return (secs / 3600) * rate;
+}
+
+function formatCurrency(n: number): string {
+  return `₹${Math.round(n).toLocaleString()}`;
+}
+
+function formatIsoClock(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return formatClock(d);
+}
+
+function formatDurationSeconds(seconds: number | null): string {
+  if (seconds == null) return "—";
+  const minutes = Math.max(0, Math.round(seconds / 60));
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+
 function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue: () => void }) {
   const { data: workflows, isLoading } = useWorkflows(design.id);
   const { data: catalog = [] } = useOperationCatalog();
