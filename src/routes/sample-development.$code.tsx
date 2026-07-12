@@ -1,17 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle,
   ArrowLeft,
-  ArrowRight,
   CheckCircle2,
   Clock,
   Coins,
   FileCheck2,
   Layers,
   Loader2,
-  RefreshCw,
-  Search,
   Sparkles,
   XCircle,
   type LucideIcon,
@@ -231,64 +227,22 @@ function StatusPanel({ design, stage }: { design: Design; stage: "In Development
   );
 }
 
-/* ---------- Materials (Material Code entry + manual search + issue flow) ---------- */
+/* ---------- Materials (Phase 1: manual entry, no ERPNext integration yet) ---------- */
 //
-// Our factories identify materials by a printed Material Code (e.g. MAT-1001),
-// not a barcode scan. Method 1 is a direct code lookup; Method 2 is a manual
-// name/code search used as a fallback when the code isn't known or isn't found.
-// MATERIAL_INVENTORY stands in for a real materials/stock table — there isn't
-// one in Supabase yet (see the codebase analysis), so this mirrors the rest of
-// this tab's existing local-state-only pattern rather than inventing a backend.
-
-type InventoryMaterial = {
-  code: string;
-  name: string;
-  color: string;
-  lot: string;
-  availableStock: number;
-  unit: string;
-};
-
-const MATERIAL_INVENTORY: InventoryMaterial[] = [
-  { code: "MAT-1001", name: "Silk Chanderi", color: "Ivory", lot: "LOT-22A", availableStock: 48.5, unit: "Meter" },
-  { code: "MAT-1002", name: "Cotton Cambric", color: "Lavender", lot: "LOT-19B", availableStock: 120, unit: "Meter" },
-  { code: "MAT-1003", name: "Organza", color: "Gold", lot: "LOT-07C", availableStock: 32.75, unit: "Meter" },
-  { code: "MAT-1004", name: "Banarasi Silk", color: "Maroon", lot: "LOT-14D", availableStock: 18.25, unit: "Meter" },
-  { code: "MAT-1005", name: "Georgette", color: "Blush Pink", lot: "LOT-31A", availableStock: 60, unit: "Meter" },
-  { code: "MAT-1006", name: "Net", color: "Off White", lot: "LOT-05E", availableStock: 25.5, unit: "Meter" },
-];
-
-function findMaterialByCode(code: string): InventoryMaterial | undefined {
-  const q = code.trim().toLowerCase();
-  return MATERIAL_INVENTORY.find((m) => m.code.toLowerCase() === q);
-}
-
-function searchMaterials(query: string): InventoryMaterial[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return MATERIAL_INVENTORY;
-  return MATERIAL_INVENTORY.filter((m) => m.code.toLowerCase().includes(q) || m.name.toLowerCase().includes(q));
-}
+// Future-ready note (not implemented yet): once ERPNext inventory integration
+// is added, replace these manual fields with material search, stock
+// validation, lot selection, and auto-filled material details. For now every
+// field below is entered by hand — no inventory, stock, or lot lookup.
 
 type PartMaterialState = {
-  codeInput: string;
-  searchQuery: string;
-  notFound: boolean;
-  material: InventoryMaterial | null;
+  materialCode: string;
+  materialName: string;
   requiredQty: number;
-  issued: boolean;
-  issuedQty: number;
+  saved: boolean;
 };
 
 function emptyPartState(): PartMaterialState {
-  return {
-    codeInput: "",
-    searchQuery: "",
-    notFound: false,
-    material: null,
-    requiredQty: 0,
-    issued: false,
-    issuedQty: 0,
-  };
+  return { materialCode: "", materialName: "", requiredQty: 0, saved: false };
 }
 
 function MaterialsPanel({ design }: { design: Design }) {
@@ -304,12 +258,8 @@ function MaterialsPanel({ design }: { design: Design }) {
     return <EmptyState label="Add garment parts on the design to start material selection." />;
   }
 
-  const issuedCount = design.parts.filter((p) => rows[p.id]?.issued).length;
-  const totalIssuedMeters = design.parts.reduce((sum, p) => sum + (rows[p.id]?.issued ? rows[p.id].issuedQty : 0), 0);
-  const allIssued = issuedCount === design.parts.length;
-
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-2.5">
       {design.parts.map((part) => (
         <MaterialPartCard
           key={part.id}
@@ -318,56 +268,6 @@ function MaterialsPanel({ design }: { design: Design }) {
           onChange={(patch) => patchPart(part.id, patch)}
         />
       ))}
-
-      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Issue Summary</p>
-        <ul className="mt-3 grid gap-2">
-          {design.parts.map((p) => {
-            const s = rows[p.id];
-            return (
-              <li
-                key={p.id}
-                className="flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2.5"
-              >
-                <span className="truncate text-sm font-semibold">{p.name}</span>
-                {s?.issued ? (
-                  <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-bold text-success">
-                    <CheckCircle2 className="h-4 w-4" /> {s.issuedQty.toFixed(2)} M Issued
-                  </span>
-                ) : (
-                  <span className="shrink-0 text-xs font-semibold text-muted-foreground">Pending</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-
-        <div className="mt-4 flex items-center justify-between gap-2 rounded-2xl bg-primary-soft px-4 py-3">
-          <span className="text-sm font-bold text-accent-foreground">Total Materials Issued</span>
-          <span className="shrink-0 text-lg font-extrabold text-primary">{totalIssuedMeters.toFixed(2)} M</span>
-        </div>
-
-        {allIssued ? (
-          <Link
-            to="/sample-making"
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-base font-bold text-primary-foreground shadow-sm hover:opacity-90"
-          >
-            Continue to Sample Making <ArrowRight className="h-4 w-4" />
-          </Link>
-        ) : (
-          <button
-            disabled
-            className="mt-4 inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl bg-muted px-4 py-4 text-base font-bold text-muted-foreground"
-          >
-            Continue to Sample Making <ArrowRight className="h-4 w-4" />
-          </button>
-        )}
-        {!allIssued && (
-          <p className="mt-2 text-center text-[11px] text-muted-foreground">
-            Issue material for all {design.parts.length} part{design.parts.length === 1 ? "" : "s"} to continue.
-          </p>
-        )}
-      </div>
     </div>
   );
 }
@@ -381,207 +281,104 @@ function MaterialPartCard({
   state: PartMaterialState;
   onChange: (patch: Partial<PartMaterialState>) => void;
 }) {
-  function runCodeSearch() {
-    const found = findMaterialByCode(state.codeInput);
-    if (found) {
-      onChange({ material: found, notFound: false, requiredQty: 0 });
-    } else {
-      onChange({ material: null, notFound: true });
-    }
+  const valid = state.materialCode.trim() !== "" && state.materialName.trim() !== "" && state.requiredQty > 0;
+
+  function save() {
+    if (!valid) return;
+    onChange({ saved: true });
   }
 
-  function selectFromList(m: InventoryMaterial) {
-    onChange({ material: m, notFound: false, requiredQty: 0, codeInput: m.code });
+  if (state.saved) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-2xl border border-success/30 bg-success/5 px-3.5 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="truncate text-sm font-bold">{partName}</h3>
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">
+              <CheckCircle2 className="h-3 w-3" /> Material Saved
+            </span>
+          </div>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {state.materialCode} · {state.materialName} · {state.requiredQty} M
+          </p>
+        </div>
+        <button
+          onClick={() => onChange({ saved: false })}
+          className="shrink-0 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold hover:bg-accent"
+        >
+          Edit
+        </button>
+      </div>
+    );
   }
-
-  function issueMaterial() {
-    if (!state.material || state.requiredQty <= 0) return;
-    onChange({ issued: true, issuedQty: state.requiredQty });
-  }
-
-  function changeMaterial() {
-    onChange({ material: null, issued: false, issuedQty: 0, requiredQty: 0, notFound: false });
-  }
-
-  const remainingStock = state.material ? Math.max(0, state.material.availableStock - state.requiredQty) : 0;
-  const overStock = !!state.material && state.requiredQty > state.material.availableStock;
 
   return (
-    <div className="rounded-3xl border border-border bg-card p-4 shadow-sm sm:p-5">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="truncate text-base font-bold">{partName}</h3>
-        {state.issued ? (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success/15 px-2.5 py-1 text-xs font-bold text-success">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Issued
-          </span>
-        ) : state.material ? (
-          <span className="shrink-0 rounded-full bg-primary-soft px-2.5 py-1 text-xs font-bold text-primary">
-            Selected
-          </span>
-        ) : (
-          <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-bold text-muted-foreground">
-            Pending
-          </span>
-        )}
+    <div className="rounded-2xl border border-border bg-card p-3">
+      <h3 className="text-sm font-bold">{partName}</h3>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <CompactField
+          label="Material Code"
+          value={state.materialCode}
+          placeholder="MAT-1001"
+          onChange={(v) => onChange({ materialCode: v })}
+        />
+        <CompactField
+          label="Material Name"
+          value={state.materialName}
+          placeholder="Silk Chanderi"
+          onChange={(v) => onChange({ materialName: v })}
+        />
       </div>
-
-      {state.issued ? (
-        <div className="mt-4 rounded-2xl border border-success/30 bg-success/10 p-4 text-center">
-          <CheckCircle2 className="mx-auto h-8 w-8 text-success" />
-          <p className="mt-2 text-sm font-bold text-success">Material Issued Successfully</p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            {state.material?.name} · {state.issuedQty.toFixed(2)} M
-          </p>
-          <button
-            onClick={changeMaterial}
-            className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-          >
-            <RefreshCw className="h-3.5 w-3.5" /> Change material
-          </button>
-        </div>
-      ) : state.material ? (
-        <div className="mt-4 grid gap-4">
-          <div className="grid grid-cols-2 gap-2">
-            <InfoTile label="Material Name" value={state.material.name} />
-            <InfoTile label="Material Code" value={state.material.code} />
-            <InfoTile label="Color" value={state.material.color} />
-            <InfoTile label="Lot Number" value={state.material.lot} />
-            <InfoTile
-              label="Available Stock"
-              value={`${state.material.availableStock.toFixed(2)} ${state.material.unit}`}
-            />
-            <InfoTile
-              label="Remaining Stock"
-              value={`${remainingStock.toFixed(2)} ${state.material.unit}`}
-              warn={overStock}
-            />
-          </div>
-
-          <label className="block">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-              Required Quantity (Meters)
-            </span>
-            <input
-              type="number"
-              min={0}
-              step={0.25}
-              inputMode="decimal"
-              value={state.requiredQty || ""}
-              onChange={(e) => onChange({ requiredQty: Math.max(0, Number(e.target.value) || 0) })}
-              placeholder="0.00"
-              className="mt-1.5 w-full rounded-2xl border border-border bg-background px-4 py-3.5 text-lg font-bold outline-none focus:border-primary"
-            />
-          </label>
-
-          {overStock && (
-            <p className="flex items-center gap-1.5 text-xs font-semibold text-destructive">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Required quantity exceeds available stock.
-            </p>
-          )}
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={issueMaterial}
-              disabled={state.requiredQty <= 0 || overStock}
-              className="flex-1 rounded-2xl bg-primary py-4 text-base font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Issue Material
-            </button>
-            <button
-              onClick={changeMaterial}
-              aria-label="Change material"
-              className="shrink-0 rounded-2xl border border-border bg-background p-4 text-muted-foreground hover:bg-accent"
-            >
-              <RefreshCw className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-4 grid gap-4">
-          {/* Method 1 (primary): Material Code entry */}
-          <div>
-            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Material Code</span>
-            <div className="mt-1.5 flex gap-2">
-              <input
-                value={state.codeInput}
-                onChange={(e) => onChange({ codeInput: e.target.value.toUpperCase(), notFound: false })}
-                onKeyDown={(e) => e.key === "Enter" && runCodeSearch()}
-                placeholder="e.g. MAT-1001"
-                className="min-w-0 flex-1 rounded-2xl border border-border bg-background px-4 py-3.5 text-base font-bold uppercase tracking-wide outline-none focus:border-primary"
-              />
-              <button
-                onClick={runCodeSearch}
-                disabled={!state.codeInput.trim()}
-                className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-primary px-5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Search className="h-4 w-4" /> Search
-              </button>
-            </div>
-            {state.notFound && (
-              <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-destructive">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> No material found for "{state.codeInput}". Try manual
-                search below.
-              </p>
-            )}
-          </div>
-
-          {/* Method 2 (fallback): manual name/code search */}
-          <details className="group rounded-2xl border border-dashed border-border">
-            <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-primary [&::-webkit-details-marker]:hidden">
-              <span className="inline-flex items-center gap-1.5">
-                <Search className="h-3.5 w-3.5" /> Can't find the code? Search materials manually
-              </span>
-            </summary>
-            <div className="border-t border-dashed border-border p-4">
-              <input
-                value={state.searchQuery}
-                onChange={(e) => onChange({ searchQuery: e.target.value })}
-                placeholder="Search by name or code…"
-                className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-primary"
-              />
-              <ul className="mt-3 grid max-h-56 gap-2 overflow-y-auto">
-                {searchMaterials(state.searchQuery).map((m) => (
-                  <li key={m.code}>
-                    <button
-                      onClick={() => selectFromList(m)}
-                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2.5 text-left hover:border-primary/40 hover:bg-primary-soft/40"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-bold">{m.name}</span>
-                        <span className="block text-[11px] text-muted-foreground">
-                          {m.code} · {m.color}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-xs font-semibold text-muted-foreground">
-                        {m.availableStock.toFixed(1)} {m.unit}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-                {searchMaterials(state.searchQuery).length === 0 && (
-                  <li className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                    No materials match your search.
-                  </li>
-                )}
-              </ul>
-            </div>
-          </details>
-        </div>
-      )}
+      <div className="mt-2 flex items-end gap-2">
+        <label className="block min-w-0 flex-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Required Quantity
+          </span>
+          <input
+            type="number"
+            min={0}
+            step={0.25}
+            inputMode="decimal"
+            value={state.requiredQty || ""}
+            onChange={(e) => onChange({ requiredQty: Math.max(0, Number(e.target.value) || 0) })}
+            placeholder="0.00"
+            className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+          />
+        </label>
+        <span className="shrink-0 pb-2 text-xs font-semibold text-muted-foreground">Meter</span>
+      </div>
+      <button
+        onClick={save}
+        disabled={!valid}
+        className="mt-3 w-full rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Save Material
+      </button>
     </div>
   );
 }
 
-function InfoTile({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+function CompactField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
   return (
-    <div
-      className={
-        "rounded-xl border p-3 " + (warn ? "border-destructive/30 bg-destructive/10" : "border-border bg-background")
-      }
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className={"mt-1 truncate text-sm font-bold " + (warn ? "text-destructive" : "")}>{value}</p>
-    </div>
+    <label className="block min-w-0">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+      />
+    </label>
   );
 }
 
