@@ -66,3 +66,35 @@ export function useOperationCatalog() {
     },
   });
 }
+
+export function useAddOperation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { name: string; category?: CatalogOperation["category"]; short?: string; repeatable?: boolean }): Promise<string> => {
+      const category = v.category ?? "Sample";
+      const short = v.short ?? v.name;
+      const slug = v.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "op";
+      const id = `${slug}-${Math.random().toString(36).slice(2, 7)}`;
+      const { data: maxRow } = await supabase
+        .from("operations_catalog")
+        .select("sort")
+        .order("sort", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const sort = ((maxRow as { sort?: number } | null)?.sort ?? 0) + 1;
+      const { error } = await supabase.from("operations_catalog").insert({
+        id,
+        name: v.name,
+        short,
+        category,
+        repeatable: v.repeatable ?? false,
+        sort,
+      });
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["operations-catalog"] });
+    },
+  });
+}
