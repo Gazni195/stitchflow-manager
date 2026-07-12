@@ -1725,17 +1725,41 @@ function StatusTile({ label, value, mono }: { label: string; value: string; mono
 /* ---------- Costing ---------- */
 
 function CostingPanel({ design }: { design: Design }) {
+  const { data: workflows } = useWorkflows(design.id);
+  const sample = workflows?.find((w) => w.kind === "sample");
+  const completedSteps = (sample?.steps ?? []).filter((s) => s.status === "completed");
+  // Total labour cost across the order = sum of per-operation labour costs.
+  const labourTotal = completedSteps.reduce((sum, s) => sum + stepLabourCost(s), 0);
+  const labourPerPiece = design.orderQuantity > 0 ? labourTotal / design.orderQuantity : 0;
+
   const [costs, setCosts] = useState<
-    { id: string; label: string; category: "Material" | "Labor" | "Overhead" | "Other"; amount: number }[]
+    { id: string; label: string; category: "Material" | "Labor" | "Overhead" | "Other"; amount: number; readOnly?: boolean }[]
   >(() => [
     { id: "c1", label: "Material (est.)", category: "Material", amount: 0 },
-    { id: "c2", label: "Stitching", category: "Labor", amount: 0 },
     { id: "c3", label: "Overheads", category: "Overhead", amount: 0 },
   ]);
 
-  const perPiece = costs.reduce((s, c) => s + c.amount, 0);
+  // Merge auto labour with manual rows for display + totals.
+  const rows: {
+    id: string;
+    label: string;
+    category: "Material" | "Labor" | "Overhead" | "Other";
+    amount: number;
+    readOnly?: boolean;
+  }[] = [
+    ...costs.filter((c) => c.category !== "Labor"),
+    {
+      id: "labour-auto",
+      label: `Labour (Auto · ${completedSteps.length} op${completedSteps.length === 1 ? "" : "s"})`,
+      category: "Labor" as const,
+      amount: labourPerPiece,
+      readOnly: true,
+    },
+  ];
+
+  const perPiece = rows.reduce((s, c) => s + c.amount, 0);
   const orderTotal = perPiece * design.orderQuantity;
-  const byCategory = costs.reduce<Record<string, number>>((acc, c) => {
+  const byCategory = rows.reduce<Record<string, number>>((acc, c) => {
     acc[c.category] = (acc[c.category] ?? 0) + c.amount;
     return acc;
   }, {});
@@ -1752,24 +1776,30 @@ function CostingPanel({ design }: { design: Design }) {
             </tr>
           </thead>
           <tbody>
-            {costs.map((c) => (
+            {rows.map((c) => (
               <tr key={c.id} className="border-t border-border">
                 <td className="p-3 font-semibold">{c.label}</td>
                 <td className="p-3 text-muted-foreground">{c.category}</td>
                 <td className="p-3 text-right">
-                  <input
-                    type="number"
-                    min={0}
-                    value={c.amount || ""}
-                    onChange={(e) =>
-                      setCosts((prev) =>
-                        prev.map((x) =>
-                          x.id === c.id ? { ...x, amount: Math.max(0, Number(e.target.value) || 0) } : x,
-                        ),
-                      )
-                    }
-                    className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-right text-sm outline-none focus:border-primary"
-                  />
+                  {c.readOnly ? (
+                    <span className="inline-flex w-28 items-center justify-end rounded-lg bg-primary-soft px-2 py-1.5 text-right text-sm font-bold text-primary">
+                      ₹{c.amount.toFixed(2)}
+                    </span>
+                  ) : (
+                    <input
+                      type="number"
+                      min={0}
+                      value={c.amount || ""}
+                      onChange={(e) =>
+                        setCosts((prev) =>
+                          prev.map((x) =>
+                            x.id === c.id ? { ...x, amount: Math.max(0, Number(e.target.value) || 0) } : x,
+                          ),
+                        )
+                      }
+                      className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-right text-sm outline-none focus:border-primary"
+                    />
+                  )}
                 </td>
               </tr>
             ))}
@@ -1779,11 +1809,32 @@ function CostingPanel({ design }: { design: Design }) {
               <td className="p-3 font-bold" colSpan={2}>
                 Total per piece
               </td>
-              <td className="p-3 text-right text-lg font-extrabold text-primary">₹{perPiece.toLocaleString()}</td>
+              <td className="p-3 text-right text-lg font-extrabold text-primary">₹{perPiece.toFixed(2)}</td>
             </tr>
           </tfoot>
         </table>
+
+        {completedSteps.length > 0 && (
+          <div className="border-t border-border p-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Labour Breakdown (Auto)
+            </p>
+            <ul className="mt-2 grid gap-1.5 text-sm">
+              {completedSteps.map((s) => (
+                <li key={s.id} className="flex items-center justify-between">
+                  <span className="truncate font-semibold">{s.label || s.operationId}</span>
+                  <span className="shrink-0 text-muted-foreground">{formatCurrency(stepLabourCost(s))}</span>
+                </li>
+              ))}
+              <li className="mt-1 flex items-center justify-between border-t border-border pt-2">
+                <span className="font-bold">Total Labour Cost</span>
+                <span className="font-extrabold text-primary">{formatCurrency(labourTotal)}</span>
+              </li>
+            </ul>
+          </div>
+        )}
       </div>
+
 
       <div className="grid gap-3">
         <div className="rounded-2xl border border-border bg-gradient-to-br from-primary to-primary-glow p-5 text-primary-foreground shadow-md">
