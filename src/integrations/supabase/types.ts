@@ -133,8 +133,11 @@ export type Database = {
       workflow_steps: {
         Row: {
           assigned_to: string | null
+          completed_at: string | null
           created_at: string
+          duration_seconds: number | null
           end_date: string | null
+          hourly_rate: number
           id: string
           input_quantity: number | null
           label: string | null
@@ -143,6 +146,7 @@ export type Database = {
           remarks: string | null
           sequence: number
           start_date: string | null
+          started_at: string | null
           status: string
           updated_at: string
           wastage_quantity: number | null
@@ -150,8 +154,11 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          completed_at?: string | null
           created_at?: string
+          duration_seconds?: number | null
           end_date?: string | null
+          hourly_rate?: number
           id?: string
           input_quantity?: number | null
           label?: string | null
@@ -160,6 +167,7 @@ export type Database = {
           remarks?: string | null
           sequence: number
           start_date?: string | null
+          started_at?: string | null
           status?: string
           updated_at?: string
           wastage_quantity?: number | null
@@ -167,8 +175,11 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          completed_at?: string | null
           created_at?: string
+          duration_seconds?: number | null
           end_date?: string | null
+          hourly_rate?: number
           id?: string
           input_quantity?: number | null
           label?: string | null
@@ -177,6 +188,7 @@ export type Database = {
           remarks?: string | null
           sequence?: number
           start_date?: string | null
+          started_at?: string | null
           status?: string
           updated_at?: string
           wastage_quantity?: number | null
