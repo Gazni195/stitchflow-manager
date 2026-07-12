@@ -808,7 +808,8 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       ? `Est. ${session.estimatedHours.trim()} hr${session.estimatedHours.trim() === "1" ? "" : "s"}`
       : "";
     const remarks = [hoursNote, session.remarks.trim()].filter(Boolean).join(" · ");
-    patchSession(step.id, { startedAt: new Date(), pausedAt: null, pausedMs: 0, completedAt: null });
+    const now = new Date();
+    patchSession(step.id, { startedAt: now, pausedAt: null, pausedMs: 0, completedAt: null });
     updateStep.mutate({
       stepId: step.id,
       patch: {
@@ -816,6 +817,9 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
         assignedTo: joinWorkers(session.workers),
         remarks: remarks || null,
         startDate: today(),
+        startedAt: now.toISOString(),
+        completedAt: null,
+        durationSeconds: null,
       },
     });
   }
@@ -834,17 +838,39 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   function cancel(step: WorkflowStep) {
     if (!window.confirm(`Cancel "${operationName(step, catalog)}"? It will move back to Pending.`)) return;
     patchSession(step.id, { startedAt: null, pausedAt: null, pausedMs: 0, completedAt: null });
-    updateStep.mutate({ stepId: step.id, patch: { status: "pending", startDate: null } });
+    updateStep.mutate({
+      stepId: step.id,
+      patch: { status: "pending", startDate: null, startedAt: null, completedAt: null, durationSeconds: null },
+    });
   }
 
   function complete(step: WorkflowStep) {
-    patchSession(step.id, { completedAt: new Date(), pausedAt: null });
-    updateStep.mutate({ stepId: step.id, patch: { status: "completed", endDate: today() } });
+    const session = sessions[step.id] ?? emptySession();
+    const now = new Date();
+    const startedAtIso = step.startedAt ?? session.startedAt?.toISOString() ?? now.toISOString();
+    const durationSeconds = Math.max(
+      0,
+      Math.round((now.getTime() - new Date(startedAtIso).getTime() - session.pausedMs) / 1000),
+    );
+    patchSession(step.id, { completedAt: now, pausedAt: null });
+    updateStep.mutate({
+      stepId: step.id,
+      patch: {
+        status: "completed",
+        endDate: today(),
+        completedAt: now.toISOString(),
+        startedAt: startedAtIso,
+        durationSeconds,
+      },
+    });
   }
 
   function reopen(step: WorkflowStep) {
     patchSession(step.id, { startedAt: null, pausedAt: null, pausedMs: 0, completedAt: null });
-    updateStep.mutate({ stepId: step.id, patch: { status: "pending", endDate: null } });
+    updateStep.mutate({
+      stepId: step.id,
+      patch: { status: "pending", endDate: null, completedAt: null, durationSeconds: null },
+    });
   }
 
   function removeStep(step: WorkflowStep) {
