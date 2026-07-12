@@ -118,9 +118,11 @@ function DesignSample({ design }: { design: Design }) {
         <Link
           to="/designs/$code"
           params={{ code: design.code }}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold hover:bg-accent"
+          aria-label="Back to design"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3 sm:py-2.5 sm:text-sm sm:font-semibold sm:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" /> Design
+          <ArrowLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Design</span>
         </Link>
       }
     >

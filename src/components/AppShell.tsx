@@ -29,7 +29,7 @@ export function AppShell({
   useRequireAuth();
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
         <SidebarContent pathname={pathname} onNavigate={() => setOpen(false)} />
