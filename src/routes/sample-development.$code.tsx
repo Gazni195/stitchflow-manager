@@ -898,6 +898,7 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
 
   return (
     <div className="grid gap-4">
+      {/* Running Operations — add process stays in the header */}
       <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Running Operations</p>
@@ -937,6 +938,32 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
         )}
       </div>
 
+      {/* Pending Operations — newly created processes land here */}
+      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Pending Operations</p>
+        {pending.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">No pending operations.</p>
+        ) : (
+          <div className="mt-3 grid gap-3">
+            {pending.map((step) => (
+              <PendingOperationCard
+                key={step.id}
+                step={step}
+                catalog={catalog}
+                session={sessions[step.id] ?? emptySession()}
+                busy={updateStep.isPending}
+                onAddWorker={(w) => addWorker(step, w)}
+                onRemoveWorker={(w) => removeWorker(step, w)}
+                onHoursChange={(v) => patchSession(step.id, { estimatedHours: v })}
+                onStart={() => start(step)}
+                onEdit={() => setEditingId(step.id)}
+                onDelete={() => removeStep(step)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="flex justify-end">
         <button
           onClick={onContinue}
@@ -947,17 +974,10 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       </div>
 
       <WorkflowTimeline
-        pending={pending}
         history={history}
         catalog={catalog}
         sessions={sessions}
-        busy={updateStep.isPending}
-        onAddWorker={addWorker}
-        onRemoveWorker={removeWorker}
-        onHoursChange={(step, v) => patchSession(step.id, { estimatedHours: v })}
-        onStart={start}
         onEdit={setEditingId}
-        onDelete={removeStep}
         onReopen={reopen}
       />
 
