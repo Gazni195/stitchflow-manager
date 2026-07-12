@@ -160,7 +160,11 @@ export function useUpdateDesignMaterial(designId: string) {
       if (v.patch.groupName !== undefined) dbPatch.group_name = v.patch.groupName;
       if (v.patch.quantity !== undefined) dbPatch.quantity = v.patch.quantity;
       if (v.patch.rate !== undefined) dbPatch.rate = v.patch.rate;
-      const { error } = await supabase.from("design_materials").update(dbPatch).eq("id", v.id);
+      const { error } = await (supabase.from("design_materials") as unknown as {
+        update: (p: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: unknown }> };
+      })
+        .update(dbPatch)
+        .eq("id", v.id);
       if (error) throw error;
     },
     onSuccess: () => invalidateDesignMaterials(qc, designId),
