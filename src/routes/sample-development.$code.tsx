@@ -1165,72 +1165,47 @@ function RunningOperationCard({
 }
 
 function WorkflowTimeline({
-  pending,
   history,
   catalog,
   sessions,
-  busy,
-  onAddWorker,
-  onRemoveWorker,
-  onHoursChange,
-  onStart,
   onEdit,
-  onDelete,
   onReopen,
 }: {
-  pending: WorkflowStep[];
   history: WorkflowStep[];
   catalog: CatalogOperation[];
   sessions: Record<string, OperationSession>;
-  busy: boolean;
-  onAddWorker: (step: WorkflowStep, worker: string) => void;
-  onRemoveWorker: (step: WorkflowStep, worker: string) => void;
-  onHoursChange: (step: WorkflowStep, value: string) => void;
-  onStart: (step: WorkflowStep) => void;
   onEdit: (stepId: string) => void;
-  onDelete: (step: WorkflowStep) => void;
   onReopen: (step: WorkflowStep) => void;
 }) {
-  const empty = pending.length === 0 && history.length === 0;
+  if (history.length === 0) {
+    return (
+      <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-sm font-bold">Workflow Timeline</p>
+        <p className="mt-2 text-sm text-muted-foreground">Completed operations will appear here.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
       <p className="text-sm font-bold">Workflow Timeline</p>
-      {empty ? (
-        <p className="mt-2 text-sm text-muted-foreground">No operations yet. Use "+ Add Process" to get started.</p>
-      ) : (
-        <ul className="mt-3 grid gap-2">
-          {pending.map((step) => (
-            <PendingTimelineRow
-              key={step.id}
-              step={step}
-              catalog={catalog}
-              session={sessions[step.id] ?? emptySession()}
-              busy={busy}
-              onAddWorker={(w) => onAddWorker(step, w)}
-              onRemoveWorker={(w) => onRemoveWorker(step, w)}
-              onHoursChange={(v) => onHoursChange(step, v)}
-              onStart={() => onStart(step)}
-              onEdit={() => onEdit(step.id)}
-              onDelete={() => onDelete(step)}
-            />
-          ))}
-          {history.map((step) => (
-            <HistoryTimelineRow
-              key={step.id}
-              step={step}
-              catalog={catalog}
-              session={sessions[step.id]}
-              onEdit={() => onEdit(step.id)}
-              onReopen={() => onReopen(step)}
-            />
-          ))}
-        </ul>
-      )}
+      <ul className="mt-3 grid gap-2">
+        {history.map((step) => (
+          <HistoryTimelineRow
+            key={step.id}
+            step={step}
+            catalog={catalog}
+            session={sessions[step.id]}
+            onEdit={() => onEdit(step.id)}
+            onReopen={() => onReopen(step)}
+          />
+        ))}
+      </ul>
     </div>
   );
 }
 
-function PendingTimelineRow({
+function PendingOperationCard({
   step,
   catalog,
   session,
@@ -1259,13 +1234,16 @@ function PendingTimelineRow({
   const Icon = op?.icon;
 
   return (
-    <li className="rounded-xl border border-border bg-background p-3">
-      <div className="flex items-start justify-between gap-2">
+    <div className="rounded-2xl border border-border bg-background p-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary">
-            {Icon ? <Icon className="h-3.5 w-3.5" /> : <Scissors className="h-3.5 w-3.5" />}
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary">
+            {Icon ? <Icon className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}
           </div>
-          <p className="truncate text-sm font-bold">{opName}</p>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold">{opName}</p>
+            <p className="text-[11px] text-muted-foreground">Status: Pending</p>
+          </div>
         </div>
         <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
           Pending
@@ -1316,28 +1294,28 @@ function PendingTimelineRow({
           </div>
         </div>
       ) : (
-        <div className="mt-2 flex items-center gap-1.5">
+        <div className="mt-3 flex items-center gap-2">
           <button
             onClick={() => setStarting(true)}
-            className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground hover:opacity-90"
+            className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:opacity-90"
           >
             ▶ Start
           </button>
           <button
             onClick={onEdit}
-            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-primary"
+            className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-accent hover:text-primary"
           >
             <Pencil className="h-3 w-3" /> Edit
           </button>
           <button
             onClick={onDelete}
-            className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
           >
             <Trash2 className="h-3 w-3" /> Delete
           </button>
         </div>
       )}
-    </li>
+    </div>
   );
 }
 
