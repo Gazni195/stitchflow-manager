@@ -56,19 +56,6 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "approval", label: "Approval", icon: FileCheck2 },
 ];
 
-// Standard sample-stage operations (real ids from operations_catalog) that
-// every new sample workflow starts with, so Sample Making always has a
-// real operation to run instead of requiring manual setup first. Users can
-// still reorder/add/remove via Configure Workflow — this is just the seed.
-const DEFAULT_SAMPLE_OPERATIONS = [
-  "fabric-selection",
-  "sample-cutting",
-  "sample-handwork",
-  "sample-stitching",
-  "sample-qc",
-  "sample-approval",
-];
-
 function DesignSamplePage() {
   useRequireAuth();
   const { code } = Route.useParams();
@@ -116,50 +103,32 @@ function DesignSample({ design }: { design: Design }) {
   const qc = useQueryClient();
   const creatingRef = useRef(false);
 
-  // Auto-create a sample workflow (and its default operations) when the
-  // design has none yet, and backfill defaults if the workflow row exists
-  // but has no steps — so Sample Making always has a real operation to run
-  // instead of requiring manual setup on every new design.
+  // Auto-create an empty sample workflow container when the design has none
+  // yet, so "+ Add Process" always has somewhere to attach steps. Sample
+  // Making is an execution screen, not a workflow builder — no default
+  // operations are seeded; the Production Manager adds only what the real
+  // factory situation calls for.
   useEffect(() => {
     if (wfLoading || !workflows) return;
-    if (bulk) return;
+    if (bulk || sample) return;
     if (creatingRef.current) return;
-    if (sample && sample.steps.length > 0) return;
 
     creatingRef.current = true;
     (async () => {
-      let workflowId = sample?.id;
-      if (!workflowId) {
-        const { data: wf, error } = await supabase
-          .from("design_workflows")
-          .insert({ design_id: design.id, kind: "sample", locked: false })
-          .select("id")
-          .single();
-        if (error || !wf) {
-          creatingRef.current = false;
-          return;
-        }
-        workflowId = wf.id;
-      }
-
-      const { error: stepsError } = await supabase.from("workflow_steps").insert(
-        DEFAULT_SAMPLE_OPERATIONS.map((operationId, i) => ({
-          workflow_id: workflowId,
-          operation_id: operationId,
-          sequence: i + 1,
-          status: "pending",
-        })),
-      );
-      if (!stepsError) {
+      const { error } = await supabase
+        .from("design_workflows")
+        .insert({ design_id: design.id, kind: "sample", locked: false });
+      if (!error) {
         qc.invalidateQueries({ queryKey: ["workflows", design.id] });
       }
       creatingRef.current = false;
     })();
   }, [wfLoading, workflows, sample, bulk, design.id, qc]);
 
+  const auditableSteps = sample?.steps.filter((s) => s.status !== "deleted") ?? [];
   const stage: "In Development" | "Ready for Review" | "Approved" = bulk
     ? "Approved"
-    : sample && sample.steps.length > 0 && sample.steps.every((s) => s.status === "completed" || s.status === "skipped")
+    : auditableSteps.length > 0 && auditableSteps.every((s) => s.status === "completed" || s.status === "skipped")
       ? "Ready for Review"
       : "In Development";
 
@@ -661,31 +630,53 @@ function CompactField({
 //
 // Pure execution screen, not a workflow builder: `workflow_steps.sequence`
 // is only "the order it was added in" (for display), never an enforced
-// path. The Production Manager can add the same operation multiple times,
-// start any pending operation regardless of order, and run more than one
-// at once — Running Operations simply lists every step whose status is
-// "in-progress"; there is no dedicated "parallel" feature, it's just what
-// happens when more than one is started before another is completed.
-// Pause/Resume/Cancel are lightweight session actions layered on top of
-// that same "in-progress" status (see OperationSession below) rather than
-// new persisted states, so no workflow_steps schema change was needed.
-// Costing is reachable at any time — it isn't gated by pending/running work.
+// path, and no default operations are seeded — the Production Manager
+// adds only what the real factory situation calls for, via "+ Add
+// Process". Every step's lifecycle is Pending -> Running -> Completed:
+//
+//   - Pending: shown as a compact row in the Workflow Timeline, with
+//     Start / Edit / Delete (hard delete — nothing to audit yet).
+//   - Running: moves out of the Timeline into Running Operations the
+//     moment Start is confirmed; Pause/Resume/Cancel live behind
+//     "More Actions" so Complete stays the one prominent action. More
+//     than one step can be Running at once — that's just what happens
+//     when a second Start happens before the first Complete, not a
+//     separate "parallel" feature.
+//   - Completed: moves back into the Timeline with Edit / Reopen. There
+//     is no direct Delete on a completed row — deleting from inside the
+//     edit dialog is a soft delete (status -> "deleted"): the row stays
+//     in the Timeline, greyed out, for audit instead of disappearing.
+//
+// An operation can have multiple workers (assigned_to stores them as a
+// comma-separated list — no schema change needed for that part). Costing
+// is reachable at any time regardless of what's pending/running.
 //
 // workflow_steps stores start_date/end_date as calendar dates, not precise
 // timestamps, so the live "Started at HH:MM" clock, ticking elapsed
-// counter, and history duration are tracked client-side for this viewing
+// counter, and Timeline duration are tracked client-side for this viewing
 // session (including pause time, subtracted from elapsed/duration). The
 // persisted day-level record (who worked it, which day, remarks, done/not)
 // is real; second-precision timing resets on reload.
 //
-// Each action here (start/pause/resume/complete/cancel) is a distinct,
-// named function — deliberately, so a future Activity Log can hook into
-// them individually without restructuring this screen.
+// Each action here (start/pause/resume/complete/cancel/reopen/soft-delete)
+// is a distinct, named function — deliberately, so a future Activity Log
+// can hook into them individually without restructuring this screen.
 
 const WORKERS = ["Ameen", "Suresh", "Fathima", "Anwar", "Vikas", "Meera"];
 
+function parseWorkers(assignedTo: string | null): string[] {
+  return (assignedTo ?? "")
+    .split(",")
+    .map((w) => w.trim())
+    .filter(Boolean);
+}
+
+function joinWorkers(workers: string[]): string {
+  return workers.join(", ");
+}
+
 type OperationSession = {
-  worker: string;
+  workers: string[];
   estimatedHours: string;
   remarks: string;
   startedAt: Date | null;
@@ -696,7 +687,7 @@ type OperationSession = {
 
 function emptySession(): OperationSession {
   return {
-    worker: "",
+    workers: [],
     estimatedHours: "",
     remarks: "",
     startedAt: null,
@@ -710,10 +701,21 @@ function formatClock(d: Date): string {
   return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
+// Live, ticking HH:MM:SS — used while an operation is actively Running.
 function formatMs(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(Math.floor(totalSeconds / 3600))}:${pad(Math.floor((totalSeconds % 3600) / 60))}:${pad(totalSeconds % 60)}`;
+}
+
+// Friendly "1h 30m" — used for finished durations in the Workflow Timeline.
+function formatHM(ms: number): string {
+  const totalMinutes = Math.max(0, Math.round(ms / 60000));
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 // Elapsed time excluding any paused stretches: frozen at pausedAt while
@@ -762,7 +764,13 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       const next = { ...prev };
       for (const s of ordered) {
         if (s.status === "in-progress" && !next[s.id]?.startedAt) {
-          next[s.id] = { ...(next[s.id] ?? emptySession()), startedAt: new Date(), pausedAt: null, pausedMs: 0 };
+          next[s.id] = {
+            ...(next[s.id] ?? emptySession()),
+            workers: next[s.id]?.workers.length ? next[s.id].workers : parseWorkers(s.assignedTo),
+            startedAt: new Date(),
+            pausedAt: null,
+            pausedMs: 0,
+          };
           changed = true;
         }
       }
@@ -774,9 +782,28 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     setSessions((prev) => ({ ...prev, [stepId]: { ...(prev[stepId] ?? emptySession()), ...patch } }));
   }
 
+  function addWorker(step: WorkflowStep, worker: string) {
+    const session = sessions[step.id] ?? emptySession();
+    if (session.workers.includes(worker)) return;
+    const workers = [...session.workers, worker];
+    patchSession(step.id, { workers });
+    if (step.status === "in-progress") {
+      updateStep.mutate({ stepId: step.id, patch: { assignedTo: joinWorkers(workers) } });
+    }
+  }
+
+  function removeWorker(step: WorkflowStep, worker: string) {
+    const session = sessions[step.id] ?? emptySession();
+    const workers = session.workers.filter((w) => w !== worker);
+    patchSession(step.id, { workers });
+    if (step.status === "in-progress") {
+      updateStep.mutate({ stepId: step.id, patch: { assignedTo: joinWorkers(workers) } });
+    }
+  }
+
   function start(step: WorkflowStep) {
     const session = sessions[step.id] ?? emptySession();
-    if (!session.worker) return;
+    if (session.workers.length === 0) return;
     const hoursNote = session.estimatedHours.trim()
       ? `Est. ${session.estimatedHours.trim()} hr${session.estimatedHours.trim() === "1" ? "" : "s"}`
       : "";
@@ -784,7 +811,12 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     patchSession(step.id, { startedAt: new Date(), pausedAt: null, pausedMs: 0, completedAt: null });
     updateStep.mutate({
       stepId: step.id,
-      patch: { status: "in-progress", assignedTo: session.worker, remarks: remarks || null, startDate: today() },
+      patch: {
+        status: "in-progress",
+        assignedTo: joinWorkers(session.workers),
+        remarks: remarks || null,
+        startDate: today(),
+      },
     });
   }
 
@@ -820,6 +852,17 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     deleteStep.mutate(step.id);
   }
 
+  function softDeleteStep(step: WorkflowStep) {
+    if (
+      !window.confirm(
+        `Delete "${operationName(step, catalog)}" from the record? It will be marked Deleted but kept in the Workflow Timeline for audit.`,
+      )
+    )
+      return;
+    updateStep.mutate({ stepId: step.id, patch: { status: "deleted" } });
+    setEditingId(null);
+  }
+
   async function commitPick(operationId: string) {
     if (!sample) return;
     const nextSeq = ordered.length ? Math.max(...ordered.map((s) => s.sequence)) + 1 : 1;
@@ -843,90 +886,79 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   const busy = updateStep.isPending || addStep.isPending || addOperation.isPending;
   const now = new Date();
 
-  const pending = ordered.filter((s) => s.status === "pending");
+  const pending = ordered.filter((s) => s.status === "pending").sort((a, b) => a.sequence - b.sequence);
   const running = ordered
     .filter((s) => s.status === "in-progress")
     .sort((a, b) => (sessions[a.id]?.startedAt?.getTime() ?? 0) - (sessions[b.id]?.startedAt?.getTime() ?? 0));
-  const completed = ordered
-    .filter((s) => s.status === "completed" || s.status === "skipped")
+  const history = ordered
+    .filter((s) => s.status === "completed" || s.status === "skipped" || s.status === "deleted")
     .sort((a, b) => (b.endDate ?? "").localeCompare(a.endDate ?? "") || b.sequence - a.sequence);
+
+  const editingStep = editingId ? ordered.find((s) => s.id === editingId) : undefined;
 
   return (
     <div className="grid gap-4">
-      <OperationsSummary
-        total={ordered.length}
-        completed={completed.length}
-        running={running.length}
-        pending={pending.length}
-      />
-
       <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Running Operations</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Running Operations</p>
+          <button
+            onClick={() => setPickerOpen(true)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-dashed border-border bg-background px-3 py-1.5 text-[11px] font-bold text-primary hover:bg-primary-soft/40"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Process
+          </button>
+        </div>
         {running.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">No operations running right now.</p>
         ) : (
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {running.map((step) => (
-              <RunningOperationCard
-                key={step.id}
-                step={step}
-                catalog={catalog}
-                session={sessions[step.id] ?? emptySession()}
-                now={now}
-                onPause={() => pause(step)}
-                onResume={() => resume(step)}
-                onComplete={() => complete(step)}
-                onCancel={() => cancel(step)}
-                busy={updateStep.isPending}
-              />
-            ))}
+            {running.map((step) => {
+              const session = sessions[step.id] ?? emptySession();
+              const workers = session.workers.length ? session.workers : parseWorkers(step.assignedTo);
+              return (
+                <RunningOperationCard
+                  key={step.id}
+                  step={step}
+                  catalog={catalog}
+                  session={session}
+                  workers={workers}
+                  now={now}
+                  onAddWorker={(w) => addWorker(step, w)}
+                  onRemoveWorker={(w) => removeWorker(step, w)}
+                  onPause={() => pause(step)}
+                  onResume={() => resume(step)}
+                  onComplete={() => complete(step)}
+                  onCancel={() => cancel(step)}
+                  busy={updateStep.isPending}
+                />
+              );
+            })}
           </div>
         )}
       </div>
 
-      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Pending Operations</p>
-        {pending.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">Nothing pending. Use "+ Add Process" below.</p>
-        ) : (
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {pending.map((step) => (
-              <PendingOperationCard
-                key={step.id}
-                step={step}
-                catalog={catalog}
-                session={sessions[step.id] ?? emptySession()}
-                onSession={(patch) => patchSession(step.id, patch)}
-                onStart={() => start(step)}
-                busy={updateStep.isPending}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={() => setPickerOpen(true)}
-          className="inline-flex items-center gap-2 rounded-2xl border border-dashed border-border bg-card px-4 py-3 text-sm font-bold text-primary hover:bg-primary-soft/40"
-        >
-          <Plus className="h-4 w-4" /> Add Process
-        </button>
+      <div className="flex justify-end">
         <button
           onClick={onContinue}
-          className="ml-auto inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+          className="inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
         >
           Continue to Costing <ArrowRight className="h-4 w-4" />
         </button>
       </div>
 
-      <OperationHistoryList
-        steps={completed}
+      <WorkflowTimeline
+        pending={pending}
+        history={history}
         catalog={catalog}
         sessions={sessions}
+        busy={updateStep.isPending}
+        onAddWorker={addWorker}
+        onRemoveWorker={removeWorker}
+        onHoursChange={(step, v) => patchSession(step.id, { estimatedHours: v })}
+        onStart={start}
         onEdit={setEditingId}
-        onReopen={reopen}
         onDelete={removeStep}
+        onReopen={reopen}
       />
 
       {pickerOpen && (
@@ -940,15 +972,16 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
         />
       )}
 
-      {editingId && (
-        <HistoryEditModal
-          step={ordered.find((s) => s.id === editingId)!}
+      {editingStep && (
+        <TimelineEditModal
+          step={editingStep}
           catalog={catalog}
           busy={updateStep.isPending}
           onSave={(patch) => {
-            updateStep.mutate({ stepId: editingId, patch });
+            updateStep.mutate({ stepId: editingStep.id, patch });
             setEditingId(null);
           }}
+          onSoftDelete={() => softDeleteStep(editingStep)}
           onClose={() => setEditingId(null)}
         />
       )}
@@ -956,109 +989,51 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   );
 }
 
-function OperationsSummary({
-  total,
-  completed,
-  running,
-  pending,
-}: {
-  total: number;
-  completed: number;
-  running: number;
-  pending: number;
-}) {
+function WorkerChips({ workers, onRemove }: { workers: string[]; onRemove?: (worker: string) => void }) {
+  if (workers.length === 0) {
+    return <span className="text-[11px] text-muted-foreground">No workers yet</span>;
+  }
   return (
-    <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Operation List</p>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <StatusTile label="Configured Operations" value={String(total)} />
-        <StatusTile label="Completed" value={String(completed)} />
-        <StatusTile label="Running" value={String(running)} />
-        <StatusTile label="Pending" value={String(pending)} />
-      </div>
-    </div>
+    <>
+      {workers.map((w) => (
+        <span
+          key={w}
+          className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary"
+        >
+          ✓ {w}
+          {onRemove && (
+            <button
+              onClick={() => onRemove(w)}
+              aria-label={`Remove ${w}`}
+              className="text-primary/60 hover:text-destructive"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          )}
+        </span>
+      ))}
+    </>
   );
 }
 
-function PendingOperationCard({
-  step,
-  catalog,
-  session,
-  onSession,
-  onStart,
-  busy,
-}: {
-  step: WorkflowStep;
-  catalog: CatalogOperation[];
-  session: OperationSession;
-  onSession: (patch: Partial<OperationSession>) => void;
-  onStart: () => void;
-  busy: boolean;
-}) {
-  const op = catalog.find((o) => o.id === step.operationId);
-  const opName = operationName(step, catalog);
-  const Icon = op?.icon;
-
+function AddWorkerControl({ workers, onAdd }: { workers: string[]; onAdd: (worker: string) => void }) {
+  const available = WORKERS.filter((w) => !workers.includes(w));
+  if (available.length === 0) return null;
   return (
-    <div className="rounded-2xl border border-border bg-background p-4">
-      <div className="flex items-center gap-2.5">
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary">
-          {Icon ? <Icon className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}
-        </div>
-        <h4 className="truncate text-base font-extrabold tracking-tight">{opName}</h4>
-      </div>
-
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Assigned Worker</span>
-          <select
-            value={session.worker}
-            onChange={(e) => onSession({ worker: e.target.value })}
-            className="mt-1.5 w-full rounded-2xl border border-border bg-background px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-primary"
-          >
-            <option value="">Select Worker</option>
-            {WORKERS.map((w) => (
-              <option key={w} value={w}>
-                {w}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Estimated Hours</span>
-          <input
-            type="number"
-            min={0}
-            step={0.5}
-            inputMode="decimal"
-            placeholder="e.g. 2"
-            value={session.estimatedHours}
-            onChange={(e) => onSession({ estimatedHours: e.target.value })}
-            className="mt-1.5 w-full rounded-2xl border border-border bg-background px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-primary"
-          />
-        </label>
-      </div>
-
-      <label className="mt-3 block">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-          Remarks (Optional)
-        </span>
-        <textarea
-          rows={2}
-          value={session.remarks}
-          onChange={(e) => onSession({ remarks: e.target.value })}
-          className="mt-1.5 w-full rounded-2xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-primary"
-        />
-      </label>
-
-      <button
-        onClick={onStart}
-        disabled={!session.worker || busy}
-        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {busy && <Loader2 className="h-4 w-4 animate-spin" />}▶ Start
-      </button>
-    </div>
+    <select
+      value=""
+      onChange={(e) => {
+        if (e.target.value) onAdd(e.target.value);
+      }}
+      className="rounded-full border border-dashed border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-primary outline-none"
+    >
+      <option value="">+ Add Worker</option>
+      {available.map((w) => (
+        <option key={w} value={w}>
+          {w}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -1066,7 +1041,10 @@ function RunningOperationCard({
   step,
   catalog,
   session,
+  workers,
   now,
+  onAddWorker,
+  onRemoveWorker,
   onPause,
   onResume,
   onComplete,
@@ -1076,7 +1054,10 @@ function RunningOperationCard({
   step: WorkflowStep;
   catalog: CatalogOperation[];
   session: OperationSession;
+  workers: string[];
   now: Date;
+  onAddWorker: (worker: string) => void;
+  onRemoveWorker: (worker: string) => void;
   onPause: () => void;
   onResume: () => void;
   onComplete: () => void;
@@ -1099,8 +1080,15 @@ function RunningOperationCard({
         <h4 className="truncate text-base font-extrabold tracking-tight">{opName}</h4>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <StatusTile label="Worker" value={step.assignedTo || session.worker || "—"} />
+      <div className="mt-3">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Workers</span>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <WorkerChips workers={workers} onRemove={onRemoveWorker} />
+          <AddWorkerControl workers={workers} onAdd={onAddWorker} />
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
         <StatusTile label="Started" value={session.startedAt ? formatClock(session.startedAt) : "—"} />
         <StatusTile label="Elapsed" value={formatMs(elapsedMs(session, now))} mono />
         <StatusTile label="Status" value={paused ? "🟡 Paused" : "🟢 Running"} />
@@ -1156,74 +1144,244 @@ function RunningOperationCard({
   );
 }
 
-function OperationHistoryList({
-  steps,
+function WorkflowTimeline({
+  pending,
+  history,
   catalog,
   sessions,
+  busy,
+  onAddWorker,
+  onRemoveWorker,
+  onHoursChange,
+  onStart,
   onEdit,
-  onReopen,
   onDelete,
+  onReopen,
 }: {
-  steps: WorkflowStep[];
+  pending: WorkflowStep[];
+  history: WorkflowStep[];
   catalog: CatalogOperation[];
   sessions: Record<string, OperationSession>;
+  busy: boolean;
+  onAddWorker: (step: WorkflowStep, worker: string) => void;
+  onRemoveWorker: (step: WorkflowStep, worker: string) => void;
+  onHoursChange: (step: WorkflowStep, value: string) => void;
+  onStart: (step: WorkflowStep) => void;
   onEdit: (stepId: string) => void;
-  onReopen: (step: WorkflowStep) => void;
   onDelete: (step: WorkflowStep) => void;
+  onReopen: (step: WorkflowStep) => void;
 }) {
+  const empty = pending.length === 0 && history.length === 0;
   return (
     <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
-      <p className="text-sm font-bold">Operation History</p>
-      {steps.length === 0 ? (
-        <p className="mt-2 text-sm text-muted-foreground">No completed operations yet.</p>
+      <p className="text-sm font-bold">Workflow Timeline</p>
+      {empty ? (
+        <p className="mt-2 text-sm text-muted-foreground">No operations yet. Use "+ Add Process" to get started.</p>
       ) : (
         <ul className="mt-3 grid gap-2">
-          {steps.map((s) => {
-            const name = operationName(s, catalog);
-            const session = sessions[s.id];
-            const duration =
-              session?.startedAt && session?.completedAt ? formatMs(elapsedMs(session, session.completedAt)) : "—";
-            const start = session?.startedAt ? formatClock(session.startedAt) : s.startDate || "—";
-            const end = session?.completedAt ? formatClock(session.completedAt) : s.endDate || "—";
-            return (
-              <li key={s.id} className="rounded-xl border border-border bg-background p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold">{name}</p>
-                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                      {s.assignedTo || "Unassigned"} · {start} → {end} · {duration}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">
-                    {s.status === "skipped" ? "Skipped" : "Completed"}
-                  </span>
-                </div>
-                <div className="mt-2 flex items-center gap-1">
-                  <button
-                    onClick={() => onEdit(s.id)}
-                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-primary"
-                  >
-                    <Pencil className="h-3 w-3" /> Edit
-                  </button>
-                  <button
-                    onClick={() => onReopen(s)}
-                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-primary"
-                  >
-                    <RotateCcw className="h-3 w-3" /> Reopen
-                  </button>
-                  <button
-                    onClick={() => onDelete(s)}
-                    className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="h-3 w-3" /> Delete
-                  </button>
-                </div>
-              </li>
-            );
-          })}
+          {pending.map((step) => (
+            <PendingTimelineRow
+              key={step.id}
+              step={step}
+              catalog={catalog}
+              session={sessions[step.id] ?? emptySession()}
+              busy={busy}
+              onAddWorker={(w) => onAddWorker(step, w)}
+              onRemoveWorker={(w) => onRemoveWorker(step, w)}
+              onHoursChange={(v) => onHoursChange(step, v)}
+              onStart={() => onStart(step)}
+              onEdit={() => onEdit(step.id)}
+              onDelete={() => onDelete(step)}
+            />
+          ))}
+          {history.map((step) => (
+            <HistoryTimelineRow
+              key={step.id}
+              step={step}
+              catalog={catalog}
+              session={sessions[step.id]}
+              onEdit={() => onEdit(step.id)}
+              onReopen={() => onReopen(step)}
+            />
+          ))}
         </ul>
       )}
     </div>
+  );
+}
+
+function PendingTimelineRow({
+  step,
+  catalog,
+  session,
+  busy,
+  onAddWorker,
+  onRemoveWorker,
+  onHoursChange,
+  onStart,
+  onEdit,
+  onDelete,
+}: {
+  step: WorkflowStep;
+  catalog: CatalogOperation[];
+  session: OperationSession;
+  busy: boolean;
+  onAddWorker: (worker: string) => void;
+  onRemoveWorker: (worker: string) => void;
+  onHoursChange: (value: string) => void;
+  onStart: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [starting, setStarting] = useState(false);
+  const op = catalog.find((o) => o.id === step.operationId);
+  const opName = operationName(step, catalog);
+  const Icon = op?.icon;
+
+  return (
+    <li className="rounded-xl border border-border bg-background p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary">
+            {Icon ? <Icon className="h-3.5 w-3.5" /> : <Scissors className="h-3.5 w-3.5" />}
+          </div>
+          <p className="truncate text-sm font-bold">{opName}</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+          Pending
+        </span>
+      </div>
+
+      {starting ? (
+        <div className="mt-3 grid gap-2.5">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Workers</span>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <WorkerChips workers={session.workers} onRemove={onRemoveWorker} />
+              <AddWorkerControl workers={session.workers} onAdd={onAddWorker} />
+            </div>
+          </div>
+          <label className="block w-40">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              Estimated Hours
+            </span>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              inputMode="decimal"
+              placeholder="e.g. 2"
+              value={session.estimatedHours}
+              onChange={(e) => onHoursChange(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-1.5 text-sm font-semibold outline-none focus:border-primary"
+            />
+          </label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                onStart();
+                setStarting(false);
+              }}
+              disabled={session.workers.length === 0 || busy}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} ▶ Confirm Start
+            </button>
+            <button
+              onClick={() => setStarting(false)}
+              className="rounded-xl border border-border px-3 py-1.5 text-[11px] font-semibold hover:bg-accent"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2 flex items-center gap-1.5">
+          <button
+            onClick={() => setStarting(true)}
+            className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground hover:opacity-90"
+          >
+            ▶ Start
+          </button>
+          <button
+            onClick={onEdit}
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-primary"
+          >
+            <Pencil className="h-3 w-3" /> Edit
+          </button>
+          <button
+            onClick={onDelete}
+            className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="h-3 w-3" /> Delete
+          </button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function HistoryTimelineRow({
+  step,
+  catalog,
+  session,
+  onEdit,
+  onReopen,
+}: {
+  step: WorkflowStep;
+  catalog: CatalogOperation[];
+  session: OperationSession | undefined;
+  onEdit: () => void;
+  onReopen: () => void;
+}) {
+  const opName = operationName(step, catalog);
+
+  if (step.status === "deleted") {
+    return (
+      <li className="rounded-xl border border-dashed border-border bg-muted/30 p-3 opacity-60">
+        <div className="flex items-center justify-between gap-2">
+          <p className="truncate text-sm font-semibold line-through">{opName}</p>
+          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+            Deleted
+          </span>
+        </div>
+      </li>
+    );
+  }
+
+  const workers = session?.workers.length ? session.workers : parseWorkers(step.assignedTo);
+  const duration = session?.startedAt && session?.completedAt ? formatHM(elapsedMs(session, session.completedAt)) : "—";
+  const start = session?.startedAt ? formatClock(session.startedAt) : step.startDate || "—";
+  const end = session?.completedAt ? formatClock(session.completedAt) : step.endDate || "—";
+
+  return (
+    <li className="rounded-xl border border-border bg-background p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold">✓ {opName}</p>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+            {workers.length ? `Workers: ${workers.join(", ")}` : "Unassigned"} · {start} → {end} · {duration}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">
+          {step.status === "skipped" ? "Skipped" : "Completed"}
+        </span>
+      </div>
+      <div className="mt-2 flex items-center gap-1">
+        <button
+          onClick={onEdit}
+          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-primary"
+        >
+          <Pencil className="h-3 w-3" /> Edit
+        </button>
+        <button
+          onClick={onReopen}
+          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-primary"
+        >
+          <RotateCcw className="h-3 w-3" /> Reopen
+        </button>
+      </div>
+    </li>
   );
 }
 
@@ -1316,24 +1474,27 @@ function OperationPickerModal({
   );
 }
 
-function HistoryEditModal({
+function TimelineEditModal({
   step,
   catalog,
   busy,
   onSave,
+  onSoftDelete,
   onClose,
 }: {
   step: WorkflowStep;
   catalog: CatalogOperation[];
   busy: boolean;
   onSave: (patch: Partial<Omit<WorkflowStep, "id" | "workflowId">>) => void;
+  onSoftDelete: () => void;
   onClose: () => void;
 }) {
-  const [worker, setWorker] = useState(step.assignedTo ?? "");
+  const [workersText, setWorkersText] = useState(parseWorkers(step.assignedTo).join(", "));
   const [status, setStatus] = useState<StepStatus>(step.status);
   const [startDate, setStartDate] = useState(step.startDate ?? "");
   const [endDate, setEndDate] = useState(step.endDate ?? "");
   const [remarks, setRemarks] = useState(step.remarks ?? "");
+  const canSoftDelete = step.status === "completed" || step.status === "skipped";
 
   return (
     <div
@@ -1357,19 +1518,15 @@ function HistoryEditModal({
 
         <div className="mt-3 grid gap-3">
           <label className="block">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Worker</span>
-            <select
-              value={worker}
-              onChange={(e) => setWorker(e.target.value)}
+            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+              Workers (comma-separated)
+            </span>
+            <input
+              value={workersText}
+              onChange={(e) => setWorkersText(e.target.value)}
+              placeholder="e.g. Ameen, Fathima"
               className="mt-1.5 w-full rounded-2xl border border-border bg-background px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-primary"
-            >
-              <option value="">—</option>
-              {WORKERS.map((w) => (
-                <option key={w} value={w}>
-                  {w}
-                </option>
-              ))}
-            </select>
+            />
           </label>
 
           <label className="block">
@@ -1383,6 +1540,7 @@ function HistoryEditModal({
               <option value="in-progress">In Progress</option>
               <option value="completed">Completed</option>
               <option value="skipped">Skipped</option>
+              <option value="deleted">Deleted</option>
             </select>
           </label>
 
@@ -1420,7 +1578,7 @@ function HistoryEditModal({
           <button
             onClick={() =>
               onSave({
-                assignedTo: worker || null,
+                assignedTo: workersText.trim() || null,
                 status,
                 startDate: startDate || null,
                 endDate: endDate || null,
@@ -1432,6 +1590,16 @@ function HistoryEditModal({
           >
             {busy && <Loader2 className="h-4 w-4 animate-spin" />} Save Changes
           </button>
+
+          {canSoftDelete && (
+            <button
+              onClick={onSoftDelete}
+              disabled={busy}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-destructive/30 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Trash2 className="h-4 w-4" /> Delete (Keep for Audit)
+            </button>
+          )}
         </div>
       </div>
     </div>
