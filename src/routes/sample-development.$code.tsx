@@ -105,7 +105,8 @@ function DesignSample({ design }: { design: Design }) {
 
   const stage: "In Development" | "Ready for Review" | "Approved" = bulk
     ? "Approved"
-    : sample && sample.steps.length > 0 && sample.steps.every((s) => s.status === "completed" || s.status === "skipped")
+    : sample && sample.steps.length > 0 &&
+        sample.steps.every((s) => s.status === "completed" || s.status === "skipped")
       ? "Ready for Review"
       : "In Development";
 
@@ -117,11 +118,9 @@ function DesignSample({ design }: { design: Design }) {
         <Link
           to="/designs/$code"
           params={{ code: design.code }}
-          aria-label="Back to design"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3 sm:py-2.5 sm:text-sm sm:font-semibold sm:text-foreground"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold hover:bg-accent"
         >
-          <ArrowLeft className="h-4 w-4" />
-          <span className="hidden sm:inline">Design</span>
+          <ArrowLeft className="h-4 w-4" /> Design
         </Link>
       }
     >
@@ -135,6 +134,7 @@ function DesignSample({ design }: { design: Design }) {
 
         {/* Mockup-style summary: image hero + facts + workflow progress dots */}
         <SampleHeader design={design} stage={stage} />
+
 
         {/* Tabs */}
         <section>
@@ -174,7 +174,13 @@ function DesignSample({ design }: { design: Design }) {
 
 /* ---------- Status ---------- */
 
-function StatusPanel({ design, stage }: { design: Design; stage: "In Development" | "Ready for Review" | "Approved" }) {
+function StatusPanel({
+  design,
+  stage,
+}: {
+  design: Design;
+  stage: "In Development" | "Ready for Review" | "Approved";
+}) {
   const steps: { id: string; label: string; icon: LucideIcon }[] = [
     { id: "Requested", label: "Requested", icon: Sparkles },
     { id: "In Development", label: "In Development", icon: Clock },
@@ -186,7 +192,9 @@ function StatusPanel({ design, stage }: { design: Design; stage: "In Development
     <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <h3 className="text-base font-bold">Sample lifecycle</h3>
-        <span className="rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary">{stage}</span>
+        <span className="rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary">
+          {stage}
+        </span>
       </div>
       <ol className="mt-5 space-y-4">
         {steps.map((step, i) => {
@@ -220,7 +228,9 @@ function StatusPanel({ design, stage }: { design: Design; stage: "In Development
 
       {design.notes && (
         <div className="mt-5 rounded-2xl border border-border bg-background p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Notes</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Notes
+          </p>
           <p className="mt-1 text-sm">{design.notes}</p>
         </div>
       )}
@@ -256,13 +266,18 @@ function MaterialsPanel({ design }: { design: Design }) {
   }
 
   const perPieceTotal = useMemo(
-    () => rows.filter((r) => r.selected).reduce((s, r) => s + r.consumption * r.rate, 0),
+    () =>
+      rows
+        .filter((r) => r.selected)
+        .reduce((s, r) => s + r.consumption * r.rate, 0),
     [rows],
   );
   const orderTotal = perPieceTotal * design.orderQuantity;
 
   if (design.parts.length === 0) {
-    return <EmptyState label="Add garment parts on the design to start material selection." />;
+    return (
+      <EmptyState label="Add garment parts on the design to start material selection." />
+    );
   }
 
   return (
@@ -337,9 +352,14 @@ function MaterialsPanel({ design }: { design: Design }) {
                       className="w-24 rounded-lg border border-border bg-background px-2 py-1.5 text-right text-sm outline-none focus:border-primary"
                     />
                   </td>
-                  <td className="p-3 text-right font-bold">₹{perPiece.toLocaleString()}</td>
+                  <td className="p-3 text-right font-bold">
+                    ₹{perPiece.toLocaleString()}
+                  </td>
                   <td className="p-3 text-center">
-                    <button onClick={() => update(p.id, { selected: !row.selected })} aria-label="Toggle selected">
+                    <button
+                      onClick={() => update(p.id, { selected: !row.selected })}
+                      aria-label="Toggle selected"
+                    >
                       {row.selected ? (
                         <CheckCircle2 className="mx-auto h-5 w-5 text-primary" />
                       ) : (
@@ -357,11 +377,17 @@ function MaterialsPanel({ design }: { design: Design }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl border border-border bg-primary-soft p-4">
           <p className="text-xs font-semibold text-muted-foreground">Per piece</p>
-          <p className="mt-1 text-2xl font-extrabold text-primary">₹{perPieceTotal.toLocaleString()}</p>
+          <p className="mt-1 text-2xl font-extrabold text-primary">
+            ₹{perPieceTotal.toLocaleString()}
+          </p>
         </div>
         <div className="rounded-2xl border border-border bg-gradient-to-br from-primary to-primary-glow p-4 text-primary-foreground shadow-md">
-          <p className="text-xs font-semibold opacity-85">Order total ({design.orderQuantity} pcs)</p>
-          <p className="mt-1 text-2xl font-extrabold">₹{orderTotal.toLocaleString()}</p>
+          <p className="text-xs font-semibold opacity-85">
+            Order total ({design.orderQuantity} pcs)
+          </p>
+          <p className="mt-1 text-2xl font-extrabold">
+            ₹{orderTotal.toLocaleString()}
+          </p>
         </div>
       </div>
     </div>
@@ -410,7 +436,9 @@ function CostingPanel({ design }: { design: Design }) {
                     onChange={(e) =>
                       setCosts((prev) =>
                         prev.map((x) =>
-                          x.id === c.id ? { ...x, amount: Math.max(0, Number(e.target.value) || 0) } : x,
+                          x.id === c.id
+                            ? { ...x, amount: Math.max(0, Number(e.target.value) || 0) }
+                            : x,
                         ),
                       )
                     }
@@ -425,7 +453,9 @@ function CostingPanel({ design }: { design: Design }) {
               <td className="p-3 font-bold" colSpan={2}>
                 Total per piece
               </td>
-              <td className="p-3 text-right text-lg font-extrabold text-primary">₹{perPiece.toLocaleString()}</td>
+              <td className="p-3 text-right text-lg font-extrabold text-primary">
+                ₹{perPiece.toLocaleString()}
+              </td>
             </tr>
           </tfoot>
         </table>
@@ -433,14 +463,20 @@ function CostingPanel({ design }: { design: Design }) {
 
       <div className="grid gap-3">
         <div className="rounded-2xl border border-border bg-gradient-to-br from-primary to-primary-glow p-5 text-primary-foreground shadow-md">
-          <p className="text-[11px] font-bold uppercase tracking-widest opacity-85">Order total</p>
-          <p className="mt-1 text-3xl font-extrabold tracking-tight">₹{orderTotal.toLocaleString()}</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest opacity-85">
+            Order total
+          </p>
+          <p className="mt-1 text-3xl font-extrabold tracking-tight">
+            ₹{orderTotal.toLocaleString()}
+          </p>
           <p className="mt-1 text-xs opacity-85">
             {design.orderQuantity} pcs × ₹{perPiece.toLocaleString()}
           </p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Breakdown</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Breakdown
+          </p>
           <ul className="mt-2 space-y-2 text-sm">
             {Object.entries(byCategory).map(([cat, amt]) => {
               const pct = perPiece > 0 ? Math.round((amt / perPiece) * 100) : 0;
@@ -453,7 +489,10 @@ function CostingPanel({ design }: { design: Design }) {
                     </span>
                   </div>
                   <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${pct}%` }}
+                    />
                   </div>
                 </li>
               );
@@ -518,12 +557,22 @@ function ApprovalPanel({ design }: { design: Design }) {
 
       <ul className="grid gap-3 sm:grid-cols-2">
         {approvals.map((a) => {
-          const Icon = a.status === "Approved" ? CheckCircle2 : a.status === "Rejected" ? XCircle : Clock;
+          const Icon =
+            a.status === "Approved"
+              ? CheckCircle2
+              : a.status === "Rejected"
+                ? XCircle
+                : Clock;
           return (
-            <li key={a.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <li
+              key={a.id}
+              className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{a.role}</p>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    {a.role}
+                  </p>
                   <p className="mt-0.5 truncate text-base font-bold">{a.name}</p>
                 </div>
                 <span
@@ -581,7 +630,8 @@ function SampleHeader({
 
   // 7-step workflow dots (per mockup). Mark step 3 as current when In Development.
   const total = 7;
-  const currentIdx = stage === "Approved" ? total : stage === "Ready for Review" ? 5 : 3;
+  const currentIdx =
+    stage === "Approved" ? total : stage === "Ready for Review" ? 5 : 3;
 
   return (
     <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
@@ -599,12 +649,19 @@ function SampleHeader({
 
       <div className="grid gap-4 p-4 sm:p-5">
         <div>
-          <p className="text-[11px] font-bold tracking-widest text-muted-foreground">{design.code}</p>
-          <h2 className="mt-0.5 text-xl font-extrabold tracking-tight sm:text-2xl">{design.name}</h2>
+          <p className="text-[11px] font-bold tracking-widest text-muted-foreground">
+            {design.code}
+          </p>
+          <h2 className="mt-0.5 text-xl font-extrabold tracking-tight sm:text-2xl">
+            {design.name}
+          </h2>
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <Fact label="Order Qty (Planned)" value={`${design.orderQuantity.toLocaleString()} Pcs`} />
+          <Fact
+            label="Order Qty (Planned)"
+            value={`${design.orderQuantity.toLocaleString()} Pcs`}
+          />
           <Fact label="Category" value={design.category || "—"} />
           <Fact label="Target Cost (Per Pc)" value={`₹${targetCostPerPc.toLocaleString()}`} />
           <Fact label="Est. Margin" value={estMargin} />
@@ -638,7 +695,12 @@ function SampleHeader({
                     {done ? "✓" : n}
                   </span>
                   {n < total && (
-                    <span className={"h-0.5 flex-1 rounded-full " + (n < currentIdx ? "bg-primary" : "bg-muted")} />
+                    <span
+                      className={
+                        "h-0.5 flex-1 rounded-full " +
+                        (n < currentIdx ? "bg-primary" : "bg-muted")
+                      }
+                    />
                   )}
                 </li>
               );
@@ -661,7 +723,10 @@ function SampleHeader({
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-border bg-background p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-1 truncate text-sm font-bold">{value}</p>
     </div>
   );
