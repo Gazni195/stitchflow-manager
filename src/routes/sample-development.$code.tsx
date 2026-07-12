@@ -928,17 +928,19 @@ function SampleMakingPanel({ design, onContinueToCosting }: { design: Design; on
 
   const heading = previous?.status === "completed" ? "Next Operation" : "Current Operation";
 
+  const currentStep = step;
+
   function startOperation() {
     if (!session.worker) return;
 
     const startedAt = new Date();
 
-    patchSession(step.id, {
+    patchSession(currentStep.id, {
       startedAt,
     });
 
     updateStep.mutate({
-      stepId: step.id,
+      stepId: currentStep.id,
       patch: {
         status: "in-progress",
         assignedTo: session.worker,
@@ -952,7 +954,7 @@ function SampleMakingPanel({ design, onContinueToCosting }: { design: Design; on
     const endedAt = new Date();
 
     updateStep.mutate({
-      stepId: step.id,
+      stepId: currentStep.id,
       patch: {
         status: "completed",
         endDate: endedAt.toISOString().slice(0, 10),
