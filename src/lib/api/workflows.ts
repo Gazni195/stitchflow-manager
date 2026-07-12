@@ -19,6 +19,10 @@ export type WorkflowStep = {
   startDate: string | null;
   endDate: string | null;
   remarks: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  durationSeconds: number | null;
+  hourlyRate: number;
 };
 
 export type DesignWorkflow = {
@@ -43,6 +47,10 @@ type DbStep = {
   start_date: string | null;
   end_date: string | null;
   remarks: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  hourly_rate: number | string | null;
 };
 
 function mapStep(r: DbStep): WorkflowStep {
@@ -60,8 +68,13 @@ function mapStep(r: DbStep): WorkflowStep {
     startDate: r.start_date,
     endDate: r.end_date,
     remarks: r.remarks,
+    startedAt: r.started_at,
+    completedAt: r.completed_at,
+    durationSeconds: r.duration_seconds,
+    hourlyRate: r.hourly_rate == null ? 150 : Number(r.hourly_rate),
   };
 }
+
 
 export function useWorkflows(designId: string | undefined) {
   return useQuery({
