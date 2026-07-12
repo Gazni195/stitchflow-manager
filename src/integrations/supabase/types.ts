@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      design_materials: {
+        Row: {
+          created_at: string
+          design_id: string
+          group_name: string
+          id: string
+          material_id: string
+          quantity: number
+          rate: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          design_id: string
+          group_name: string
+          id?: string
+          material_id: string
+          quantity?: number
+          rate?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          design_id?: string
+          group_name?: string
+          id?: string
+          material_id?: string
+          quantity?: number
+          rate?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_materials_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_materials_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       design_workflows: {
         Row: {
           created_at: string
@@ -99,6 +147,36 @@ export type Database = {
           parts?: Json
           product_type?: string
           status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      materials: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          rate: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name: string
+          rate?: number
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          rate?: number
+          unit?: string
           updated_at?: string
         }
         Relationships: []
