@@ -28,6 +28,14 @@ import { useRequireAuth } from "@/hooks/use-auth";
 import { useDesignByCode } from "@/lib/api/designs";
 import { useAddOperation, useOperationCatalog, type CatalogOperation } from "@/lib/api/operations";
 import {
+  useAddDesignMaterial,
+  useDeleteDesignMaterial,
+  useDesignMaterials,
+  useMaterials,
+  useUpdateDesignMaterial,
+  type Material,
+} from "@/lib/api/materials";
+import {
   useAddStep,
   useDeleteStep,
   useUpdateStep,
@@ -252,27 +260,24 @@ function StatusPanel({ design, stage }: { design: Design; stage: "In Development
   );
 }
 
-/* ---------- Materials (Phase 1: flexible Material Groups, manual entry) ---------- */
+/* ---------- Materials (Select from Material Master, persisted) ---------- */
 //
-// Material Groups are independent of the design's garment parts. Top/Pant/
-// Shawl are always-present defaults — enable/disable only, never deleted.
-// Lining/Lace/Accessories are optional and start disabled; users can also
-// add fully custom groups, which behave the same way (enable/disable, no
-// delete). Every row's fields (code/name/quantity/unit) mirror what an
-// ERPNext stock item search would eventually return, and `source` is ready
-// to flip from "manual" to "erpnext" per row — so a later inventory
-// integration can autofill these same fields instead of manual typing,
-// without changing this UI. No stock/lot lookup is implemented yet.
-
-type MaterialSource = "manual" | "erpnext";
+// Material Groups (Top/Pant/Shawl always-present, Lining/Lace/Accessories
+// optional, plus custom ones) are still a client-side organizing shell —
+// but every row inside them is now a real design_materials record: pick a
+// Material from the (locally stored) Material Master, enter Quantity, and
+// Rate/Amount are derived automatically (Amount = Quantity x Rate, computed
+// by the database so it can never drift). Saved rows are reloaded and
+// re-grouped by their stored group_name on every visit, so this survives
+// reloads and tab switches — Costing reads the same table for its "Total
+// Material Cost". No ERPNext calls happen here; Material Master is a local
+// list for now, meant to later sync from ERPNext's Item Master.
 
 type MaterialRowState = {
   id: string;
-  materialCode: string;
-  materialName: string;
+  designMaterialId: string | null;
+  materialId: string;
   quantity: number;
-  unit: string;
-  source: MaterialSource;
   editing: boolean;
 };
 
@@ -284,22 +289,12 @@ type MaterialGroupState = {
   rows: MaterialRowState[];
 };
 
-const UNIT_OPTIONS = ["Meter", "Pcs", "Yard", "Kg", "Set", "Roll"];
-
 function newGroup(name: string, enabled: boolean, expanded = false): MaterialGroupState {
   return { id: crypto.randomUUID(), name, enabled, expanded, rows: [] };
 }
 
 function newRow(): MaterialRowState {
-  return {
-    id: crypto.randomUUID(),
-    materialCode: "",
-    materialName: "",
-    quantity: 0,
-    unit: "Meter",
-    source: "manual",
-    editing: true,
-  };
+  return { id: crypto.randomUUID(), designMaterialId: null, materialId: "", quantity: 0, editing: true };
 }
 
 function initialGroups(): MaterialGroupState[] {
@@ -315,9 +310,43 @@ function initialGroups(): MaterialGroupState[] {
 
 function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: () => void }) {
   const [groups, setGroups] = useState<MaterialGroupState[]>(initialGroups);
+  const [hydrated, setHydrated] = useState(false);
   const [customName, setCustomName] = useState("");
   const { data: workflows } = useWorkflows(design.id);
   const updateStep = useUpdateStep(design.id);
+  const { data: materials = [] } = useMaterials();
+  const { data: designMaterials = [], isLoading: rowsLoading } = useDesignMaterials(design.id);
+  const addDesignMaterial = useAddDesignMaterial(design.id);
+  const updateDesignMaterial = useUpdateDesignMaterial(design.id);
+  const deleteDesignMaterial = useDeleteDesignMaterial(design.id);
+
+  // Fold previously-saved rows into the group shell once, on first load —
+  // enabling any group (default or custom) that already has saved rows.
+  useEffect(() => {
+    if (hydrated || rowsLoading) return;
+    if (designMaterials.length > 0) {
+      setGroups((prev) => {
+        const next = prev.map((g) => ({ ...g, rows: [] as MaterialRowState[] }));
+        for (const dm of designMaterials) {
+          let group = next.find((g) => g.name.toLowerCase() === dm.groupName.toLowerCase());
+          if (!group) {
+            group = newGroup(dm.groupName, true, false);
+            next.push(group);
+          }
+          group.enabled = true;
+          group.rows.push({
+            id: crypto.randomUUID(),
+            designMaterialId: dm.id,
+            materialId: dm.materialId,
+            quantity: dm.quantity,
+            editing: false,
+          });
+        }
+        return next;
+      });
+    }
+    setHydrated(true);
+  }, [designMaterials, rowsLoading, hydrated]);
 
   function updateGroup(id: string, patch: Partial<MaterialGroupState>) {
     setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
@@ -335,20 +364,45 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
       prev.map((g) => (g.id === groupId ? { ...g, expanded: true, rows: [...g.rows, newRow()] } : g)),
     );
   }
-  function updateRow(groupId: string, rowId: string, patch: Partial<MaterialRowState>) {
+  function patchRow(groupId: string, rowId: string, patch: Partial<MaterialRowState>) {
     setGroups((prev) =>
       prev.map((g) =>
         g.id === groupId ? { ...g, rows: g.rows.map((r) => (r.id === rowId ? { ...r, ...patch } : r)) } : g,
       ),
     );
   }
-  function removeRow(groupId: string, rowId: string) {
-    setGroups((prev) => prev.map((g) => (g.id === groupId ? { ...g, rows: g.rows.filter((r) => r.id !== rowId) } : g)));
+  async function saveRow(group: MaterialGroupState, row: MaterialRowState) {
+    const material = materials.find((m) => m.id === row.materialId);
+    if (!material || row.quantity <= 0) return;
+    if (row.designMaterialId) {
+      await updateDesignMaterial.mutateAsync({
+        id: row.designMaterialId,
+        patch: { materialId: row.materialId, groupName: group.name, quantity: row.quantity, rate: material.rate },
+      });
+      patchRow(group.id, row.id, { editing: false });
+    } else {
+      const id = await addDesignMaterial.mutateAsync({
+        materialId: row.materialId,
+        groupName: group.name,
+        quantity: row.quantity,
+        rate: material.rate,
+      });
+      patchRow(group.id, row.id, { editing: false, designMaterialId: id });
+    }
+  }
+  async function removeRow(groupId: string, row: MaterialRowState) {
+    if (row.designMaterialId) {
+      await deleteDesignMaterial.mutateAsync(row.designMaterialId);
+    }
+    setGroups((prev) =>
+      prev.map((g) => (g.id === groupId ? { ...g, rows: g.rows.filter((r) => r.id !== row.id) } : g)),
+    );
   }
 
   const enabledGroups = groups.filter((g) => g.enabled);
   const allRequiredMaterialsSaved =
     enabledGroups.length > 0 && enabledGroups.every((g) => g.rows.length > 0 && g.rows.every((r) => !r.editing));
+  const busy = addDesignMaterial.isPending || updateDesignMaterial.isPending || deleteDesignMaterial.isPending;
 
   // The real, saved sample workflow may or may not include a Fabric/Material
   // Selection step (workflows are user-configured). When it does, completing
@@ -366,15 +420,35 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
 
   return (
     <div className="grid gap-2">
+      <Link
+        to="/material-master"
+        className="inline-flex w-fit items-center gap-1.5 text-[11px] font-semibold text-primary hover:underline"
+      >
+        Manage Material Master →
+      </Link>
+
+      {materials.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-border bg-card p-3 text-center text-xs text-muted-foreground">
+          No materials in the Material Master yet.{" "}
+          <Link to="/material-master" className="font-semibold text-primary hover:underline">
+            Add some
+          </Link>{" "}
+          before selecting.
+        </div>
+      )}
+
       {groups.map((group) => (
         <MaterialGroupCard
           key={group.id}
           group={group}
+          materials={materials}
+          busy={busy}
           onToggleExpanded={() => updateGroup(group.id, { expanded: !group.expanded })}
           onToggleEnabled={(enabled) => updateGroup(group.id, { enabled })}
           onAddRow={() => addRow(group.id)}
-          onUpdateRow={(rowId, patch) => updateRow(group.id, rowId, patch)}
-          onRemoveRow={(rowId) => removeRow(group.id, rowId)}
+          onPatchRow={(rowId, patch) => patchRow(group.id, rowId, patch)}
+          onSaveRow={(row) => saveRow(group, row)}
+          onRemoveRow={(row) => removeRow(group.id, row)}
         />
       ))}
 
@@ -431,18 +505,24 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
 
 function MaterialGroupCard({
   group,
+  materials,
+  busy,
   onToggleExpanded,
   onToggleEnabled,
   onAddRow,
-  onUpdateRow,
+  onPatchRow,
+  onSaveRow,
   onRemoveRow,
 }: {
   group: MaterialGroupState;
+  materials: Material[];
+  busy: boolean;
   onToggleExpanded: () => void;
   onToggleEnabled: (enabled: boolean) => void;
   onAddRow: () => void;
-  onUpdateRow: (rowId: string, patch: Partial<MaterialRowState>) => void;
-  onRemoveRow: (rowId: string) => void;
+  onPatchRow: (rowId: string, patch: Partial<MaterialRowState>) => void;
+  onSaveRow: (row: MaterialRowState) => void;
+  onRemoveRow: (row: MaterialRowState) => void;
 }) {
   return (
     <div
@@ -482,8 +562,11 @@ function MaterialGroupCard({
               <MaterialRowItem
                 key={row.id}
                 row={row}
-                onChange={(patch) => onUpdateRow(row.id, patch)}
-                onDelete={() => onRemoveRow(row.id)}
+                materials={materials}
+                busy={busy}
+                onPatch={(patch) => onPatchRow(row.id, patch)}
+                onSave={() => onSaveRow(row)}
+                onDelete={() => onRemoveRow(row)}
               />
             ))
           )}
@@ -501,27 +584,36 @@ function MaterialGroupCard({
 
 function MaterialRowItem({
   row,
-  onChange,
+  materials,
+  busy,
+  onPatch,
+  onSave,
   onDelete,
 }: {
   row: MaterialRowState;
-  onChange: (patch: Partial<MaterialRowState>) => void;
+  materials: Material[];
+  busy: boolean;
+  onPatch: (patch: Partial<MaterialRowState>) => void;
+  onSave: () => void;
   onDelete: () => void;
 }) {
-  const valid = row.materialCode.trim() !== "" && row.materialName.trim() !== "" && row.quantity > 0;
+  const selected = materials.find((m) => m.id === row.materialId);
+  const amount = (selected?.rate ?? 0) * row.quantity;
+  const valid = !!row.materialId && row.quantity > 0;
 
   if (!row.editing) {
     return (
       <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{row.materialName}</p>
+          <p className="truncate text-sm font-semibold">{selected?.name ?? "Unknown material"}</p>
           <p className="truncate text-[11px] text-muted-foreground">
-            {row.materialCode} · {row.quantity} {row.unit}
+            {row.quantity} {selected?.unit ?? ""} × ₹{(selected?.rate ?? 0).toLocaleString()} = ₹
+            {amount.toLocaleString()}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button
-            onClick={() => onChange({ editing: true })}
+            onClick={() => onPatch({ editing: true })}
             aria-label="Edit material"
             className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-primary"
           >
@@ -541,19 +633,24 @@ function MaterialRowItem({
 
   return (
     <div className="rounded-xl border border-primary/30 bg-primary-soft/30 p-2.5">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <CompactField
-          label="Material Code"
-          value={row.materialCode}
-          placeholder="MAT-1001"
-          onChange={(v) => onChange({ materialCode: v })}
-        />
-        <CompactField
-          label="Material Name"
-          value={row.materialName}
-          placeholder="Silk Chanderi"
-          onChange={(v) => onChange({ materialName: v })}
-        />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <label className="block min-w-0 sm:col-span-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Select Material
+          </span>
+          <select
+            value={row.materialId}
+            onChange={(e) => onPatch({ materialId: e.target.value })}
+            className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+          >
+            <option value="">Select Material</option>
+            {materials.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} ({m.unit})
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="block min-w-0">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quantity</span>
           <input
@@ -562,33 +659,25 @@ function MaterialRowItem({
             step={0.25}
             inputMode="decimal"
             value={row.quantity || ""}
-            onChange={(e) => onChange({ quantity: Math.max(0, Number(e.target.value) || 0) })}
+            onChange={(e) => onPatch({ quantity: Math.max(0, Number(e.target.value) || 0) })}
             placeholder="0.00"
             className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
           />
         </label>
-        <label className="block min-w-0">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unit</span>
-          <select
-            value={row.unit}
-            onChange={(e) => onChange({ unit: e.target.value })}
-            className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
-          >
-            {UNIT_OPTIONS.map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <StatusTile label="Rate" value={selected ? `₹${selected.rate.toLocaleString()}` : "—"} />
+        <StatusTile label="Amount" value={selected ? `₹${amount.toLocaleString()}` : "—"} mono />
+      </div>
+
       <div className="mt-2 flex gap-2">
         <button
-          onClick={() => onChange({ editing: false })}
-          disabled={!valid}
+          onClick={onSave}
+          disabled={!valid || busy}
           className="flex-1 rounded-xl bg-primary py-2 text-xs font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Save
+          {busy ? "Saving…" : "Save"}
         </button>
         <button
           onClick={onDelete}
@@ -599,30 +688,6 @@ function MaterialRowItem({
         </button>
       </div>
     </div>
-  );
-}
-
-function CompactField({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <label className="block min-w-0">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
-      />
-    </label>
   );
 }
 
@@ -708,8 +773,15 @@ function formatMs(ms: number): string {
   return `${pad(Math.floor(totalSeconds / 3600))}:${pad(Math.floor((totalSeconds % 3600) / 60))}:${pad(totalSeconds % 60)}`;
 }
 
-
-
+// Friendly "1h 30m" — used for finished durations in the Workflow Timeline.
+function formatHM(ms: number): string {
+  const totalMinutes = Math.max(0, Math.round(ms / 60000));
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
 
 // Elapsed time excluding any paused stretches: frozen at pausedAt while
 // paused, frozen at completedAt once done, otherwise counts up to `at`.
@@ -727,48 +799,6 @@ function operationName(step: WorkflowStep, catalog: CatalogOperation[]): string 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
-
-const DEFAULT_HOURLY_RATE = 150;
-
-// Duration in seconds preferring persisted actuals, falling back to live session.
-function stepDurationSeconds(step: WorkflowStep, session: OperationSession | undefined): number | null {
-  if (step.durationSeconds != null) return step.durationSeconds;
-  if (step.startedAt && step.completedAt) {
-    return Math.max(0, Math.round((new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime()) / 1000));
-  }
-  if (session?.startedAt && session?.completedAt) {
-    return Math.max(0, Math.round(elapsedMs(session, session.completedAt) / 1000));
-  }
-  return null;
-}
-
-function stepLabourCost(step: WorkflowStep, session?: OperationSession): number {
-  const secs = stepDurationSeconds(step, session);
-  if (secs == null) return 0;
-  const rate = step.hourlyRate || DEFAULT_HOURLY_RATE;
-  return (secs / 3600) * rate;
-}
-
-function formatCurrency(n: number): string {
-  return `₹${Math.round(n).toLocaleString()}`;
-}
-
-function formatIsoClock(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  return formatClock(d);
-}
-
-function formatDurationSeconds(seconds: number | null): string {
-  if (seconds == null) return "—";
-  const minutes = Math.max(0, Math.round(seconds / 60));
-  if (minutes < 60) return `${minutes} min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
-}
-
 
 function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue: () => void }) {
   const { data: workflows, isLoading } = useWorkflows(design.id);
@@ -802,7 +832,7 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
           next[s.id] = {
             ...(next[s.id] ?? emptySession()),
             workers: next[s.id]?.workers.length ? next[s.id].workers : parseWorkers(s.assignedTo),
-            startedAt: s.startedAt ? new Date(s.startedAt) : new Date(),
+            startedAt: new Date(),
             pausedAt: null,
             pausedMs: 0,
           };
@@ -843,8 +873,7 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       ? `Est. ${session.estimatedHours.trim()} hr${session.estimatedHours.trim() === "1" ? "" : "s"}`
       : "";
     const remarks = [hoursNote, session.remarks.trim()].filter(Boolean).join(" · ");
-    const now = new Date();
-    patchSession(step.id, { startedAt: now, pausedAt: null, pausedMs: 0, completedAt: null });
+    patchSession(step.id, { startedAt: new Date(), pausedAt: null, pausedMs: 0, completedAt: null });
     updateStep.mutate({
       stepId: step.id,
       patch: {
@@ -852,9 +881,6 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
         assignedTo: joinWorkers(session.workers),
         remarks: remarks || null,
         startDate: today(),
-        startedAt: now.toISOString(),
-        completedAt: null,
-        durationSeconds: null,
       },
     });
   }
@@ -873,39 +899,17 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   function cancel(step: WorkflowStep) {
     if (!window.confirm(`Cancel "${operationName(step, catalog)}"? It will move back to Pending.`)) return;
     patchSession(step.id, { startedAt: null, pausedAt: null, pausedMs: 0, completedAt: null });
-    updateStep.mutate({
-      stepId: step.id,
-      patch: { status: "pending", startDate: null, startedAt: null, completedAt: null, durationSeconds: null },
-    });
+    updateStep.mutate({ stepId: step.id, patch: { status: "pending", startDate: null } });
   }
 
   function complete(step: WorkflowStep) {
-    const session = sessions[step.id] ?? emptySession();
-    const now = new Date();
-    const startedAtIso = step.startedAt ?? session.startedAt?.toISOString() ?? now.toISOString();
-    const durationSeconds = Math.max(
-      0,
-      Math.round((now.getTime() - new Date(startedAtIso).getTime() - session.pausedMs) / 1000),
-    );
-    patchSession(step.id, { completedAt: now, pausedAt: null });
-    updateStep.mutate({
-      stepId: step.id,
-      patch: {
-        status: "completed",
-        endDate: today(),
-        completedAt: now.toISOString(),
-        startedAt: startedAtIso,
-        durationSeconds,
-      },
-    });
+    patchSession(step.id, { completedAt: new Date(), pausedAt: null });
+    updateStep.mutate({ stepId: step.id, patch: { status: "completed", endDate: today() } });
   }
 
   function reopen(step: WorkflowStep) {
     patchSession(step.id, { startedAt: null, pausedAt: null, pausedMs: 0, completedAt: null });
-    updateStep.mutate({
-      stepId: step.id,
-      patch: { status: "pending", endDate: null, completedAt: null, durationSeconds: null },
-    });
+    updateStep.mutate({ stepId: step.id, patch: { status: "pending", endDate: null } });
   }
 
   function removeStep(step: WorkflowStep) {
@@ -959,7 +963,6 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
 
   return (
     <div className="grid gap-4">
-      {/* Running Operations — add process stays in the header */}
       <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Running Operations</p>
@@ -999,32 +1002,6 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
         )}
       </div>
 
-      {/* Pending Operations — newly created processes land here */}
-      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Pending Operations</p>
-        {pending.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">No pending operations.</p>
-        ) : (
-          <div className="mt-3 grid gap-3">
-            {pending.map((step) => (
-              <PendingOperationCard
-                key={step.id}
-                step={step}
-                catalog={catalog}
-                session={sessions[step.id] ?? emptySession()}
-                busy={updateStep.isPending}
-                onAddWorker={(w) => addWorker(step, w)}
-                onRemoveWorker={(w) => removeWorker(step, w)}
-                onHoursChange={(v) => patchSession(step.id, { estimatedHours: v })}
-                onStart={() => start(step)}
-                onEdit={() => setEditingId(step.id)}
-                onDelete={() => removeStep(step)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
       <div className="flex justify-end">
         <button
           onClick={onContinue}
@@ -1033,6 +1010,19 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
           Continue to Costing <ArrowRight className="h-4 w-4" />
         </button>
       </div>
+
+      <PendingOperationsSection
+        pending={pending}
+        catalog={catalog}
+        sessions={sessions}
+        busy={updateStep.isPending}
+        onAddWorker={addWorker}
+        onRemoveWorker={removeWorker}
+        onHoursChange={(step, v) => patchSession(step.id, { estimatedHours: v })}
+        onStart={start}
+        onEdit={setEditingId}
+        onDelete={removeStep}
+      />
 
       <WorkflowTimeline
         history={history}
@@ -1225,6 +1215,64 @@ function RunningOperationCard({
   );
 }
 
+// Its own section, directly below Running Operations — compact Pending
+// rows (Start / Edit / Delete) live here now instead of inside the
+// Workflow Timeline, which is reserved for completed/skipped/deleted
+// history. Same PendingTimelineRow component and callbacks as before,
+// just relocated: no business logic changed, only placement.
+function PendingOperationsSection({
+  pending,
+  catalog,
+  sessions,
+  busy,
+  onAddWorker,
+  onRemoveWorker,
+  onHoursChange,
+  onStart,
+  onEdit,
+  onDelete,
+}: {
+  pending: WorkflowStep[];
+  catalog: CatalogOperation[];
+  sessions: Record<string, OperationSession>;
+  busy: boolean;
+  onAddWorker: (step: WorkflowStep, worker: string) => void;
+  onRemoveWorker: (step: WorkflowStep, worker: string) => void;
+  onHoursChange: (step: WorkflowStep, value: string) => void;
+  onStart: (step: WorkflowStep) => void;
+  onEdit: (stepId: string) => void;
+  onDelete: (step: WorkflowStep) => void;
+}) {
+  return (
+    <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
+      <p className="text-sm font-bold">Pending Operations</p>
+      {pending.length === 0 ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Nothing pending. Use "+ Add Process" above to queue one up.
+        </p>
+      ) : (
+        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+          {pending.map((step) => (
+            <PendingTimelineRow
+              key={step.id}
+              step={step}
+              catalog={catalog}
+              session={sessions[step.id] ?? emptySession()}
+              busy={busy}
+              onAddWorker={(w) => onAddWorker(step, w)}
+              onRemoveWorker={(w) => onRemoveWorker(step, w)}
+              onHoursChange={(v) => onHoursChange(step, v)}
+              onStart={() => onStart(step)}
+              onEdit={() => onEdit(step.id)}
+              onDelete={() => onDelete(step)}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function WorkflowTimeline({
   history,
   catalog,
@@ -1238,47 +1286,30 @@ function WorkflowTimeline({
   onEdit: (stepId: string) => void;
   onReopen: (step: WorkflowStep) => void;
 }) {
-  const totalLabour = history
-    .filter((s) => s.status === "completed")
-    .reduce((sum, s) => sum + stepLabourCost(s, sessions[s.id]), 0);
-
-  if (history.length === 0) {
-    return (
-      <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
-        <p className="text-sm font-bold">Workflow Timeline</p>
-        <p className="mt-2 text-sm text-muted-foreground">Completed operations will appear here.</p>
-      </div>
-    );
-  }
-
   return (
     <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-bold">Workflow Timeline</p>
-        {totalLabour > 0 && (
-          <span className="rounded-full bg-primary-soft px-3 py-1 text-[11px] font-bold text-primary">
-            Total Labour · {formatCurrency(totalLabour)}
-          </span>
-        )}
-      </div>
-      <ul className="mt-3 grid gap-2">
-
-        {history.map((step) => (
-          <HistoryTimelineRow
-            key={step.id}
-            step={step}
-            catalog={catalog}
-            session={sessions[step.id]}
-            onEdit={() => onEdit(step.id)}
-            onReopen={() => onReopen(step)}
-          />
-        ))}
-      </ul>
+      <p className="text-sm font-bold">Workflow Timeline</p>
+      {history.length === 0 ? (
+        <p className="mt-2 text-sm text-muted-foreground">No completed operations yet.</p>
+      ) : (
+        <ul className="mt-3 grid gap-2">
+          {history.map((step) => (
+            <HistoryTimelineRow
+              key={step.id}
+              step={step}
+              catalog={catalog}
+              session={sessions[step.id]}
+              onEdit={() => onEdit(step.id)}
+              onReopen={() => onReopen(step)}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
 
-function PendingOperationCard({
+function PendingTimelineRow({
   step,
   catalog,
   session,
@@ -1307,16 +1338,13 @@ function PendingOperationCard({
   const Icon = op?.icon;
 
   return (
-    <div className="rounded-2xl border border-border bg-background p-3">
-      <div className="flex items-start justify-between gap-3">
+    <li className="rounded-xl border border-border bg-background p-3">
+      <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary">
-            {Icon ? <Icon className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary">
+            {Icon ? <Icon className="h-3.5 w-3.5" /> : <Scissors className="h-3.5 w-3.5" />}
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold">{opName}</p>
-            <p className="text-[11px] text-muted-foreground">Status: Pending</p>
-          </div>
+          <p className="truncate text-sm font-bold">{opName}</p>
         </div>
         <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
           Pending
@@ -1367,28 +1395,28 @@ function PendingOperationCard({
           </div>
         </div>
       ) : (
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-2 flex items-center gap-1.5">
           <button
             onClick={() => setStarting(true)}
-            className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:opacity-90"
+            className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground hover:opacity-90"
           >
             ▶ Start
           </button>
           <button
             onClick={onEdit}
-            className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-accent hover:text-primary"
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-primary"
           >
             <Pencil className="h-3 w-3" /> Edit
           </button>
           <button
             onClick={onDelete}
-            className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
           >
             <Trash2 className="h-3 w-3" /> Delete
           </button>
         </div>
       )}
-    </div>
+    </li>
   );
 }
 
@@ -1421,47 +1449,18 @@ function HistoryTimelineRow({
   }
 
   const workers = session?.workers.length ? session.workers : parseWorkers(step.assignedTo);
-  const durationSecs = stepDurationSeconds(step, session);
-  const duration = formatDurationSeconds(durationSecs);
-  const start =
-    formatIsoClock(step.startedAt) ?? (session?.startedAt ? formatClock(session.startedAt) : step.startDate || "—");
-  const end =
-    formatIsoClock(step.completedAt) ?? (session?.completedAt ? formatClock(session.completedAt) : step.endDate || "—");
-  const isCompleted = step.status === "completed";
-  const labour = isCompleted ? stepLabourCost(step, session) : 0;
-  const rate = step.hourlyRate || DEFAULT_HOURLY_RATE;
+  const duration = session?.startedAt && session?.completedAt ? formatHM(elapsedMs(session, session.completedAt)) : "—";
+  const start = session?.startedAt ? formatClock(session.startedAt) : step.startDate || "—";
+  const end = session?.completedAt ? formatClock(session.completedAt) : step.endDate || "—";
 
   return (
     <li className="rounded-xl border border-border bg-background p-3">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0">
           <p className="truncate text-sm font-bold">✓ {opName}</p>
           <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-            {workers.length ? `Workers: ${workers.join(", ")}` : "Unassigned"}
+            {workers.length ? `Workers: ${workers.join(", ")}` : "Unassigned"} · {start} → {end} · {duration}
           </p>
-          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] sm:grid-cols-4">
-            <div>
-              <span className="block font-semibold text-muted-foreground">Started</span>
-              <span className="font-bold">{start}</span>
-            </div>
-            <div>
-              <span className="block font-semibold text-muted-foreground">Completed</span>
-              <span className="font-bold">{end}</span>
-            </div>
-            <div>
-              <span className="block font-semibold text-muted-foreground">Duration</span>
-              <span className="font-bold">{duration}</span>
-            </div>
-            {isCompleted && (
-              <div>
-                <span className="block font-semibold text-muted-foreground">Labour Cost</span>
-                <span className="font-bold text-primary">
-                  {formatCurrency(labour)}
-                  <span className="ml-1 text-[10px] font-medium text-muted-foreground">@ ₹{rate}/hr</span>
-                </span>
-              </div>
-            )}
-          </div>
         </div>
         <span className="shrink-0 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">
           {step.status === "skipped" ? "Skipped" : "Completed"}
@@ -1718,37 +1717,23 @@ function StatusTile({ label, value, mono }: { label: string; value: string; mono
 /* ---------- Costing ---------- */
 
 function CostingPanel({ design }: { design: Design }) {
-  const { data: workflows } = useWorkflows(design.id);
-  const sample = workflows?.find((w) => w.kind === "sample");
-  const completedSteps = (sample?.steps ?? []).filter((s) => s.status === "completed");
-  // Total labour cost across the order = sum of per-operation labour costs.
-  const labourTotal = completedSteps.reduce((sum, s) => sum + stepLabourCost(s), 0);
-  const labourPerPiece = design.orderQuantity > 0 ? labourTotal / design.orderQuantity : 0;
+  const { data: designMaterials = [] } = useDesignMaterials(design.id);
+  const materialCost = designMaterials.reduce((s, m) => s + m.amount, 0);
 
   const [costs, setCosts] = useState<
-    { id: string; label: string; category: "Material" | "Labor" | "Overhead" | "Other"; amount: number; readOnly?: boolean }[]
+    { id: string; label: string; category: "Labor" | "Overhead" | "Other"; amount: number }[]
   >(() => [
-    { id: "c1", label: "Material (est.)", category: "Material", amount: 0 },
+    { id: "c2", label: "Stitching", category: "Labor", amount: 0 },
     { id: "c3", label: "Overheads", category: "Overhead", amount: 0 },
   ]);
 
-  // Merge auto labour with manual rows for display + totals.
-  const rows: {
-    id: string;
-    label: string;
-    category: "Material" | "Labor" | "Overhead" | "Other";
-    amount: number;
-    readOnly?: boolean;
-  }[] = [
-    ...costs.filter((c) => c.category !== "Labor"),
-    {
-      id: "labour-auto",
-      label: `Labour (Auto · ${completedSteps.length} op${completedSteps.length === 1 ? "" : "s"})`,
-      category: "Labor" as const,
-      amount: labourPerPiece,
-      readOnly: true,
-    },
-  ];
+  const materialRow = {
+    id: "material",
+    label: "Material (from Material Selection)",
+    category: "Material" as const,
+    amount: materialCost,
+  };
+  const rows: { id: string; label: string; category: string; amount: number }[] = [materialRow, ...costs];
 
   const perPiece = rows.reduce((s, c) => s + c.amount, 0);
   const orderTotal = perPiece * design.orderQuantity;
@@ -1774,9 +1759,12 @@ function CostingPanel({ design }: { design: Design }) {
                 <td className="p-3 font-semibold">{c.label}</td>
                 <td className="p-3 text-muted-foreground">{c.category}</td>
                 <td className="p-3 text-right">
-                  {c.readOnly ? (
-                    <span className="inline-flex w-28 items-center justify-end rounded-lg bg-primary-soft px-2 py-1.5 text-right text-sm font-bold text-primary">
-                      ₹{c.amount.toFixed(2)}
+                  {c.id === "material" ? (
+                    <span
+                      className="inline-block w-28 text-right font-bold text-primary"
+                      title="Auto-calculated from Material Selection"
+                    >
+                      ₹{c.amount.toLocaleString()}
                     </span>
                   ) : (
                     <input
@@ -1802,32 +1790,11 @@ function CostingPanel({ design }: { design: Design }) {
               <td className="p-3 font-bold" colSpan={2}>
                 Total per piece
               </td>
-              <td className="p-3 text-right text-lg font-extrabold text-primary">₹{perPiece.toFixed(2)}</td>
+              <td className="p-3 text-right text-lg font-extrabold text-primary">₹{perPiece.toLocaleString()}</td>
             </tr>
           </tfoot>
         </table>
-
-        {completedSteps.length > 0 && (
-          <div className="border-t border-border p-4">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Labour Breakdown (Auto)
-            </p>
-            <ul className="mt-2 grid gap-1.5 text-sm">
-              {completedSteps.map((s) => (
-                <li key={s.id} className="flex items-center justify-between">
-                  <span className="truncate font-semibold">{s.label || s.operationId}</span>
-                  <span className="shrink-0 text-muted-foreground">{formatCurrency(stepLabourCost(s))}</span>
-                </li>
-              ))}
-              <li className="mt-1 flex items-center justify-between border-t border-border pt-2">
-                <span className="font-bold">Total Labour Cost</span>
-                <span className="font-extrabold text-primary">{formatCurrency(labourTotal)}</span>
-              </li>
-            </ul>
-          </div>
-        )}
       </div>
-
 
       <div className="grid gap-3">
         <div className="rounded-2xl border border-border bg-gradient-to-br from-primary to-primary-glow p-5 text-primary-foreground shadow-md">
