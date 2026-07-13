@@ -29,6 +29,7 @@ import { Route as ProductionIndexRouteImport } from './routes/production.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
 import { Route as ProductionReadyRouteImport } from './routes/production.ready'
+import { Route as ProductionPoRouteImport } from './routes/production.$po'
 import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
 import { Route as DesignsCodeWorkflowRouteImport } from './routes/designs.$code.workflow'
 
@@ -132,6 +133,11 @@ const ProductionReadyRoute = ProductionReadyRouteImport.update({
   path: '/production/ready',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProductionPoRoute = ProductionPoRouteImport.update({
+  id: '/production/$po',
+  path: '/production/$po',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DesignsCodeRoute = DesignsCodeRouteImport.update({
   id: '/designs/$code',
   path: '/designs/$code',
@@ -160,6 +166,7 @@ export interface FileRoutesByFullPath {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/production/$po': typeof ProductionPoRoute
   '/production/ready': typeof ProductionReadyRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
@@ -184,6 +191,7 @@ export interface FileRoutesByTo {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/production/$po': typeof ProductionPoRoute
   '/production/ready': typeof ProductionReadyRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs': typeof DesignsIndexRoute
@@ -209,6 +217,7 @@ export interface FileRoutesById {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/production/$po': typeof ProductionPoRoute
   '/production/ready': typeof ProductionReadyRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
@@ -235,6 +244,7 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/production/$po'
     | '/production/ready'
     | '/sample-development/$code'
     | '/designs/'
@@ -259,6 +269,7 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/production/$po'
     | '/production/ready'
     | '/sample-development/$code'
     | '/designs'
@@ -283,6 +294,7 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/production/$po'
     | '/production/ready'
     | '/sample-development/$code'
     | '/designs/'
@@ -308,6 +320,7 @@ export interface RootRouteChildren {
   StitchingRoute: typeof StitchingRoute
   StockRoute: typeof StockRoute
   DesignsCodeRoute: typeof DesignsCodeRouteWithChildren
+  ProductionPoRoute: typeof ProductionPoRoute
   ProductionReadyRoute: typeof ProductionReadyRoute
   SampleDevelopmentCodeRoute: typeof SampleDevelopmentCodeRoute
   DesignsIndexRoute: typeof DesignsIndexRoute
@@ -457,6 +470,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductionReadyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/production/$po': {
+      id: '/production/$po'
+      path: '/production/$po'
+      fullPath: '/production/$po'
+      preLoaderRoute: typeof ProductionPoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/designs/$code': {
       id: '/designs/$code'
       path: '/designs/$code'
@@ -503,6 +523,7 @@ const rootRouteChildren: RootRouteChildren = {
   StitchingRoute: StitchingRoute,
   StockRoute: StockRoute,
   DesignsCodeRoute: DesignsCodeRouteWithChildren,
+  ProductionPoRoute: ProductionPoRoute,
   ProductionReadyRoute: ProductionReadyRoute,
   SampleDevelopmentCodeRoute: SampleDevelopmentCodeRoute,
   DesignsIndexRoute: DesignsIndexRoute,
