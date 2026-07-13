@@ -23,12 +23,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
-import {
-  AREA_TRACKED_OPERATION_IDS,
-  WorkAreaDialog,
-  formatWorkArea,
-  type WorkAreaPayload,
-} from "@/components/WorkAreaDialog";
+import { WorkAreaDialog, formatWorkArea, type WorkAreaPayload } from "@/components/WorkAreaDialog";
 import { Switch } from "@/components/ui/switch";
 import { useRequireAuth } from "@/hooks/use-auth";
 import { useDesignByCode } from "@/lib/api/designs";
@@ -683,8 +678,6 @@ function joinWorkers(workers: string[]): string {
 
 type OperationSession = {
   workers: string[];
-  estimatedHours: string;
-  remarks: string;
   startedAt: Date | null;
   pausedAt: Date | null;
   pausedMs: number;
@@ -694,8 +687,6 @@ type OperationSession = {
 function emptySession(): OperationSession {
   return {
     workers: [],
-    estimatedHours: "",
-    remarks: "",
     startedAt: null,
     pausedAt: null,
     pausedMs: 0,
@@ -842,37 +833,6 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     }
   }
 
-  function start(step: WorkflowStep, override?: WorkAreaPayload) {
-    const currentSession = sessions[step.id] ?? emptySession();
-    const workers = override?.workers ?? currentSession.workers;
-    if (workers.length === 0) return;
-    const hoursNote = currentSession.estimatedHours.trim()
-      ? `Est. ${currentSession.estimatedHours.trim()} hr${currentSession.estimatedHours.trim() === "1" ? "" : "s"}`
-      : "";
-    const remarks = [hoursNote, currentSession.remarks.trim()].filter(Boolean).join(" · ");
-    const now = new Date();
-    patchSession(step.id, { workers, startedAt: now, pausedAt: null, pausedMs: 0, completedAt: null });
-    updateStep.mutate({
-      stepId: step.id,
-      patch: {
-        status: "in-progress",
-        assignedTo: joinWorkers(workers),
-        remarks: remarks || null,
-        startDate: today(),
-        startedAt: now.toISOString(),
-        completedAt: null,
-        durationSeconds: null,
-        ...(override
-          ? {
-              garmentPart: override.garmentPart,
-              workArea: override.workArea,
-              customArea: override.customArea,
-            }
-          : {}),
-      },
-    });
-  }
-
   function pause(step: WorkflowStep) {
     patchSession(step.id, { pausedAt: new Date() });
   }
@@ -884,13 +844,11 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     patchSession(step.id, { pausedAt: null, pausedMs: session.pausedMs + extra });
   }
 
+  // There is no Pending list to move a cancelled operation back to, so
+  // Cancel removes it entirely — same as deleting it.
   function cancel(step: WorkflowStep) {
-    if (!window.confirm(`Cancel "${operationName(step, catalog)}"? It will move back to Pending.`)) return;
-    patchSession(step.id, { startedAt: null, pausedAt: null, pausedMs: 0, completedAt: null });
-    updateStep.mutate({
-      stepId: step.id,
-      patch: { status: "pending", startDate: null, startedAt: null, completedAt: null, durationSeconds: null },
-    });
+    if (!window.confirm(`Cancel "${operationName(step, catalog)}"? This cannot be undone.`)) return;
+    deleteStep.mutate(step.id);
   }
 
   function complete(step: WorkflowStep) {
@@ -914,11 +872,20 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     });
   }
 
+  // Reopening a completed operation puts it straight back into Running with
+  // a fresh timer — there is no Pending state to return it to instead.
   function reopen(step: WorkflowStep) {
-    patchSession(step.id, { startedAt: null, pausedAt: null, pausedMs: 0, completedAt: null });
+    const now = new Date();
+    patchSession(step.id, { startedAt: now, pausedAt: null, pausedMs: 0, completedAt: null });
     updateStep.mutate({
       stepId: step.id,
-      patch: { status: "pending", endDate: null, completedAt: null, durationSeconds: null },
+      patch: {
+        status: "in-progress",
+        endDate: null,
+        startedAt: now.toISOString(),
+        completedAt: null,
+        durationSeconds: null,
+      },
     });
   }
 
@@ -938,8 +905,9 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     setEditingId(null);
   }
 
-  // Picking a process no longer creates a Pending Operation. It just
-  // remembers what was picked and opens the Start Operation popup for it.
+  // Step 1, "Select Operation": picking a process never creates a Pending
+  // Operation. It just remembers what was picked and opens the Start
+  // Operation popup (Garment Part -> Area -> Worker) for it.
   function commitPick(operationId: string) {
     const op = catalog.find((o) => o.id === operationId);
     setNewProcess({ operationId, name: op?.name ?? operationId });
@@ -954,39 +922,25 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
 
   // Creates the workflow step and starts it in one go, only once Start
   // Operation is confirmed. If the popup is cancelled instead, this never
-  // runs, so nothing is ever created.
-  async function createAndStart(
-    operationId: string,
-    workers: string[],
-    opts: { garmentPart?: string; workArea?: string | null; customArea?: string | null; estimatedHours?: string } = {},
-  ) {
-    if (!sample || workers.length === 0) return;
+  // runs, so nothing is ever created — it goes straight into Running.
+  async function createAndStart(operationId: string, payload: WorkAreaPayload) {
+    if (!sample || payload.workers.length === 0) return;
     const nextSeq = ordered.length ? Math.max(...ordered.map((s) => s.sequence)) + 1 : 1;
     const now = new Date();
-    const hours = opts.estimatedHours?.trim() ?? "";
-    const hoursNote = hours ? `Est. ${hours} hr${hours === "1" ? "" : "s"}` : "";
     const stepId = await addStep.mutateAsync({ workflowId: sample.id, operationId, sequence: nextSeq });
-    patchSession(stepId, {
-      workers,
-      estimatedHours: hours,
-      startedAt: now,
-      pausedAt: null,
-      pausedMs: 0,
-      completedAt: null,
-    });
+    patchSession(stepId, { workers: payload.workers, startedAt: now, pausedAt: null, pausedMs: 0, completedAt: null });
     updateStep.mutate({
       stepId,
       patch: {
         status: "in-progress",
-        assignedTo: joinWorkers(workers),
-        remarks: hoursNote || null,
+        assignedTo: joinWorkers(payload.workers),
         startDate: today(),
         startedAt: now.toISOString(),
         completedAt: null,
         durationSeconds: null,
-        ...(opts.garmentPart
-          ? { garmentPart: opts.garmentPart, workArea: opts.workArea ?? null, customArea: opts.customArea ?? null }
-          : {}),
+        garmentPart: payload.garmentPart,
+        workArea: payload.workArea,
+        customArea: payload.customArea,
       },
     });
     setNewProcess(null);
@@ -1003,7 +957,6 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   const busy = updateStep.isPending || addStep.isPending || addOperation.isPending;
   const now = new Date();
 
-  const pending = ordered.filter((s) => s.status === "pending").sort((a, b) => a.sequence - b.sequence);
   const running = ordered
     .filter((s) => s.status === "in-progress")
     .sort((a, b) => (sessions[a.id]?.startedAt?.getTime() ?? 0) - (sessions[b.id]?.startedAt?.getTime() ?? 0));
@@ -1015,17 +968,18 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
 
   return (
     <div className="grid gap-4">
-      {/* Running Operations — add process stays in the header */}
+      {/* The one way to add work: Select Operation -> Garment Part ->
+          Area (Top only) -> Worker -> Start Operation. Goes straight into
+          Running — there is no Pending Operations step in between. */}
+      <button
+        onClick={() => setPickerOpen(true)}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-base font-bold text-primary-foreground shadow-sm hover:opacity-90"
+      >
+        ▶ Start Process
+      </button>
+
       <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Running Operations</p>
-          <button
-            onClick={() => setPickerOpen(true)}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-dashed border-border bg-background px-3 py-1.5 text-[11px] font-bold text-primary hover:bg-primary-soft/40"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add Process
-          </button>
-        </div>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Running Operations</p>
         {running.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">No operations running right now.</p>
         ) : (
@@ -1055,32 +1009,6 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
         )}
       </div>
 
-      {/* Pending Operations — newly created processes land here */}
-      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Pending Operations</p>
-        {pending.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">No pending operations.</p>
-        ) : (
-          <div className="mt-3 grid gap-3">
-            {pending.map((step) => (
-              <PendingOperationCard
-                key={step.id}
-                step={step}
-                catalog={catalog}
-                session={sessions[step.id] ?? emptySession()}
-                busy={updateStep.isPending}
-                onAddWorker={(w) => addWorker(step, w)}
-                onRemoveWorker={(w) => removeWorker(step, w)}
-                onHoursChange={(v) => patchSession(step.id, { estimatedHours: v })}
-                onStart={(payload) => start(step, payload)}
-                onEdit={() => setEditingId(step.id)}
-                onDelete={() => removeStep(step)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
       <div className="flex justify-end">
         <button
           onClick={onContinue}
@@ -1100,7 +1028,7 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
 
       {pickerOpen && (
         <OperationPickerModal
-          title="Add Process"
+          title="Select Operation"
           catalog={catalog}
           busy={busy}
           onPick={commitPick}
@@ -1109,29 +1037,13 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
         />
       )}
 
-      {newProcess && AREA_TRACKED_OPERATION_IDS.has(newProcess.operationId) && (
+      {newProcess && (
         <WorkAreaDialog
           operationName={newProcess.name}
           workerOptions={WORKERS}
           busy={busy}
           onCancel={() => setNewProcess(null)}
-          onConfirm={(payload) =>
-            createAndStart(newProcess.operationId, payload.workers, {
-              garmentPart: payload.garmentPart,
-              workArea: payload.workArea,
-              customArea: payload.customArea,
-            })
-          }
-        />
-      )}
-
-      {newProcess && !AREA_TRACKED_OPERATION_IDS.has(newProcess.operationId) && (
-        <StartWorkersDialog
-          operationName={newProcess.name}
-          workerOptions={WORKERS}
-          busy={busy}
-          onCancel={() => setNewProcess(null)}
-          onConfirm={(workers, estimatedHours) => createAndStart(newProcess.operationId, workers, { estimatedHours })}
+          onConfirm={(payload) => createAndStart(newProcess.operationId, payload)}
         />
       )}
 
@@ -1366,136 +1278,6 @@ function WorkflowTimeline({
   );
 }
 
-function PendingOperationCard({
-  step,
-  catalog,
-  session,
-  busy,
-  onAddWorker,
-  onRemoveWorker,
-  onHoursChange,
-  onStart,
-  onEdit,
-  onDelete,
-}: {
-  step: WorkflowStep;
-  catalog: CatalogOperation[];
-  session: OperationSession;
-  busy: boolean;
-  onAddWorker: (worker: string) => void;
-  onRemoveWorker: (worker: string) => void;
-  onHoursChange: (value: string) => void;
-  onStart: (payload?: WorkAreaPayload) => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const [starting, setStarting] = useState(false);
-  const [areaOpen, setAreaOpen] = useState(false);
-  const op = catalog.find((o) => o.id === step.operationId);
-  const opName = operationName(step, catalog);
-  const Icon = op?.icon;
-  const requiresArea = AREA_TRACKED_OPERATION_IDS.has(step.operationId);
-
-  return (
-    <div className="rounded-2xl border border-border bg-background p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary">
-            {Icon ? <Icon className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold">{opName}</p>
-            <p className="text-[11px] text-muted-foreground">Status: Pending</p>
-          </div>
-        </div>
-        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
-          Pending
-        </span>
-      </div>
-
-      {starting && !requiresArea ? (
-        <div className="mt-3 grid gap-2.5">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Workers</span>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-              <WorkerChips workers={session.workers} onRemove={onRemoveWorker} />
-              <AddWorkerControl workers={session.workers} onAdd={onAddWorker} />
-            </div>
-          </div>
-          <label className="block w-40">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Estimated Hours
-            </span>
-            <input
-              type="number"
-              min={0}
-              step={0.5}
-              inputMode="decimal"
-              placeholder="e.g. 2"
-              value={session.estimatedHours}
-              onChange={(e) => onHoursChange(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-1.5 text-sm font-semibold outline-none focus:border-primary"
-            />
-          </label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                onStart();
-                setStarting(false);
-              }}
-              disabled={session.workers.length === 0 || busy}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} ▶ Confirm Start
-            </button>
-            <button
-              onClick={() => setStarting(false)}
-              className="rounded-xl border border-border px-3 py-1.5 text-[11px] font-semibold hover:bg-accent"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-3 flex items-center gap-2">
-          <button
-            onClick={() => (requiresArea ? setAreaOpen(true) : setStarting(true))}
-            className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:opacity-90"
-          >
-            ▶ Start
-          </button>
-          <button
-            onClick={onEdit}
-            className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-accent hover:text-primary"
-          >
-            <Pencil className="h-3 w-3" /> Edit
-          </button>
-          <button
-            onClick={onDelete}
-            className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="h-3 w-3" /> Delete
-          </button>
-        </div>
-      )}
-
-      {areaOpen && (
-        <WorkAreaDialog
-          operationName={opName}
-          workerOptions={WORKERS}
-          initialWorkers={session.workers}
-          busy={busy}
-          onCancel={() => setAreaOpen(false)}
-          onConfirm={(payload) => {
-            setAreaOpen(false);
-            onStart(payload);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
 function HistoryTimelineRow({
   step,
   catalog,
@@ -1591,107 +1373,6 @@ function HistoryTimelineRow({
         </button>
       </div>
     </li>
-  );
-}
-
-// Same "Start Operation" popup style as WorkAreaDialog, used for processes
-// that don't track Garment Part / Area (e.g. Sample Approval, or a custom
-// process name) — same Workers + Estimated Hours fields as before, just
-// shown as a popup instead of appearing after landing in Pending Operations.
-function StartWorkersDialog({
-  operationName,
-  workerOptions,
-  busy,
-  onCancel,
-  onConfirm,
-}: {
-  operationName: string;
-  workerOptions: string[];
-  busy?: boolean;
-  onCancel: () => void;
-  onConfirm: (workers: string[], estimatedHours: string) => void;
-}) {
-  const [workers, setWorkers] = useState<string[]>([]);
-  const [estimatedHours, setEstimatedHours] = useState("");
-
-  function toggleWorker(w: string) {
-    setWorkers((prev) => (prev.includes(w) ? prev.filter((x) => x !== w) : [...prev, w]));
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-      <div className="w-full max-w-md rounded-t-3xl bg-card p-5 shadow-xl sm:rounded-3xl">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Start Operation</p>
-            <h3 className="text-base font-bold">{operationName}</h3>
-          </div>
-          <button
-            onClick={onCancel}
-            className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="mt-4">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Assigned Workers</p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {workerOptions.map((w) => {
-              const active = workers.includes(w);
-              return (
-                <button
-                  key={w}
-                  onClick={() => toggleWorker(w)}
-                  className={
-                    "rounded-full border px-3 py-1 text-xs font-semibold transition " +
-                    (active
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-background hover:bg-accent")
-                  }
-                >
-                  {w}
-                </button>
-              );
-            })}
-          </div>
-          {workers.length === 0 && (
-            <p className="mt-1.5 text-[11px] text-muted-foreground">Select at least one worker.</p>
-          )}
-        </div>
-
-        <label className="mt-4 block w-40">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Estimated Hours</span>
-          <input
-            type="number"
-            min={0}
-            step={0.5}
-            inputMode="decimal"
-            placeholder="e.g. 2"
-            value={estimatedHours}
-            onChange={(e) => setEstimatedHours(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-1.5 text-sm font-semibold outline-none focus:border-primary"
-          />
-        </label>
-
-        <div className="mt-5 flex gap-2">
-          <button
-            onClick={onCancel}
-            className="flex-1 rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold hover:bg-accent"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => onConfirm(workers, estimatedHours)}
-            disabled={workers.length === 0 || busy}
-            className="inline-flex flex-[2] items-center justify-center gap-1.5 rounded-xl bg-primary px-3 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />} ▶ Start Operation
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -1846,7 +1527,6 @@ function TimelineEditModal({
               onChange={(e) => setStatus(e.target.value as StepStatus)}
               className="mt-1.5 w-full rounded-2xl border border-border bg-background px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-primary"
             >
-              <option value="pending">Pending</option>
               <option value="in-progress">In Progress</option>
               <option value="completed">Completed</option>
               <option value="skipped">Skipped</option>
