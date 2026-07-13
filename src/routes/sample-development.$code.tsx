@@ -25,7 +25,7 @@ import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
 import { WorkAreaDialog, formatWorkArea, type WorkAreaPayload } from "@/components/WorkAreaDialog";
 import { Switch } from "@/components/ui/switch";
-import { useRequireAuth } from "@/hooks/use-auth";
+import { useRequireAuth, useSession } from "@/hooks/use-auth";
 import { useDesignByCode } from "@/lib/api/designs";
 import { useAddOperation, useOperationCatalog, type CatalogOperation } from "@/lib/api/operations";
 import {
