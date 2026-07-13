@@ -23,6 +23,9 @@ export type WorkflowStep = {
   completedAt: string | null;
   durationSeconds: number | null;
   hourlyRate: number;
+  garmentPart: string | null;
+  workArea: string | null;
+  customArea: string | null;
 };
 
 export type DesignWorkflow = {
@@ -51,6 +54,9 @@ type DbStep = {
   completed_at: string | null;
   duration_seconds: number | null;
   hourly_rate: number | string | null;
+  garment_part: string | null;
+  work_area: string | null;
+  custom_area: string | null;
 };
 
 function mapStep(r: DbStep): WorkflowStep {
@@ -72,6 +78,9 @@ function mapStep(r: DbStep): WorkflowStep {
     completedAt: r.completed_at,
     durationSeconds: r.duration_seconds,
     hourlyRate: r.hourly_rate == null ? 150 : Number(r.hourly_rate),
+    garmentPart: r.garment_part,
+    workArea: r.work_area,
+    customArea: r.custom_area,
   };
 }
 
@@ -163,6 +172,9 @@ export function useUpdateStep(designId: string) {
       if (p.completedAt !== undefined) dbPatch.completed_at = p.completedAt;
       if (p.durationSeconds !== undefined) dbPatch.duration_seconds = p.durationSeconds;
       if (p.hourlyRate !== undefined) dbPatch.hourly_rate = p.hourlyRate;
+      if (p.garmentPart !== undefined) dbPatch.garment_part = p.garmentPart;
+      if (p.workArea !== undefined) dbPatch.work_area = p.workArea;
+      if (p.customArea !== undefined) dbPatch.custom_area = p.customArea;
       const { error } = await (supabase.from("workflow_steps") as unknown as { update: (p: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: unknown }> } })
         .update(dbPatch).eq("id", v.stepId);
       if (error) throw error;

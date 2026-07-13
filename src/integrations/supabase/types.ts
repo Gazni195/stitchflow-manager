@@ -213,8 +213,10 @@ export type Database = {
           assigned_to: string | null
           completed_at: string | null
           created_at: string
+          custom_area: string | null
           duration_seconds: number | null
           end_date: string | null
+          garment_part: string | null
           hourly_rate: number
           id: string
           input_quantity: number | null
@@ -228,14 +230,17 @@ export type Database = {
           status: string
           updated_at: string
           wastage_quantity: number | null
+          work_area: string | null
           workflow_id: string
         }
         Insert: {
           assigned_to?: string | null
           completed_at?: string | null
           created_at?: string
+          custom_area?: string | null
           duration_seconds?: number | null
           end_date?: string | null
+          garment_part?: string | null
           hourly_rate?: number
           id?: string
           input_quantity?: number | null
@@ -249,14 +254,17 @@ export type Database = {
           status?: string
           updated_at?: string
           wastage_quantity?: number | null
+          work_area?: string | null
           workflow_id: string
         }
         Update: {
           assigned_to?: string | null
           completed_at?: string | null
           created_at?: string
+          custom_area?: string | null
           duration_seconds?: number | null
           end_date?: string | null
+          garment_part?: string | null
           hourly_rate?: number
           id?: string
           input_quantity?: number | null
@@ -270,6 +278,7 @@ export type Database = {
           status?: string
           updated_at?: string
           wastage_quantity?: number | null
+          work_area?: string | null
           workflow_id?: string
         }
         Relationships: [

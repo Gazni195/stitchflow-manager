@@ -23,6 +23,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
+import { AREA_TRACKED_OPERATION_IDS, WorkAreaDialog, formatWorkArea, type WorkAreaPayload } from "@/components/WorkAreaDialog";
 import { Switch } from "@/components/ui/switch";
 import { useRequireAuth } from "@/hooks/use-auth";
 import { useDesignByCode } from "@/lib/api/designs";
@@ -836,25 +837,33 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     }
   }
 
-  function start(step: WorkflowStep) {
-    const session = sessions[step.id] ?? emptySession();
-    if (session.workers.length === 0) return;
-    const hoursNote = session.estimatedHours.trim()
-      ? `Est. ${session.estimatedHours.trim()} hr${session.estimatedHours.trim() === "1" ? "" : "s"}`
+  function start(step: WorkflowStep, override?: WorkAreaPayload) {
+    const currentSession = sessions[step.id] ?? emptySession();
+    const workers = override?.workers ?? currentSession.workers;
+    if (workers.length === 0) return;
+    const hoursNote = currentSession.estimatedHours.trim()
+      ? `Est. ${currentSession.estimatedHours.trim()} hr${currentSession.estimatedHours.trim() === "1" ? "" : "s"}`
       : "";
-    const remarks = [hoursNote, session.remarks.trim()].filter(Boolean).join(" · ");
+    const remarks = [hoursNote, currentSession.remarks.trim()].filter(Boolean).join(" · ");
     const now = new Date();
-    patchSession(step.id, { startedAt: now, pausedAt: null, pausedMs: 0, completedAt: null });
+    patchSession(step.id, { workers, startedAt: now, pausedAt: null, pausedMs: 0, completedAt: null });
     updateStep.mutate({
       stepId: step.id,
       patch: {
         status: "in-progress",
-        assignedTo: joinWorkers(session.workers),
+        assignedTo: joinWorkers(workers),
         remarks: remarks || null,
         startDate: today(),
         startedAt: now.toISOString(),
         completedAt: null,
         durationSeconds: null,
+        ...(override
+          ? {
+              garmentPart: override.garmentPart,
+              workArea: override.workArea,
+              customArea: override.customArea,
+            }
+          : {}),
       },
     });
   }
@@ -1016,7 +1025,7 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
                 onAddWorker={(w) => addWorker(step, w)}
                 onRemoveWorker={(w) => removeWorker(step, w)}
                 onHoursChange={(v) => patchSession(step.id, { estimatedHours: v })}
-                onStart={() => start(step)}
+                onStart={(payload) => start(step, payload)}
                 onEdit={() => setEditingId(step.id)}
                 onDelete={() => removeStep(step)}
               />
@@ -1158,7 +1167,14 @@ function RunningOperationCard({
         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary">
           {Icon ? <Icon className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}
         </div>
-        <h4 className="truncate text-base font-extrabold tracking-tight">{opName}</h4>
+        <div className="min-w-0 flex-1">
+          <h4 className="truncate text-base font-extrabold tracking-tight">{opName}</h4>
+          {formatWorkArea(step.garmentPart, step.workArea, step.customArea) && (
+            <p className="truncate text-[11px] font-semibold text-primary">
+              {formatWorkArea(step.garmentPart, step.workArea, step.customArea)}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="mt-3">
@@ -1297,14 +1313,16 @@ function PendingOperationCard({
   onAddWorker: (worker: string) => void;
   onRemoveWorker: (worker: string) => void;
   onHoursChange: (value: string) => void;
-  onStart: () => void;
+  onStart: (payload?: WorkAreaPayload) => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const [starting, setStarting] = useState(false);
+  const [areaOpen, setAreaOpen] = useState(false);
   const op = catalog.find((o) => o.id === step.operationId);
   const opName = operationName(step, catalog);
   const Icon = op?.icon;
+  const requiresArea = AREA_TRACKED_OPERATION_IDS.has(step.operationId);
 
   return (
     <div className="rounded-2xl border border-border bg-background p-3">
@@ -1323,7 +1341,7 @@ function PendingOperationCard({
         </span>
       </div>
 
-      {starting ? (
+      {starting && !requiresArea ? (
         <div className="mt-3 grid gap-2.5">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Workers</span>
@@ -1369,7 +1387,7 @@ function PendingOperationCard({
       ) : (
         <div className="mt-3 flex items-center gap-2">
           <button
-            onClick={() => setStarting(true)}
+            onClick={() => (requiresArea ? setAreaOpen(true) : setStarting(true))}
             className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:opacity-90"
           >
             ▶ Start
@@ -1387,6 +1405,20 @@ function PendingOperationCard({
             <Trash2 className="h-3 w-3" /> Delete
           </button>
         </div>
+      )}
+
+      {areaOpen && (
+        <WorkAreaDialog
+          operationName={opName}
+          workerOptions={WORKERS}
+          initialWorkers={session.workers}
+          busy={busy}
+          onCancel={() => setAreaOpen(false)}
+          onConfirm={(payload) => {
+            setAreaOpen(false);
+            onStart(payload);
+          }}
+        />
       )}
     </div>
   );
@@ -1436,6 +1468,11 @@ function HistoryTimelineRow({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold">✓ {opName}</p>
+          {formatWorkArea(step.garmentPart, step.workArea, step.customArea) && (
+            <p className="truncate text-[11px] font-semibold text-primary">
+              {formatWorkArea(step.garmentPart, step.workArea, step.customArea)}
+            </p>
+          )}
           <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
             {workers.length ? `Workers: ${workers.join(", ")}` : "Unassigned"}
           </p>
