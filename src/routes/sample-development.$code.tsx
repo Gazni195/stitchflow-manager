@@ -1652,7 +1652,7 @@ function StatusTile({ label, value, mono }: { label: string; value: string; mono
 
 /* ---------- Costing ---------- */
 
-function CostingPanel({ design }: { design: Design }) {
+function CostingPanel({ design, onContinue }: { design: Design; onContinue: () => void }) {
   const { data: workflows } = useWorkflows(design.id);
   const sample = workflows?.find((w) => w.kind === "sample");
   const completedSteps = (sample?.steps ?? []).filter((s) => s.status === "completed");
