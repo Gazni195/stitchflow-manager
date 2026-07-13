@@ -54,6 +54,9 @@ type DbStep = {
   completed_at: string | null;
   duration_seconds: number | null;
   hourly_rate: number | string | null;
+  garment_part: string | null;
+  work_area: string | null;
+  custom_area: string | null;
 };
 
 function mapStep(r: DbStep): WorkflowStep {
@@ -75,6 +78,9 @@ function mapStep(r: DbStep): WorkflowStep {
     completedAt: r.completed_at,
     durationSeconds: r.duration_seconds,
     hourlyRate: r.hourly_rate == null ? 150 : Number(r.hourly_rate),
+    garmentPart: r.garment_part,
+    workArea: r.work_area,
+    customArea: r.custom_area,
   };
 }
 
