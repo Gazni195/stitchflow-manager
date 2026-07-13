@@ -1306,14 +1306,16 @@ function PendingOperationCard({
   onAddWorker: (worker: string) => void;
   onRemoveWorker: (worker: string) => void;
   onHoursChange: (value: string) => void;
-  onStart: () => void;
+  onStart: (payload?: WorkAreaPayload) => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const [starting, setStarting] = useState(false);
+  const [areaOpen, setAreaOpen] = useState(false);
   const op = catalog.find((o) => o.id === step.operationId);
   const opName = operationName(step, catalog);
   const Icon = op?.icon;
+  const requiresArea = AREA_TRACKED_OPERATION_IDS.has(step.operationId);
 
   return (
     <div className="rounded-2xl border border-border bg-background p-3">
@@ -1332,7 +1334,7 @@ function PendingOperationCard({
         </span>
       </div>
 
-      {starting ? (
+      {starting && !requiresArea ? (
         <div className="mt-3 grid gap-2.5">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Workers</span>
@@ -1378,7 +1380,7 @@ function PendingOperationCard({
       ) : (
         <div className="mt-3 flex items-center gap-2">
           <button
-            onClick={() => setStarting(true)}
+            onClick={() => (requiresArea ? setAreaOpen(true) : setStarting(true))}
             className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:opacity-90"
           >
             ▶ Start
@@ -1396,6 +1398,20 @@ function PendingOperationCard({
             <Trash2 className="h-3 w-3" /> Delete
           </button>
         </div>
+      )}
+
+      {areaOpen && (
+        <WorkAreaDialog
+          operationName={opName}
+          workerOptions={WORKERS}
+          initialWorkers={session.workers}
+          busy={busy}
+          onCancel={() => setAreaOpen(false)}
+          onConfirm={(payload) => {
+            setAreaOpen(false);
+            onStart(payload);
+          }}
+        />
       )}
     </div>
   );
