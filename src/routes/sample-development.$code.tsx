@@ -1919,6 +1919,8 @@ function ApprovalPanel({ design }: { design: Design }) {
   const approved = approvals.filter((a) => a.status === "Approved").length;
   const total = approvals.length;
   const pct = Math.round((approved / total) * 100);
+  const allApproved = approved === total;
+  const approveSample = useApproveSample(design.id);
 
   function setStatus(id: string, status: ApprovalRow["status"]) {
     setApprovals((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
