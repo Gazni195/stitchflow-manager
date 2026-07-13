@@ -25,6 +25,7 @@ import { Route as BarcodeRouteImport } from './routes/barcode'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SampleDevelopmentIndexRouteImport } from './routes/sample-development.index'
+import { Route as ProductionIndexRouteImport } from './routes/production.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
 import { Route as ProductionReadyRouteImport } from './routes/production.ready'
@@ -111,6 +112,11 @@ const SampleDevelopmentIndexRoute = SampleDevelopmentIndexRouteImport.update({
   path: '/sample-development/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProductionIndexRoute = ProductionIndexRouteImport.update({
+  id: '/production/',
+  path: '/production/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DesignsIndexRoute = DesignsIndexRouteImport.update({
   id: '/designs/',
   path: '/designs/',
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/production/ready': typeof ProductionReadyRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
+  '/production/': typeof ProductionIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
@@ -180,6 +187,7 @@ export interface FileRoutesByTo {
   '/production/ready': typeof ProductionReadyRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs': typeof DesignsIndexRoute
+  '/production': typeof ProductionIndexRoute
   '/sample-development': typeof SampleDevelopmentIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
@@ -204,6 +212,7 @@ export interface FileRoutesById {
   '/production/ready': typeof ProductionReadyRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
+  '/production/': typeof ProductionIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
@@ -229,6 +238,7 @@ export interface FileRouteTypes {
     | '/production/ready'
     | '/sample-development/$code'
     | '/designs/'
+    | '/production/'
     | '/sample-development/'
     | '/designs/$code/workflow'
   fileRoutesByTo: FileRoutesByTo
@@ -252,6 +262,7 @@ export interface FileRouteTypes {
     | '/production/ready'
     | '/sample-development/$code'
     | '/designs'
+    | '/production'
     | '/sample-development'
     | '/designs/$code/workflow'
   id:
@@ -275,6 +286,7 @@ export interface FileRouteTypes {
     | '/production/ready'
     | '/sample-development/$code'
     | '/designs/'
+    | '/production/'
     | '/sample-development/'
     | '/designs/$code/workflow'
   fileRoutesById: FileRoutesById
@@ -299,6 +311,7 @@ export interface RootRouteChildren {
   ProductionReadyRoute: typeof ProductionReadyRoute
   SampleDevelopmentCodeRoute: typeof SampleDevelopmentCodeRoute
   DesignsIndexRoute: typeof DesignsIndexRoute
+  ProductionIndexRoute: typeof ProductionIndexRoute
   SampleDevelopmentIndexRoute: typeof SampleDevelopmentIndexRoute
 }
 
@@ -416,6 +429,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SampleDevelopmentIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/production/': {
+      id: '/production/'
+      path: '/production'
+      fullPath: '/production/'
+      preLoaderRoute: typeof ProductionIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/designs/': {
       id: '/designs/'
       path: '/designs'
@@ -486,6 +506,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProductionReadyRoute: ProductionReadyRoute,
   SampleDevelopmentCodeRoute: SampleDevelopmentCodeRoute,
   DesignsIndexRoute: DesignsIndexRoute,
+  ProductionIndexRoute: ProductionIndexRoute,
   SampleDevelopmentIndexRoute: SampleDevelopmentIndexRoute,
 }
 export const routeTree = rootRouteImport
