@@ -27,6 +27,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SampleDevelopmentIndexRouteImport } from './routes/sample-development.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
+import { Route as ProductionReadyRouteImport } from './routes/production.ready'
 import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
 import { Route as DesignsCodeWorkflowRouteImport } from './routes/designs.$code.workflow'
 
@@ -120,6 +121,11 @@ const SampleDevelopmentCodeRoute = SampleDevelopmentCodeRouteImport.update({
   path: '/sample-development/$code',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProductionReadyRoute = ProductionReadyRouteImport.update({
+  id: '/production/ready',
+  path: '/production/ready',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DesignsCodeRoute = DesignsCodeRouteImport.update({
   id: '/designs/$code',
   path: '/designs/$code',
@@ -148,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/production/ready': typeof ProductionReadyRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
@@ -170,6 +177,7 @@ export interface FileRoutesByTo {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/production/ready': typeof ProductionReadyRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs': typeof DesignsIndexRoute
   '/sample-development': typeof SampleDevelopmentIndexRoute
@@ -193,6 +201,7 @@ export interface FileRoutesById {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/production/ready': typeof ProductionReadyRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
@@ -217,6 +226,7 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/production/ready'
     | '/sample-development/$code'
     | '/designs/'
     | '/sample-development/'
@@ -239,6 +249,7 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/production/ready'
     | '/sample-development/$code'
     | '/designs'
     | '/sample-development'
@@ -261,6 +272,7 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/production/ready'
     | '/sample-development/$code'
     | '/designs/'
     | '/sample-development/'
@@ -284,6 +296,7 @@ export interface RootRouteChildren {
   StitchingRoute: typeof StitchingRoute
   StockRoute: typeof StockRoute
   DesignsCodeRoute: typeof DesignsCodeRouteWithChildren
+  ProductionReadyRoute: typeof ProductionReadyRoute
   SampleDevelopmentCodeRoute: typeof SampleDevelopmentCodeRoute
   DesignsIndexRoute: typeof DesignsIndexRoute
   SampleDevelopmentIndexRoute: typeof SampleDevelopmentIndexRoute
@@ -417,6 +430,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SampleDevelopmentCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/production/ready': {
+      id: '/production/ready'
+      path: '/production/ready'
+      fullPath: '/production/ready'
+      preLoaderRoute: typeof ProductionReadyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/designs/$code': {
       id: '/designs/$code'
       path: '/designs/$code'
@@ -463,6 +483,7 @@ const rootRouteChildren: RootRouteChildren = {
   StitchingRoute: StitchingRoute,
   StockRoute: StockRoute,
   DesignsCodeRoute: DesignsCodeRouteWithChildren,
+  ProductionReadyRoute: ProductionReadyRoute,
   SampleDevelopmentCodeRoute: SampleDevelopmentCodeRoute,
   DesignsIndexRoute: DesignsIndexRoute,
   SampleDevelopmentIndexRoute: SampleDevelopmentIndexRoute,
