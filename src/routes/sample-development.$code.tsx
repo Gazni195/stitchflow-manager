@@ -23,6 +23,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
+import { AREA_TRACKED_OPERATION_IDS, WorkAreaDialog, formatWorkArea, type WorkAreaPayload } from "@/components/WorkAreaDialog";
 import { Switch } from "@/components/ui/switch";
 import { useRequireAuth } from "@/hooks/use-auth";
 import { useDesignByCode } from "@/lib/api/designs";
