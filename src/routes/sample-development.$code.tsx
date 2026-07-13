@@ -30,6 +30,7 @@ import { useDesignByCode } from "@/lib/api/designs";
 import { useAddOperation, useOperationCatalog, type CatalogOperation } from "@/lib/api/operations";
 import {
   useAddStep,
+  useApproveSample,
   useDeleteStep,
   useUpdateStep,
   useWorkflows,
