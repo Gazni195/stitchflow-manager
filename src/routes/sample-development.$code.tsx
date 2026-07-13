@@ -1986,9 +1986,20 @@ function ApprovalPanel({ design }: { design: Design }) {
           );
         })}
       </ul>
+
+      <button
+        onClick={() => approveSample.mutate()}
+        disabled={!allApproved || approveSample.isPending}
+        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-success px-4 py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {approveSample.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+        <CheckCircle2 className="h-4 w-4" />
+        {allApproved ? "Approve Sample" : `Awaiting ${total - approved} approval${total - approved === 1 ? "" : "s"}`}
+      </button>
     </div>
   );
 }
+
 
 /* ---------- Shared ---------- */
 
