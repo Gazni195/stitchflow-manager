@@ -1648,15 +1648,15 @@ function CostingPanel({ design }: { design: Design }) {
   const { data: workflows } = useWorkflows(design.id);
   const sample = workflows?.find((w) => w.kind === "sample");
   const completedSteps = (sample?.steps ?? []).filter((s) => s.status === "completed");
-  // Total labour cost across the order = sum of per-operation labour costs.
-  const labourTotal = completedSteps.reduce((sum, s) => sum + stepLabourCost(s), 0);
-  const labourPerPiece = design.orderQuantity > 0 ? labourTotal / design.orderQuantity : 0;
+  // Sample Development ALWAYS costs a single piece. During sampling only one
+  // physical garment is produced, so labour recorded on operations is already
+  // per-piece. Material `quantity` stores consumption-per-piece × rate, so
+  // that too is already per-piece. Do NOT multiply or divide by orderQuantity
+  // here — that belongs to Production Costing after sample approval.
+  const labourPerPiece = completedSteps.reduce((sum, s) => sum + stepLabourCost(s), 0);
 
-  // Material total is derived automatically from selected inventory materials.
   const { data: designMaterials = [] } = useDesignMaterials(design.id);
-  const materialOrderTotal = computeMaterialTotal(designMaterials);
-  const materialPerPiece =
-    design.orderQuantity > 0 ? materialOrderTotal / design.orderQuantity : 0;
+  const materialPerPiece = computeMaterialTotal(designMaterials);
 
   const [costs, setCosts] = useState<
     {
@@ -1668,7 +1668,6 @@ function CostingPanel({ design }: { design: Design }) {
     }[]
   >(() => [{ id: "c3", label: "Overheads", category: "Overhead", amount: 0 }]);
 
-  // Merge auto labour with manual rows for display + totals.
   const rows: {
     id: string;
     label: string;
@@ -1694,7 +1693,7 @@ function CostingPanel({ design }: { design: Design }) {
   ];
 
   const perPiece = rows.reduce((s, c) => s + c.amount, 0);
-  const orderTotal = perPiece * design.orderQuantity;
+  const projectedProductionTotal = perPiece * design.orderQuantity;
   const byCategory = rows.reduce<Record<string, number>>((acc, c) => {
     acc[c.category] = (acc[c.category] ?? 0) + c.amount;
     return acc;
@@ -1703,12 +1702,21 @@ function CostingPanel({ design }: { design: Design }) {
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <div>
+            <p className="text-sm font-bold">Sample Costing</p>
+            <p className="text-xs text-muted-foreground">Cost of producing 1 piece</p>
+          </div>
+          <span className="rounded-full bg-primary-soft px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
+            1 Piece
+          </span>
+        </div>
         <table className="w-full min-w-[420px] text-sm">
           <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
               <th className="p-3 text-left font-semibold">Cost Item</th>
               <th className="p-3 text-left font-semibold">Category</th>
-              <th className="p-3 text-right font-semibold">Amount (₹/pc)</th>
+              <th className="p-3 text-right font-semibold">Amount (₹ / 1 Piece)</th>
             </tr>
           </thead>
           <tbody>
@@ -1743,7 +1751,7 @@ function CostingPanel({ design }: { design: Design }) {
           <tfoot>
             <tr className="border-t border-border bg-primary-soft">
               <td className="p-3 font-bold" colSpan={2}>
-                Total per piece
+                Total Sample Cost (1 Piece)
               </td>
               <td className="p-3 text-right text-lg font-extrabold text-primary">₹{perPiece.toFixed(2)}</td>
             </tr>
@@ -1753,7 +1761,7 @@ function CostingPanel({ design }: { design: Design }) {
         {completedSteps.length > 0 && (
           <div className="border-t border-border p-4">
             <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Labour Breakdown (Auto)
+              Labour Breakdown (Auto · 1 Piece)
             </p>
             <ul className="mt-2 grid gap-1.5 text-sm">
               {completedSteps.map((s) => (
@@ -1763,8 +1771,8 @@ function CostingPanel({ design }: { design: Design }) {
                 </li>
               ))}
               <li className="mt-1 flex items-center justify-between border-t border-border pt-2">
-                <span className="font-bold">Total Labour Cost</span>
-                <span className="font-extrabold text-primary">{formatCurrency(labourTotal)}</span>
+                <span className="font-bold">Total Labour (1 Piece)</span>
+                <span className="font-extrabold text-primary">{formatCurrency(labourPerPiece)}</span>
               </li>
             </ul>
           </div>
@@ -1773,14 +1781,25 @@ function CostingPanel({ design }: { design: Design }) {
 
       <div className="grid gap-3">
         <div className="rounded-2xl border border-border bg-gradient-to-br from-primary to-primary-glow p-5 text-primary-foreground shadow-md">
-          <p className="text-[11px] font-bold uppercase tracking-widest opacity-85">Order total</p>
-          <p className="mt-1 text-3xl font-extrabold tracking-tight">₹{orderTotal.toLocaleString()}</p>
-          <p className="mt-1 text-xs opacity-85">
+          <p className="text-[11px] font-bold uppercase tracking-widest opacity-85">Sample Cost</p>
+          <p className="mt-1 text-3xl font-extrabold tracking-tight">₹{perPiece.toLocaleString()}</p>
+          <p className="mt-1 text-xs opacity-85">Per piece · Sample Development</p>
+        </div>
+        <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-4">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Production Projection
+          </p>
+          <p className="mt-1 text-lg font-extrabold">₹{projectedProductionTotal.toLocaleString()}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {design.orderQuantity} pcs × ₹{perPiece.toLocaleString()}
+          </p>
+          <p className="mt-2 text-[11px] italic text-muted-foreground">
+            Informational only. Actual production cost is calculated after sample approval when a
+            Production Order is created.
           </p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Breakdown</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Breakdown (1 Piece)</p>
           <ul className="mt-2 space-y-2 text-sm">
             {Object.entries(byCategory).map(([cat, amt]) => {
               const pct = perPiece > 0 ? Math.round((amt / perPiece) * 100) : 0;
@@ -1804,6 +1823,7 @@ function CostingPanel({ design }: { design: Design }) {
     </div>
   );
 }
+
 
 /* ---------- Approval ---------- */
 
