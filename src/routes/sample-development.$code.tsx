@@ -209,7 +209,7 @@ function DesignSample({ design }: { design: Design }) {
 
 /* ---------- Status ---------- */
 
-function StatusPanel({ design, stage }: { design: Design; stage: "In Development" | "Ready for Review" | "Approved" }) {
+function StatusPanel({ design, stage, onContinue }: { design: Design; stage: "In Development" | "Ready for Review" | "Approved"; onContinue: () => void }) {
   const steps: { id: string; label: string; icon: LucideIcon }[] = [
     { id: "Requested", label: "Requested", icon: Sparkles },
     { id: "In Development", label: "In Development", icon: Clock },
