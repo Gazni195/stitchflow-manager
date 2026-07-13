@@ -36,6 +36,15 @@ import {
   type StepStatus,
   type WorkflowStep,
 } from "@/lib/api/workflows";
+import {
+  useAddDesignMaterial,
+  useDesignMaterials,
+  useMaterials,
+  useRemoveDesignMaterial,
+  useUpdateDesignMaterial,
+  type DesignMaterial,
+  type Material,
+} from "@/lib/api/materials";
 import { supabase } from "@/integrations/supabase/client";
 import type { Design } from "@/lib/designs";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/designs";
@@ -253,109 +262,52 @@ function StatusPanel({ design, stage }: { design: Design; stage: "In Development
   );
 }
 
-/* ---------- Materials (Phase 1: flexible Material Groups, manual entry) ---------- */
+/* ---------- Materials (Inventory-driven selection) ---------- */
 //
-// Material Groups are independent of the design's garment parts. Top/Pant/
-// Shawl are always-present defaults — enable/disable only, never deleted.
-// Lining/Lace/Accessories are optional and start disabled; users can also
-// add fully custom groups, which behave the same way (enable/disable, no
-// delete). Every row's fields (code/name/quantity/unit) mirror what an
-// ERPNext stock item search would eventually return, and `source` is ready
-// to flip from "manual" to "erpnext" per row — so a later inventory
-// integration can autofill these same fields instead of manual typing,
-// without changing this UI. No stock/lot lookup is implemented yet.
+// Material Selection ONLY selects materials from the shared Inventory Master
+// (`/inventory`). Users pick an existing material, enter a quantity, and the
+// unit + cost per unit are loaded from inventory automatically. Amount is
+// computed as quantity × rate. The `rate` stored on `design_materials` is a
+// snapshot of the material's current `cost_per_unit` at the moment of
+// selection so historical samples stay stable even when inventory prices
+// change; refreshing a row re-snaps the current inventory price. Selections
+// persist in `design_materials` and drive the Costing tab.
 
-type MaterialSource = "manual" | "erpnext";
+const MATERIAL_GROUPS = ["Top", "Pant", "Shawl", "Lining", "Lace", "Accessories", "Other"] as const;
+type MaterialGroupName = (typeof MATERIAL_GROUPS)[number];
 
-type MaterialRowState = {
-  id: string;
-  materialCode: string;
-  materialName: string;
-  quantity: number;
-  unit: string;
-  source: MaterialSource;
-  editing: boolean;
-};
-
-type MaterialGroupState = {
-  id: string;
-  name: string;
-  enabled: boolean;
-  expanded: boolean;
-  rows: MaterialRowState[];
-};
-
-const UNIT_OPTIONS = ["Meter", "Pcs", "Yard", "Kg", "Set", "Roll"];
-
-function newGroup(name: string, enabled: boolean, expanded = false): MaterialGroupState {
-  return { id: crypto.randomUUID(), name, enabled, expanded, rows: [] };
-}
-
-function newRow(): MaterialRowState {
-  return {
-    id: crypto.randomUUID(),
-    materialCode: "",
-    materialName: "",
-    quantity: 0,
-    unit: "Meter",
-    source: "manual",
-    editing: true,
-  };
-}
-
-function initialGroups(): MaterialGroupState[] {
-  return [
-    newGroup("Top", true, true),
-    newGroup("Pant", true, false),
-    newGroup("Shawl", true, false),
-    newGroup("Lining", false, false),
-    newGroup("Lace", false, false),
-    newGroup("Accessories", false, false),
-  ];
+export function computeMaterialTotal(items: DesignMaterial[]): number {
+  return items.reduce((s, i) => s + i.amount, 0);
 }
 
 function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: () => void }) {
-  const [groups, setGroups] = useState<MaterialGroupState[]>(initialGroups);
-  const [customName, setCustomName] = useState("");
   const { data: workflows } = useWorkflows(design.id);
   const updateStep = useUpdateStep(design.id);
+  const { data: inventory = [], isLoading: invLoading } = useMaterials();
+  const { data: selected = [], isLoading: selLoading } = useDesignMaterials(design.id);
+  const addLine = useAddDesignMaterial(design.id);
+  const removeLine = useRemoveDesignMaterial(design.id);
+  const updateLine = useUpdateDesignMaterial(design.id);
 
-  function updateGroup(id: string, patch: Partial<MaterialGroupState>) {
-    setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
-  }
-  function addGroup(name: string) {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    setGroups((prev) => {
-      if (prev.some((g) => g.name.toLowerCase() === trimmed.toLowerCase())) return prev;
-      return [...prev, newGroup(trimmed, true, true)];
+  const [pickerFor, setPickerFor] = useState<MaterialGroupName | null>(null);
+
+  const byGroup = MATERIAL_GROUPS.map((g) => ({
+    group: g,
+    rows: selected.filter((r) => r.groupName === g),
+  }));
+  const materialTotal = computeMaterialTotal(selected);
+  const activeInventory = inventory.filter((m) => m.status === "active");
+
+  async function handlePick(group: MaterialGroupName, material: Material, quantity: number) {
+    await addLine.mutateAsync({
+      materialId: material.id,
+      groupName: group,
+      quantity,
+      rate: material.costPerUnit,
     });
-  }
-  function addRow(groupId: string) {
-    setGroups((prev) =>
-      prev.map((g) => (g.id === groupId ? { ...g, expanded: true, rows: [...g.rows, newRow()] } : g)),
-    );
-  }
-  function updateRow(groupId: string, rowId: string, patch: Partial<MaterialRowState>) {
-    setGroups((prev) =>
-      prev.map((g) =>
-        g.id === groupId ? { ...g, rows: g.rows.map((r) => (r.id === rowId ? { ...r, ...patch } : r)) } : g,
-      ),
-    );
-  }
-  function removeRow(groupId: string, rowId: string) {
-    setGroups((prev) => prev.map((g) => (g.id === groupId ? { ...g, rows: g.rows.filter((r) => r.id !== rowId) } : g)));
+    setPickerFor(null);
   }
 
-  const enabledGroups = groups.filter((g) => g.enabled);
-  const allRequiredMaterialsSaved =
-    enabledGroups.length > 0 && enabledGroups.every((g) => g.rows.length > 0 && g.rows.every((r) => !r.editing));
-
-  // The real, saved sample workflow may or may not include a Fabric/Material
-  // Selection step (workflows are user-configured). When it does, completing
-  // here marks that step done in the same data Sample Making reads its "next
-  // operation" from — so workflow progress and the Sample Making tab both
-  // reflect this automatically, with no separate hardcoded state.
   async function completeMaterialSelection() {
     const sample = workflows?.find((w) => w.kind === "sample");
     const step = sample?.steps.find((s) => s.operationId === "fabric-selection");
@@ -365,239 +317,324 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
     onCompleted();
   }
 
+  const isLoading = invLoading || selLoading;
+
   return (
-    <div className="grid gap-2">
-      {groups.map((group) => (
-        <MaterialGroupCard
-          key={group.id}
-          group={group}
-          onToggleExpanded={() => updateGroup(group.id, { expanded: !group.expanded })}
-          onToggleEnabled={(enabled) => updateGroup(group.id, { enabled })}
-          onAddRow={() => addRow(group.id)}
-          onUpdateRow={(rowId, patch) => updateRow(group.id, rowId, patch)}
-          onRemoveRow={(rowId) => removeRow(group.id, rowId)}
-        />
-      ))}
-
-      <div className="rounded-2xl border border-dashed border-border bg-card p-3">
-        <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">+ Add Material Group</p>
-        <div className="mt-2 flex gap-2">
-          <input
-            value={customName}
-            onChange={(e) => setCustomName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                addGroup(customName);
-                setCustomName("");
-              }
-            }}
-            placeholder="Custom group e.g. Interlining, Embroidery, Dupatta Border"
-            className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-          />
-          <button
-            onClick={() => {
-              addGroup(customName);
-              setCustomName("");
-            }}
-            disabled={!customName.trim()}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Plus className="h-4 w-4" /> Add
-          </button>
-        </div>
-      </div>
-
-      {allRequiredMaterialsSaved ? (
-        <div className="rounded-2xl border border-success/30 bg-success/5 p-4">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 text-xs font-bold text-success">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Material Selection Completed
-          </span>
-          <button
-            onClick={completeMaterialSelection}
-            disabled={updateStep.isPending}
-            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {updateStep.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Complete Material Selection & Continue
-          </button>
-        </div>
-      ) : (
-        <p className="text-center text-[11px] text-muted-foreground">
-          Save at least one material in every enabled group to continue.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function MaterialGroupCard({
-  group,
-  onToggleExpanded,
-  onToggleEnabled,
-  onAddRow,
-  onUpdateRow,
-  onRemoveRow,
-}: {
-  group: MaterialGroupState;
-  onToggleExpanded: () => void;
-  onToggleEnabled: (enabled: boolean) => void;
-  onAddRow: () => void;
-  onUpdateRow: (rowId: string, patch: Partial<MaterialRowState>) => void;
-  onRemoveRow: (rowId: string) => void;
-}) {
-  return (
-    <div
-      className={
-        "overflow-hidden rounded-2xl border border-border bg-card transition-opacity " +
-        (group.enabled ? "" : "opacity-60")
-      }
-    >
-      <div className="flex h-12 items-center gap-2 px-3">
-        <button onClick={onToggleExpanded} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-          <ChevronDown
-            className={
-              "h-4 w-4 shrink-0 text-muted-foreground transition-transform " + (group.expanded ? "rotate-180" : "")
-            }
-          />
-          <span className="truncate text-sm font-semibold">{group.name}</span>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            ({group.rows.length} Material{group.rows.length === 1 ? "" : "s"})
-          </span>
-        </button>
-        <Switch
-          checked={group.enabled}
-          onCheckedChange={onToggleEnabled}
-          onClick={(e) => e.stopPropagation()}
-          aria-label={group.enabled ? `Disable ${group.name}` : `Enable ${group.name}`}
-        />
-      </div>
-
-      {group.expanded && (
-        <div className="grid gap-2 border-t border-border p-3">
-          {group.rows.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
-              No materials added yet.
-            </p>
-          ) : (
-            group.rows.map((row) => (
-              <MaterialRowItem
-                key={row.id}
-                row={row}
-                onChange={(patch) => onUpdateRow(row.id, patch)}
-                onDelete={() => onRemoveRow(row.id)}
-              />
-            ))
-          )}
-          <button
-            onClick={onAddRow}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-background py-2 text-xs font-semibold text-primary hover:bg-primary-soft/40"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add Material
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MaterialRowItem({
-  row,
-  onChange,
-  onDelete,
-}: {
-  row: MaterialRowState;
-  onChange: (patch: Partial<MaterialRowState>) => void;
-  onDelete: () => void;
-}) {
-  const valid = row.materialCode.trim() !== "" && row.materialName.trim() !== "" && row.quantity > 0;
-
-  if (!row.editing) {
-    return (
-      <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{row.materialName}</p>
-          <p className="truncate text-[11px] text-muted-foreground">
-            {row.materialCode} · {row.quantity} {row.unit}
+    <div className="grid gap-3">
+      <div className="flex items-center justify-between rounded-2xl border border-border bg-gradient-to-br from-primary-soft to-background p-4">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Material total
+          </p>
+          <p className="mt-0.5 text-2xl font-extrabold text-primary">
+            ₹{materialTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {selected.length} item{selected.length === 1 ? "" : "s"} · prices from Inventory
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <button
-            onClick={() => onChange({ editing: true })}
-            aria-label="Edit material"
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-primary"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={onDelete}
-            aria-label="Delete material"
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        <Link
+          to="/inventory"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold text-primary hover:bg-primary-soft/40"
+        >
+          <Layers className="h-3.5 w-3.5" /> Open Inventory
+        </Link>
       </div>
-    );
+
+      {isLoading ? (
+        <div className="grid place-items-center rounded-2xl border border-border bg-card p-10">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        byGroup.map(({ group, rows }) => (
+          <MaterialGroupSection
+            key={group}
+            group={group}
+            rows={rows}
+            onAdd={() => setPickerFor(group)}
+            onRemove={(id) => removeLine.mutate(id)}
+            onQuantityChange={(id, qty) => updateLine.mutate({ id, quantity: qty })}
+          />
+        ))
+      )}
+
+      {selected.length > 0 ? (
+        <button
+          onClick={completeMaterialSelection}
+          disabled={updateStep.isPending}
+          className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {updateStep.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          Complete Material Selection & Continue
+        </button>
+      ) : (
+        <p className="text-center text-[11px] text-muted-foreground">
+          Add at least one material from Inventory to continue.
+        </p>
+      )}
+
+      {pickerFor && (
+        <MaterialPickerDialog
+          group={pickerFor}
+          inventory={activeInventory}
+          onClose={() => setPickerFor(null)}
+          onSelect={handlePick}
+          busy={addLine.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
+function MaterialGroupSection({
+  group,
+  rows,
+  onAdd,
+  onRemove,
+  onQuantityChange,
+}: {
+  group: MaterialGroupName;
+  rows: DesignMaterial[];
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+  onQuantityChange: (id: string, qty: number) => void;
+}) {
+  const subtotal = rows.reduce((s, r) => s + r.amount, 0);
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="flex items-center justify-between gap-2 px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-sm font-bold">{group}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {rows.length} item{rows.length === 1 ? "" : "s"} · ₹
+            {subtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </p>
+        </div>
+        <button
+          onClick={onAdd}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-primary-soft px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/15"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add from Inventory
+        </button>
+      </div>
+
+      {rows.length > 0 && (
+        <ul className="divide-y divide-border border-t border-border">
+          {rows.map((r) => (
+            <MaterialLineRow
+              key={r.id}
+              row={r}
+              onRemove={() => onRemove(r.id)}
+              onQuantityChange={(qty) => onQuantityChange(r.id, qty)}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function MaterialLineRow({
+  row,
+  onRemove,
+  onQuantityChange,
+}: {
+  row: DesignMaterial;
+  onRemove: () => void;
+  onQuantityChange: (qty: number) => void;
+}) {
+  const [qty, setQty] = useState(row.quantity);
+  useEffect(() => {
+    setQty(row.quantity);
+  }, [row.quantity]);
+  const mat = row.material;
+  const amount = qty * row.rate;
+
+  function commitQty(next: number) {
+    const clean = Math.max(0, Number(next) || 0);
+    setQty(clean);
+    if (clean !== row.quantity) onQuantityChange(clean);
   }
 
   return (
-    <div className="rounded-xl border border-primary/30 bg-primary-soft/30 p-2.5">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <CompactField
-          label="Material Code"
-          value={row.materialCode}
-          placeholder="MAT-1001"
-          onChange={(v) => onChange({ materialCode: v })}
-        />
-        <CompactField
-          label="Material Name"
-          value={row.materialName}
-          placeholder="Silk Chanderi"
-          onChange={(v) => onChange({ materialName: v })}
-        />
-        <label className="block min-w-0">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quantity</span>
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold">{mat?.name ?? "Deleted material"}</p>
+        <p className="truncate text-[11px] text-muted-foreground">
+          {mat?.code ?? "—"} · ₹{row.rate.toFixed(2)}/{mat?.unit ?? "unit"}
+          {mat && mat.availableStock < qty && (
+            <span className="ml-1 rounded-full bg-warning/20 px-1.5 py-0.5 text-[10px] font-bold text-warning-foreground">
+              stock {mat.availableStock}
+            </span>
+          )}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <input
             type="number"
             min={0}
             step={0.25}
             inputMode="decimal"
-            value={row.quantity || ""}
-            onChange={(e) => onChange({ quantity: Math.max(0, Number(e.target.value) || 0) })}
-            placeholder="0.00"
-            className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+            value={qty || ""}
+            onChange={(e) => setQty(Math.max(0, Number(e.target.value) || 0))}
+            onBlur={(e) => commitQty(Number(e.target.value))}
+            className="w-20 rounded-lg border border-border bg-background px-2 py-1.5 text-right text-sm font-bold outline-none focus:border-primary"
           />
-        </label>
-        <label className="block min-w-0">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unit</span>
-          <select
-            value={row.unit}
-            onChange={(e) => onChange({ unit: e.target.value })}
-            className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
-          >
-            {UNIT_OPTIONS.map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
-        </label>
+          <span className="text-[11px] text-muted-foreground">{mat?.unit ?? ""}</span>
+        </div>
+        <span className="w-20 text-right text-sm font-bold text-primary tabular-nums">
+          ₹{amount.toFixed(2)}
+        </span>
+        <button
+          onClick={onRemove}
+          aria-label="Remove"
+          className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </div>
-      <div className="mt-2 flex gap-2">
-        <button
-          onClick={() => onChange({ editing: false })}
-          disabled={!valid}
-          className="flex-1 rounded-xl bg-primary py-2 text-xs font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Save
-        </button>
-        <button
-          onClick={onDelete}
-          aria-label="Delete material"
-          className="shrink-0 rounded-xl border border-border bg-background px-3 text-muted-foreground hover:border-destructive/40 hover:text-destructive"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+    </li>
+  );
+}
+
+function MaterialPickerDialog({
+  group,
+  inventory,
+  onClose,
+  onSelect,
+  busy,
+}: {
+  group: MaterialGroupName;
+  inventory: Material[];
+  onClose: () => void;
+  onSelect: (group: MaterialGroupName, material: Material, quantity: number) => void;
+  busy: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const [chosen, setChosen] = useState<Material | null>(null);
+  const [quantity, setQuantity] = useState<number>(1);
+
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? inventory.filter((m) => m.code.toLowerCase().includes(q) || m.name.toLowerCase().includes(q))
+    : inventory;
+  const amount = chosen ? chosen.costPerUnit * quantity : 0;
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-end sm:place-items-center bg-foreground/40 p-0 sm:p-4">
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-t-3xl sm:rounded-3xl border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between px-5 pt-5">
+          <div>
+            <h2 className="text-lg font-bold">Select material</h2>
+            <p className="text-xs text-muted-foreground">Adding to · {group}</p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {!chosen ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-3 px-5 pb-5 pt-3">
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by code or name"
+              className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary"
+            />
+            <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-border">
+              {filtered.length === 0 ? (
+                <div className="grid place-items-center gap-2 p-8 text-center">
+                  <p className="text-sm font-semibold">No materials found</p>
+                  <p className="text-xs text-muted-foreground">
+                    Add materials in the Inventory module first.
+                  </p>
+                  <Link
+                    to="/inventory"
+                    className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+                  >
+                    Open Inventory
+                  </Link>
+                </div>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {filtered.map((m) => (
+                    <li key={m.id}>
+                      <button
+                        onClick={() => setChosen(m)}
+                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-accent"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">{m.name}</p>
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            {m.code} · stock {m.availableStock} {m.unit}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-sm font-bold tabular-nums text-primary">
+                          ₹{m.costPerUnit.toFixed(2)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-3 px-5 pb-5 pt-3">
+            <div className="rounded-xl border border-border bg-primary-soft/40 p-3">
+              <p className="text-sm font-bold">{chosen.name}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {chosen.code} · ₹{chosen.costPerUnit.toFixed(2)}/{chosen.unit} · stock{" "}
+                {chosen.availableStock}
+              </p>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-3">
+              <label className="block min-w-0">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                  Quantity ({chosen.unit})
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.25}
+                  inputMode="decimal"
+                  value={quantity || ""}
+                  onChange={(e) => setQuantity(Math.max(0, Number(e.target.value) || 0))}
+                  className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+                />
+              </label>
+              <div className="pb-1">
+                <p className="text-[10px] font-bold uppercase text-muted-foreground">×</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Amount</p>
+                <p className="text-lg font-extrabold text-primary tabular-nums">₹{amount.toFixed(2)}</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setChosen(null)}
+                className="rounded-xl border border-border px-3 py-2.5 text-xs font-bold text-muted-foreground hover:bg-accent"
+              >
+                Back
+              </button>
+              <button
+                onClick={() => onSelect(group, chosen, quantity)}
+                disabled={busy || quantity <= 0}
+                className="ml-auto inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-60"
+              >
+                {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                Add to sample
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1615,6 +1652,12 @@ function CostingPanel({ design }: { design: Design }) {
   const labourTotal = completedSteps.reduce((sum, s) => sum + stepLabourCost(s), 0);
   const labourPerPiece = design.orderQuantity > 0 ? labourTotal / design.orderQuantity : 0;
 
+  // Material total is derived automatically from selected inventory materials.
+  const { data: designMaterials = [] } = useDesignMaterials(design.id);
+  const materialOrderTotal = computeMaterialTotal(designMaterials);
+  const materialPerPiece =
+    design.orderQuantity > 0 ? materialOrderTotal / design.orderQuantity : 0;
+
   const [costs, setCosts] = useState<
     {
       id: string;
@@ -1623,10 +1666,7 @@ function CostingPanel({ design }: { design: Design }) {
       amount: number;
       readOnly?: boolean;
     }[]
-  >(() => [
-    { id: "c1", label: "Material (est.)", category: "Material", amount: 0 },
-    { id: "c3", label: "Overheads", category: "Overhead", amount: 0 },
-  ]);
+  >(() => [{ id: "c3", label: "Overheads", category: "Overhead", amount: 0 }]);
 
   // Merge auto labour with manual rows for display + totals.
   const rows: {
@@ -1636,7 +1676,14 @@ function CostingPanel({ design }: { design: Design }) {
     amount: number;
     readOnly?: boolean;
   }[] = [
-    ...costs.filter((c) => c.category !== "Labor"),
+    {
+      id: "material-auto",
+      label: `Material (Auto · ${designMaterials.length} item${designMaterials.length === 1 ? "" : "s"})`,
+      category: "Material" as const,
+      amount: materialPerPiece,
+      readOnly: true,
+    },
+    ...costs.filter((c) => c.category !== "Labor" && c.category !== "Material"),
     {
       id: "labour-auto",
       label: `Labour (Auto · ${completedSteps.length} op${completedSteps.length === 1 ? "" : "s"})`,

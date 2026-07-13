@@ -153,29 +153,41 @@ export type Database = {
       }
       materials: {
         Row: {
+          available_stock: number
+          code: string
+          cost_per_unit: number
           created_at: string
-          created_by: string
+          created_by: string | null
           id: string
           name: string
           rate: number
+          status: string
           unit: string
           updated_at: string
         }
         Insert: {
+          available_stock?: number
+          code: string
+          cost_per_unit?: number
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           id?: string
           name: string
           rate?: number
+          status?: string
           unit?: string
           updated_at?: string
         }
         Update: {
+          available_stock?: number
+          code?: string
+          cost_per_unit?: number
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           id?: string
           name?: string
           rate?: number
+          status?: string
           unit?: string
           updated_at?: string
         }

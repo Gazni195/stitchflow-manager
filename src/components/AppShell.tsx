@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Menu, Bell, Search, LayoutDashboard, Shirt, FlaskConical, Factory, Warehouse, X } from "lucide-react";
+import { Menu, Bell, Search, LayoutDashboard, Shirt, FlaskConical, Factory, Warehouse, Package, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { WORKFLOW } from "@/lib/workflow";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ const PRIMARY_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/designs", label: "Designs", icon: Shirt },
   { to: "/sample-development", label: "Samples", icon: FlaskConical },
+  { to: "/inventory", label: "Inventory", icon: Package },
   { to: "/stitching", label: "Production", icon: Factory },
   { to: "/stock", label: "Stock", icon: Warehouse },
 ] as const;

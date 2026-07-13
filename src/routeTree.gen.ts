@@ -17,6 +17,7 @@ import { Route as QcRouteImport } from './routes/qc'
 import { Route as PackingRouteImport } from './routes/packing'
 import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as HandworkRouteImport } from './routes/handwork'
 import { Route as CuttingRouteImport } from './routes/cutting'
 import { Route as CostingRouteImport } from './routes/costing'
@@ -67,6 +68,11 @@ const MaterialsRoute = MaterialsRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InventoryRoute = InventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HandworkRoute = HandworkRouteImport.update({
@@ -132,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/costing': typeof CostingRoute
   '/cutting': typeof CuttingRoute
   '/handwork': typeof HandworkRoute
+  '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/materials': typeof MaterialsRoute
   '/packing': typeof PackingRoute
@@ -153,6 +160,7 @@ export interface FileRoutesByTo {
   '/costing': typeof CostingRoute
   '/cutting': typeof CuttingRoute
   '/handwork': typeof HandworkRoute
+  '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/materials': typeof MaterialsRoute
   '/packing': typeof PackingRoute
@@ -175,6 +183,7 @@ export interface FileRoutesById {
   '/costing': typeof CostingRoute
   '/cutting': typeof CuttingRoute
   '/handwork': typeof HandworkRoute
+  '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/materials': typeof MaterialsRoute
   '/packing': typeof PackingRoute
@@ -198,6 +207,7 @@ export interface FileRouteTypes {
     | '/costing'
     | '/cutting'
     | '/handwork'
+    | '/inventory'
     | '/login'
     | '/materials'
     | '/packing'
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/costing'
     | '/cutting'
     | '/handwork'
+    | '/inventory'
     | '/login'
     | '/materials'
     | '/packing'
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/costing'
     | '/cutting'
     | '/handwork'
+    | '/inventory'
     | '/login'
     | '/materials'
     | '/packing'
@@ -262,6 +274,7 @@ export interface RootRouteChildren {
   CostingRoute: typeof CostingRoute
   CuttingRoute: typeof CuttingRoute
   HandworkRoute: typeof HandworkRoute
+  InventoryRoute: typeof InventoryRoute
   LoginRoute: typeof LoginRoute
   MaterialsRoute: typeof MaterialsRoute
   PackingRoute: typeof PackingRoute
@@ -332,6 +345,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inventory': {
+      id: '/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof InventoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/handwork': {
@@ -433,6 +453,7 @@ const rootRouteChildren: RootRouteChildren = {
   CostingRoute: CostingRoute,
   CuttingRoute: CuttingRoute,
   HandworkRoute: HandworkRoute,
+  InventoryRoute: InventoryRoute,
   LoginRoute: LoginRoute,
   MaterialsRoute: MaterialsRoute,
   PackingRoute: PackingRoute,
