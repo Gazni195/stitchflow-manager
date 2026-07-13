@@ -1676,7 +1676,14 @@ function CostingPanel({ design }: { design: Design }) {
     amount: number;
     readOnly?: boolean;
   }[] = [
-    ...costs.filter((c) => c.category !== "Labor"),
+    {
+      id: "material-auto",
+      label: `Material (Auto · ${designMaterials.length} item${designMaterials.length === 1 ? "" : "s"})`,
+      category: "Material" as const,
+      amount: materialPerPiece,
+      readOnly: true,
+    },
+    ...costs.filter((c) => c.category !== "Labor" && c.category !== "Material"),
     {
       id: "labour-auto",
       label: `Labour (Auto · ${completedSteps.length} op${completedSteps.length === 1 ? "" : "s"})`,
