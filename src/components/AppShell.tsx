@@ -9,7 +9,7 @@ const PRIMARY_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/designs", label: "Designs", icon: Shirt },
   { to: "/sample-development", label: "Samples", icon: FlaskConical },
-  { to: "/production/ready", label: "Production", icon: PlayCircle },
+  { to: "/production", label: "Production", icon: PlayCircle },
   { to: "/inventory", label: "Inventory", icon: Package },
   { to: "/stitching", label: "Line", icon: Factory },
   { to: "/stock", label: "Stock", icon: Warehouse },

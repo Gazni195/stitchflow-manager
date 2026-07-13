@@ -28,7 +28,6 @@ import { Route as SampleDevelopmentIndexRouteImport } from './routes/sample-deve
 import { Route as ProductionIndexRouteImport } from './routes/production.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
-import { Route as ProductionReadyRouteImport } from './routes/production.ready'
 import { Route as ProductionPoRouteImport } from './routes/production.$po'
 import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
 import { Route as DesignsCodeWorkflowRouteImport } from './routes/designs.$code.workflow'
@@ -128,11 +127,6 @@ const SampleDevelopmentCodeRoute = SampleDevelopmentCodeRouteImport.update({
   path: '/sample-development/$code',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProductionReadyRoute = ProductionReadyRouteImport.update({
-  id: '/production/ready',
-  path: '/production/ready',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ProductionPoRoute = ProductionPoRouteImport.update({
   id: '/production/$po',
   path: '/production/$po',
@@ -167,7 +161,6 @@ export interface FileRoutesByFullPath {
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
   '/production/$po': typeof ProductionPoRoute
-  '/production/ready': typeof ProductionReadyRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
   '/production/': typeof ProductionIndexRoute
@@ -192,7 +185,6 @@ export interface FileRoutesByTo {
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
   '/production/$po': typeof ProductionPoRoute
-  '/production/ready': typeof ProductionReadyRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs': typeof DesignsIndexRoute
   '/production': typeof ProductionIndexRoute
@@ -218,7 +210,6 @@ export interface FileRoutesById {
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
   '/production/$po': typeof ProductionPoRoute
-  '/production/ready': typeof ProductionReadyRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
   '/production/': typeof ProductionIndexRoute
@@ -245,7 +236,6 @@ export interface FileRouteTypes {
     | '/stock'
     | '/designs/$code'
     | '/production/$po'
-    | '/production/ready'
     | '/sample-development/$code'
     | '/designs/'
     | '/production/'
@@ -270,7 +260,6 @@ export interface FileRouteTypes {
     | '/stock'
     | '/designs/$code'
     | '/production/$po'
-    | '/production/ready'
     | '/sample-development/$code'
     | '/designs'
     | '/production'
@@ -295,7 +284,6 @@ export interface FileRouteTypes {
     | '/stock'
     | '/designs/$code'
     | '/production/$po'
-    | '/production/ready'
     | '/sample-development/$code'
     | '/designs/'
     | '/production/'
@@ -321,7 +309,6 @@ export interface RootRouteChildren {
   StockRoute: typeof StockRoute
   DesignsCodeRoute: typeof DesignsCodeRouteWithChildren
   ProductionPoRoute: typeof ProductionPoRoute
-  ProductionReadyRoute: typeof ProductionReadyRoute
   SampleDevelopmentCodeRoute: typeof SampleDevelopmentCodeRoute
   DesignsIndexRoute: typeof DesignsIndexRoute
   ProductionIndexRoute: typeof ProductionIndexRoute
@@ -463,13 +450,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SampleDevelopmentCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/production/ready': {
-      id: '/production/ready'
-      path: '/production/ready'
-      fullPath: '/production/ready'
-      preLoaderRoute: typeof ProductionReadyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/production/$po': {
       id: '/production/$po'
       path: '/production/$po'
@@ -524,7 +504,6 @@ const rootRouteChildren: RootRouteChildren = {
   StockRoute: StockRoute,
   DesignsCodeRoute: DesignsCodeRouteWithChildren,
   ProductionPoRoute: ProductionPoRoute,
-  ProductionReadyRoute: ProductionReadyRoute,
   SampleDevelopmentCodeRoute: SampleDevelopmentCodeRoute,
   DesignsIndexRoute: DesignsIndexRoute,
   ProductionIndexRoute: ProductionIndexRoute,
