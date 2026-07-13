@@ -1468,6 +1468,11 @@ function HistoryTimelineRow({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold">✓ {opName}</p>
+          {formatWorkArea(step.garmentPart, step.workArea, step.customArea) && (
+            <p className="truncate text-[11px] font-semibold text-primary">
+              {formatWorkArea(step.garmentPart, step.workArea, step.customArea)}
+            </p>
+          )}
           <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
             {workers.length ? `Workers: ${workers.join(", ")}` : "Unassigned"}
           </p>
