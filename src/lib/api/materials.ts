@@ -191,7 +191,7 @@ export function useUpdateDesignMaterial(designId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { id: string; quantity: number; rate?: number }) => {
-      const patch: Record<string, number> = { quantity: input.quantity };
+      const patch: { quantity: number; rate?: number } = { quantity: input.quantity };
       if (typeof input.rate === "number") patch.rate = input.rate;
       const { error } = await supabase.from("design_materials").update(patch).eq("id", input.id);
       if (error) throw error;
