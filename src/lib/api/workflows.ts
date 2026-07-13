@@ -127,14 +127,19 @@ function invalidate(qc: ReturnType<typeof useQueryClient>, designId: string) {
 export function useAddStep(designId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (v: { workflowId: string; operationId: string; sequence: number }) => {
-      const { error } = await supabase.from("workflow_steps").insert({
-        workflow_id: v.workflowId,
-        operation_id: v.operationId,
-        sequence: v.sequence,
-        status: "pending",
-      });
+    mutationFn: async (v: { workflowId: string; operationId: string; sequence: number }): Promise<string> => {
+      const { data, error } = await supabase
+        .from("workflow_steps")
+        .insert({
+          workflow_id: v.workflowId,
+          operation_id: v.operationId,
+          sequence: v.sequence,
+          status: "pending",
+        })
+        .select("id")
+        .single();
       if (error) throw error;
+      return (data as { id: string }).id;
     },
     onSuccess: () => invalidate(qc, designId),
   });
