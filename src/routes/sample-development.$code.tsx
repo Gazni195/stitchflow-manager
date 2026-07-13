@@ -30,6 +30,7 @@ import { useDesignByCode } from "@/lib/api/designs";
 import { useAddOperation, useOperationCatalog, type CatalogOperation } from "@/lib/api/operations";
 import {
   useAddStep,
+  useApproveSample,
   useDeleteStep,
   useUpdateStep,
   useWorkflows,
@@ -194,10 +195,10 @@ function DesignSample({ design }: { design: Design }) {
           </div>
 
           <div className="pt-5">
-            {tab === "status" && <StatusPanel design={design} stage={stage} />}
+            {tab === "status" && <StatusPanel design={design} stage={stage} onContinue={() => setTab("materials")} />}
             {tab === "materials" && <MaterialsPanel design={design} onCompleted={() => setTab("making")} />}
             {tab === "making" && <SampleMakingPanel design={design} onContinue={() => setTab("costing")} />}
-            {tab === "costing" && <CostingPanel design={design} />}
+            {tab === "costing" && <CostingPanel design={design} onContinue={() => setTab("approval")} />}
             {tab === "approval" && <ApprovalPanel design={design} />}
           </div>
         </section>
@@ -208,7 +209,7 @@ function DesignSample({ design }: { design: Design }) {
 
 /* ---------- Status ---------- */
 
-function StatusPanel({ design, stage }: { design: Design; stage: "In Development" | "Ready for Review" | "Approved" }) {
+function StatusPanel({ design, stage, onContinue }: { design: Design; stage: "In Development" | "Ready for Review" | "Approved"; onContinue: () => void }) {
   const steps: { id: string; label: string; icon: LucideIcon }[] = [
     { id: "Requested", label: "Requested", icon: Sparkles },
     { id: "In Development", label: "In Development", icon: Clock },
@@ -258,6 +259,13 @@ function StatusPanel({ design, stage }: { design: Design; stage: "In Development
           <p className="mt-1 text-sm">{design.notes}</p>
         </div>
       )}
+
+      <button
+        onClick={onContinue}
+        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+      >
+        Continue to Material Selection <ArrowRight className="h-4 w-4" />
+      </button>
     </div>
   );
 }
@@ -1644,7 +1652,7 @@ function StatusTile({ label, value, mono }: { label: string; value: string; mono
 
 /* ---------- Costing ---------- */
 
-function CostingPanel({ design }: { design: Design }) {
+function CostingPanel({ design, onContinue }: { design: Design; onContinue: () => void }) {
   const { data: workflows } = useWorkflows(design.id);
   const sample = workflows?.find((w) => w.kind === "sample");
   const completedSteps = (sample?.steps ?? []).filter((s) => s.status === "completed");
@@ -1810,6 +1818,13 @@ function CostingPanel({ design }: { design: Design }) {
           Production Order is created.
         </p>
       </div>
+
+      <button
+        onClick={onContinue}
+        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+      >
+        Continue to Approval <ArrowRight className="h-4 w-4" />
+      </button>
     </div>
   );
 }
@@ -1904,6 +1919,8 @@ function ApprovalPanel({ design }: { design: Design }) {
   const approved = approvals.filter((a) => a.status === "Approved").length;
   const total = approvals.length;
   const pct = Math.round((approved / total) * 100);
+  const allApproved = approved === total;
+  const approveSample = useApproveSample(design.id);
 
   function setStatus(id: string, status: ApprovalRow["status"]) {
     setApprovals((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
@@ -1969,9 +1986,20 @@ function ApprovalPanel({ design }: { design: Design }) {
           );
         })}
       </ul>
+
+      <button
+        onClick={() => approveSample.mutate()}
+        disabled={!allApproved || approveSample.isPending}
+        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-success px-4 py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {approveSample.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+        <CheckCircle2 className="h-4 w-4" />
+        {allApproved ? "Approve Sample" : `Awaiting ${total - approved} approval${total - approved === 1 ? "" : "s"}`}
+      </button>
     </div>
   );
 }
+
 
 /* ---------- Shared ---------- */
 
