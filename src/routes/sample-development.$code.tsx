@@ -1167,7 +1167,14 @@ function RunningOperationCard({
         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary">
           {Icon ? <Icon className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}
         </div>
-        <h4 className="truncate text-base font-extrabold tracking-tight">{opName}</h4>
+        <div className="min-w-0 flex-1">
+          <h4 className="truncate text-base font-extrabold tracking-tight">{opName}</h4>
+          {formatWorkArea(step.garmentPart, step.workArea, step.customArea) && (
+            <p className="truncate text-[11px] font-semibold text-primary">
+              {formatWorkArea(step.garmentPart, step.workArea, step.customArea)}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="mt-3">
