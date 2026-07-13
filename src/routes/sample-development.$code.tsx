@@ -36,6 +36,15 @@ import {
   type StepStatus,
   type WorkflowStep,
 } from "@/lib/api/workflows";
+import {
+  useAddDesignMaterial,
+  useDesignMaterials,
+  useMaterials,
+  useRemoveDesignMaterial,
+  useUpdateDesignMaterial,
+  type DesignMaterial,
+  type Material,
+} from "@/lib/api/materials";
 import { supabase } from "@/integrations/supabase/client";
 import type { Design } from "@/lib/designs";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/designs";
