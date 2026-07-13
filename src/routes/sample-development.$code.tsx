@@ -1652,6 +1652,12 @@ function CostingPanel({ design }: { design: Design }) {
   const labourTotal = completedSteps.reduce((sum, s) => sum + stepLabourCost(s), 0);
   const labourPerPiece = design.orderQuantity > 0 ? labourTotal / design.orderQuantity : 0;
 
+  // Material total is derived automatically from selected inventory materials.
+  const { data: designMaterials = [] } = useDesignMaterials(design.id);
+  const materialOrderTotal = computeMaterialTotal(designMaterials);
+  const materialPerPiece =
+    design.orderQuantity > 0 ? materialOrderTotal / design.orderQuantity : 0;
+
   const [costs, setCosts] = useState<
     {
       id: string;
@@ -1660,10 +1666,7 @@ function CostingPanel({ design }: { design: Design }) {
       amount: number;
       readOnly?: boolean;
     }[]
-  >(() => [
-    { id: "c1", label: "Material (est.)", category: "Material", amount: 0 },
-    { id: "c3", label: "Overheads", category: "Overhead", amount: 0 },
-  ]);
+  >(() => [{ id: "c3", label: "Overheads", category: "Overhead", amount: 0 }]);
 
   // Merge auto labour with manual rows for display + totals.
   const rows: {
