@@ -172,6 +172,9 @@ export function useUpdateStep(designId: string) {
       if (p.completedAt !== undefined) dbPatch.completed_at = p.completedAt;
       if (p.durationSeconds !== undefined) dbPatch.duration_seconds = p.durationSeconds;
       if (p.hourlyRate !== undefined) dbPatch.hourly_rate = p.hourlyRate;
+      if (p.garmentPart !== undefined) dbPatch.garment_part = p.garmentPart;
+      if (p.workArea !== undefined) dbPatch.work_area = p.workArea;
+      if (p.customArea !== undefined) dbPatch.custom_area = p.customArea;
       const { error } = await (supabase.from("workflow_steps") as unknown as { update: (p: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: unknown }> } })
         .update(dbPatch).eq("id", v.stepId);
       if (error) throw error;
