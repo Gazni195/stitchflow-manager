@@ -1895,36 +1895,35 @@ function EmptyChild({ text }: { text: string }) {
 
 /* ---------- Approval ---------- */
 
-type ApprovalRow = {
-  id: string;
-  role: string;
-  name: string;
-  status: "Pending" | "Approved" | "Rejected";
-};
-
-const APPROVAL_TONE: Record<ApprovalRow["status"], string> = {
-  Pending: "bg-muted text-muted-foreground",
-  Approved: "bg-success/15 text-success",
-  Rejected: "bg-destructive/15 text-destructive",
-};
+const APPROVAL_ROLES = ["Designer", "Merchandiser", "Production Head", "Customer"] as const;
+type ApprovalRoleName = (typeof APPROVAL_ROLES)[number];
 
 function ApprovalPanel({ design }: { design: Design }) {
-  const [approvals, setApprovals] = useState<ApprovalRow[]>(() => [
-    { id: "a1", role: "Designer", name: "—", status: "Pending" },
-    { id: "a2", role: "Merchandiser", name: "—", status: "Pending" },
-    { id: "a3", role: "Production Head", name: "—", status: "Pending" },
-    { id: "a4", role: "Customer", name: design.customer || "—", status: "Pending" },
-  ]);
-
-  const approved = approvals.filter((a) => a.status === "Approved").length;
-  const total = approvals.length;
-  const pct = Math.round((approved / total) * 100);
-  const allApproved = approved === total;
+  const { data: approvals = [], isLoading } = useSampleApprovals(design.id);
+  const record = useRecordApproval(design.id);
   const approveSample = useApproveSample(design.id);
+  const autoRanRef = useRef(false);
 
-  function setStatus(id: string, status: ApprovalRow["status"]) {
-    setApprovals((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
-  }
+  const byRole = new Map<string, (typeof approvals)[number]>(
+    approvals.map((a) => [a.role, a]),
+  );
+  const approvedCount = APPROVAL_ROLES.filter((r) => byRole.has(r)).length;
+  const total = APPROVAL_ROLES.length;
+  const pct = Math.round((approvedCount / total) * 100);
+  const allApproved = approvedCount === total;
+  const sampleLocked =
+    design.status === "sample_approved" ||
+    design.status === "in_production" ||
+    design.status === "completed";
+
+  // When the last role signs off, auto-run the sample-approved RPC so the
+  // design status flips to Ready for Production and the bulk workflow is
+  // materialized — no extra button click needed.
+  useEffect(() => {
+    if (!allApproved || sampleLocked || autoRanRef.current) return;
+    autoRanRef.current = true;
+    approveSample.mutate();
+  }, [allApproved, sampleLocked, approveSample]);
 
   return (
     <div className="grid gap-4">
@@ -1933,7 +1932,7 @@ function ApprovalPanel({ design }: { design: Design }) {
           <div>
             <p className="font-bold">Approval progress</p>
             <p className="text-xs text-muted-foreground">
-              {approved} of {total} approvers signed off
+              {approvedCount} of {total} approvers signed off
             </p>
           </div>
           <p className="text-2xl font-extrabold text-primary">{pct}%</p>
@@ -1946,59 +1945,141 @@ function ApprovalPanel({ design }: { design: Design }) {
         </div>
       </div>
 
-      <ul className="grid gap-3 sm:grid-cols-2">
-        {approvals.map((a) => {
-          const Icon = a.status === "Approved" ? CheckCircle2 : a.status === "Rejected" ? XCircle : Clock;
-          return (
-            <li key={a.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{a.role}</p>
-                  <p className="mt-0.5 truncate text-base font-bold">{a.name}</p>
-                </div>
-                <span
-                  className={
-                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold " +
-                    APPROVAL_TONE[a.status]
-                  }
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {a.status}
-                </span>
-              </div>
-              {a.status === "Pending" && (
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={() => setStatus(a.id, "Approved")}
-                    className="flex-1 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => setStatus(a.id, "Rejected")}
-                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold hover:border-destructive/40 hover:text-destructive"
-                  >
-                    Reject
-                  </button>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      {isLoading ? (
+        <div className="grid place-items-center rounded-2xl border border-border bg-card p-10">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {APPROVAL_ROLES.map((role) => (
+            <ApprovalCard
+              key={role}
+              role={role}
+              existing={byRole.get(role) ?? null}
+              defaultName={role === "Customer" ? design.customer : ""}
+              disabled={sampleLocked || record.isPending}
+              onApprove={(name) => record.mutateAsync({ role, approverName: name })}
+            />
+          ))}
+        </ul>
+      )}
 
-      <button
-        onClick={() => approveSample.mutate()}
-        disabled={!allApproved || approveSample.isPending}
-        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-success px-4 py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {approveSample.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-        <CheckCircle2 className="h-4 w-4" />
-        {allApproved ? "Approve Sample" : `Awaiting ${total - approved} approval${total - approved === 1 ? "" : "s"}`}
-      </button>
+      {sampleLocked ? (
+        <div className="rounded-2xl border border-success/40 bg-success/10 p-5">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-success">Sample approved · Ready for Production</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                This sample has been signed off and moved to the production queue.
+              </p>
+              <Link
+                to="/production/ready"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:opacity-90"
+              >
+                Open Production Queue <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : allApproved ? (
+        <div className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary/10 px-4 py-3.5 text-sm font-semibold text-primary">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Finalising sample approval…
+        </div>
+      ) : (
+        <p className="text-center text-[11px] text-muted-foreground">
+          Awaiting {total - approvedCount} approval{total - approvedCount === 1 ? "" : "s"}. Sample moves to
+          <span className="font-semibold text-foreground"> Ready for Production </span>
+          automatically once all approvers sign off.
+        </p>
+      )}
     </div>
   );
 }
+
+function ApprovalCard({
+  role,
+  existing,
+  defaultName,
+  disabled,
+  onApprove,
+}: {
+  role: ApprovalRoleName;
+  existing: SampleApproval | null;
+  defaultName: string;
+  disabled: boolean;
+  onApprove: (name: string) => Promise<void>;
+}) {
+  const [name, setName] = useState(defaultName);
+  const [busy, setBusy] = useState(false);
+  const isApproved = !!existing;
+
+  async function submit() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setBusy(true);
+    try {
+      await onApprove(trimmed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{role}</p>
+          <p className="mt-0.5 truncate text-base font-bold">
+            {isApproved ? existing!.approverName : defaultName || "—"}
+          </p>
+        </div>
+        <span
+          className={
+            "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold " +
+            (isApproved ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")
+          }
+        >
+          {isApproved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+          {isApproved ? "Approved" : "Pending"}
+        </span>
+      </div>
+
+      {isApproved ? (
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Approved on {new Date(existing!.approvedAt).toLocaleString(undefined, {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </p>
+      ) : (
+        <div className="mt-3 grid gap-2">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={`${role} name`}
+            disabled={disabled || busy}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+          />
+          <button
+            onClick={submit}
+            disabled={disabled || busy || !name.trim()}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Approve
+          </button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+
 
 
 /* ---------- Shared ---------- */
