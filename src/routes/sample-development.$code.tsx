@@ -1977,7 +1977,7 @@ function ApprovalPanel({ design }: { design: Design }) {
                 This sample has been signed off and moved to the production queue.
               </p>
               <Link
-                to="/production/ready"
+                to="/production"
                 className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:opacity-90"
               >
                 Open Production Queue <ArrowRight className="h-3.5 w-3.5" />

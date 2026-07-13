@@ -220,6 +220,115 @@ export type Database = {
         }
         Relationships: []
       }
+      production_orders: {
+        Row: {
+          code: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          design_id: string
+          id: string
+          order_quantity: number
+          start_date: string
+          status: string
+          supervisor: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          design_id: string
+          id?: string
+          order_quantity: number
+          start_date?: string
+          status?: string
+          supervisor?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          design_id?: string
+          id?: string
+          order_quantity?: number
+          start_date?: string
+          status?: string
+          supervisor?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_orders_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_processes: {
+        Row: {
+          assigned_to: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          issued_at: string | null
+          issued_qty: number | null
+          notes: string | null
+          operation_id: string
+          production_order_id: string
+          returned_qty: number | null
+          sequence: number
+          status: string
+          updated_at: string
+          worker_type: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          issued_at?: string | null
+          issued_qty?: number | null
+          notes?: string | null
+          operation_id: string
+          production_order_id: string
+          returned_qty?: number | null
+          sequence: number
+          status?: string
+          updated_at?: string
+          worker_type?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          issued_at?: string | null
+          issued_qty?: number | null
+          notes?: string | null
+          operation_id?: string
+          production_order_id?: string
+          returned_qty?: number | null
+          sequence?: number
+          status?: string
+          updated_at?: string
+          worker_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_processes_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sample_approvals: {
         Row: {
           approved_at: string
@@ -360,11 +469,34 @@ export type Database = {
     }
     Functions: {
       approve_sample: { Args: { _design_id: string }; Returns: string }
+      complete_process: {
+        Args: { _process_id: string; _returned_qty: number }
+        Returns: undefined
+      }
       has_design_access: { Args: { _design_id: string }; Returns: boolean }
       has_workflow_access: { Args: { _workflow_id: string }; Returns: boolean }
+      issue_bundle: {
+        Args: {
+          _assigned_to: string
+          _issued_qty: number
+          _notes: string
+          _process_id: string
+          _worker_type: string
+        }
+        Returns: undefined
+      }
       start_bulk_production: {
         Args: { _design_id: string }
         Returns: undefined
+      }
+      start_production: {
+        Args: {
+          _design_id: string
+          _order_quantity: number
+          _start_date: string
+          _supervisor: string
+        }
+        Returns: string
       }
     }
     Enums: {
