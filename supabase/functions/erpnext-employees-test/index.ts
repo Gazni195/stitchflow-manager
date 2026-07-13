@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
   }
 
   const base = url.replace(/\/+$/, "");
-  const endpoint = `${base}/api/resource/Employee?fields=["employee","employee_name","status"]&limit_page_length=0`;
+  const endpoint = `${base}/api/resource/Employee?fields=["employee","employee_name","status"]&limit_page_length=0&limit_start=0`;
 
   try {
     const res = await fetch(endpoint, {
