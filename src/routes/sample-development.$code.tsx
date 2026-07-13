@@ -38,8 +38,7 @@ import {
   type WorkflowStep,
 } from "@/lib/api/workflows";
 import { useSampleApprovals, useRecordApproval, type SampleApproval } from "@/lib/api/approvals";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const __wf_barrier = null;
+
 
 import {
   useAddDesignMaterial,
