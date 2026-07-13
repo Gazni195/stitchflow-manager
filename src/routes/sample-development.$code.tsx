@@ -837,25 +837,33 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     }
   }
 
-  function start(step: WorkflowStep) {
-    const session = sessions[step.id] ?? emptySession();
-    if (session.workers.length === 0) return;
-    const hoursNote = session.estimatedHours.trim()
-      ? `Est. ${session.estimatedHours.trim()} hr${session.estimatedHours.trim() === "1" ? "" : "s"}`
+  function start(step: WorkflowStep, override?: WorkAreaPayload) {
+    const currentSession = sessions[step.id] ?? emptySession();
+    const workers = override?.workers ?? currentSession.workers;
+    if (workers.length === 0) return;
+    const hoursNote = currentSession.estimatedHours.trim()
+      ? `Est. ${currentSession.estimatedHours.trim()} hr${currentSession.estimatedHours.trim() === "1" ? "" : "s"}`
       : "";
-    const remarks = [hoursNote, session.remarks.trim()].filter(Boolean).join(" · ");
+    const remarks = [hoursNote, currentSession.remarks.trim()].filter(Boolean).join(" · ");
     const now = new Date();
-    patchSession(step.id, { startedAt: now, pausedAt: null, pausedMs: 0, completedAt: null });
+    patchSession(step.id, { workers, startedAt: now, pausedAt: null, pausedMs: 0, completedAt: null });
     updateStep.mutate({
       stepId: step.id,
       patch: {
         status: "in-progress",
-        assignedTo: joinWorkers(session.workers),
+        assignedTo: joinWorkers(workers),
         remarks: remarks || null,
         startDate: today(),
         startedAt: now.toISOString(),
         completedAt: null,
         durationSeconds: null,
+        ...(override
+          ? {
+              garmentPart: override.garmentPart,
+              workArea: override.workArea,
+              customArea: override.customArea,
+            }
+          : {}),
       },
     });
   }
