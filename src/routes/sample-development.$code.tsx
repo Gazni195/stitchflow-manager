@@ -1025,7 +1025,7 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
                 onAddWorker={(w) => addWorker(step, w)}
                 onRemoveWorker={(w) => removeWorker(step, w)}
                 onHoursChange={(v) => patchSession(step.id, { estimatedHours: v })}
-                onStart={() => start(step)}
+                onStart={(payload) => start(step, payload)}
                 onEdit={() => setEditingId(step.id)}
                 onDelete={() => removeStep(step)}
               />
