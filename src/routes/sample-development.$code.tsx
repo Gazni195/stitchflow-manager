@@ -1658,50 +1658,25 @@ function CostingPanel({ design }: { design: Design }) {
   const { data: designMaterials = [] } = useDesignMaterials(design.id);
   const materialPerPiece = computeMaterialTotal(designMaterials);
 
-  const [costs, setCosts] = useState<
-    {
-      id: string;
-      label: string;
-      category: "Material" | "Labor" | "Overhead" | "Other";
-      amount: number;
-      readOnly?: boolean;
-    }[]
-  >(() => [{ id: "c3", label: "Overheads", category: "Overhead", amount: 0 }]);
+  const [overheadItems, setOverheadItems] = useState<
+    { id: string; label: string; amount: number }[]
+  >(() => [
+    { id: "oh-electricity", label: "Electricity", amount: 0 },
+    { id: "oh-packing", label: "Packing", amount: 0 },
+    { id: "oh-transport", label: "Transport", amount: 0 },
+  ]);
+  const overheadPerPiece = overheadItems.reduce((s, o) => s + (o.amount || 0), 0);
 
-  const rows: {
-    id: string;
-    label: string;
-    category: "Material" | "Labor" | "Overhead" | "Other";
-    amount: number;
-    readOnly?: boolean;
-  }[] = [
-    {
-      id: "material-auto",
-      label: `Material (Auto · ${designMaterials.length} item${designMaterials.length === 1 ? "" : "s"})`,
-      category: "Material" as const,
-      amount: materialPerPiece,
-      readOnly: true,
-    },
-    ...costs.filter((c) => c.category !== "Labor" && c.category !== "Material"),
-    {
-      id: "labour-auto",
-      label: `Labour (Auto · ${completedSteps.length} op${completedSteps.length === 1 ? "" : "s"})`,
-      category: "Labor" as const,
-      amount: labourPerPiece,
-      readOnly: true,
-    },
-  ];
-
-  const perPiece = rows.reduce((s, c) => s + c.amount, 0);
+  const perPiece = materialPerPiece + labourPerPiece + overheadPerPiece;
   const projectedProductionTotal = perPiece * design.orderQuantity;
-  const byCategory = rows.reduce<Record<string, number>>((acc, c) => {
-    acc[c.category] = (acc[c.category] ?? 0) + c.amount;
-    return acc;
-  }, {});
+
+  const [openRow, setOpenRow] = useState<"material" | "overhead" | "labour" | null>("material");
+  const toggle = (k: "material" | "overhead" | "labour") =>
+    setOpenRow((cur) => (cur === k ? null : k));
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
+    <div className="grid gap-4">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div>
             <p className="text-sm font-bold">Sample Costing</p>
@@ -1711,117 +1686,195 @@ function CostingPanel({ design }: { design: Design }) {
             1 Piece
           </span>
         </div>
-        <table className="w-full min-w-[420px] text-sm">
-          <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground">
-            <tr>
-              <th className="p-3 text-left font-semibold">Cost Item</th>
-              <th className="p-3 text-left font-semibold">Category</th>
-              <th className="p-3 text-right font-semibold">Amount (₹ / 1 Piece)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((c) => (
-              <tr key={c.id} className="border-t border-border">
-                <td className="p-3 font-semibold">{c.label}</td>
-                <td className="p-3 text-muted-foreground">{c.category}</td>
-                <td className="p-3 text-right">
-                  {c.readOnly ? (
-                    <span className="inline-flex w-28 items-center justify-end rounded-lg bg-primary-soft px-2 py-1.5 text-right text-sm font-bold text-primary">
-                      ₹{c.amount.toFixed(2)}
-                    </span>
-                  ) : (
-                    <input
-                      type="number"
-                      min={0}
-                      value={c.amount || ""}
-                      onChange={(e) =>
-                        setCosts((prev) =>
-                          prev.map((x) =>
-                            x.id === c.id ? { ...x, amount: Math.max(0, Number(e.target.value) || 0) } : x,
-                          ),
-                        )
-                      }
-                      className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-right text-sm outline-none focus:border-primary"
-                    />
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-t border-border bg-primary-soft">
-              <td className="p-3 font-bold" colSpan={2}>
-                Total Sample Cost (1 Piece)
-              </td>
-              <td className="p-3 text-right text-lg font-extrabold text-primary">₹{perPiece.toFixed(2)}</td>
-            </tr>
-          </tfoot>
-        </table>
 
-        {completedSteps.length > 0 && (
-          <div className="border-t border-border p-4">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Labour Breakdown (Auto · 1 Piece)
-            </p>
-            <ul className="mt-2 grid gap-1.5 text-sm">
-              {completedSteps.map((s) => (
-                <li key={s.id} className="flex items-center justify-between">
-                  <span className="truncate font-semibold">{s.label || s.operationId}</span>
-                  <span className="shrink-0 text-muted-foreground">{formatCurrency(stepLabourCost(s))}</span>
+        <ul className="divide-y divide-border">
+          {/* Material */}
+          <CostRow
+            title="Material"
+            meta={`${designMaterials.length} Item${designMaterials.length === 1 ? "" : "s"}`}
+            amount={materialPerPiece}
+            open={openRow === "material"}
+            onToggle={() => toggle("material")}
+          >
+            {designMaterials.length === 0 ? (
+              <EmptyChild text="No materials selected." />
+            ) : (
+              <ul className="grid gap-2">
+                {designMaterials.map((m) => (
+                  <li key={m.id} className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
+                        {m.material?.name ?? "Material"}
+                      </p>
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {m.quantity} {m.material?.unit ?? ""} × ₹{m.rate.toFixed(2)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-sm font-bold tabular-nums">
+                      {formatCurrency(m.amount)}
+                    </span>
+                  </li>
+                ))}
+                <ChildTotal label="Material Total" amount={materialPerPiece} />
+              </ul>
+            )}
+          </CostRow>
+
+          {/* Overhead */}
+          <CostRow
+            title="Overhead"
+            amount={overheadPerPiece}
+            open={openRow === "overhead"}
+            onToggle={() => toggle("overhead")}
+          >
+            <ul className="grid gap-2">
+              {overheadItems.map((o) => (
+                <li key={o.id} className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold">{o.label}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={o.amount || ""}
+                    onChange={(e) =>
+                      setOverheadItems((prev) =>
+                        prev.map((x) =>
+                          x.id === o.id
+                            ? { ...x, amount: Math.max(0, Number(e.target.value) || 0) }
+                            : x,
+                        ),
+                      )
+                    }
+                    className="w-24 rounded-lg border border-border bg-background px-2 py-1.5 text-right text-sm tabular-nums outline-none focus:border-primary"
+                  />
                 </li>
               ))}
-              <li className="mt-1 flex items-center justify-between border-t border-border pt-2">
-                <span className="font-bold">Total Labour (1 Piece)</span>
-                <span className="font-extrabold text-primary">{formatCurrency(labourPerPiece)}</span>
-              </li>
+              <ChildTotal label="Overhead Total" amount={overheadPerPiece} />
             </ul>
+          </CostRow>
+
+          {/* Labour */}
+          <CostRow
+            title="Labour"
+            meta={`${completedSteps.length} Operation${completedSteps.length === 1 ? "" : "s"}`}
+            amount={labourPerPiece}
+            open={openRow === "labour"}
+            onToggle={() => toggle("labour")}
+          >
+            {completedSteps.length === 0 ? (
+              <EmptyChild text="No completed operations yet." />
+            ) : (
+              <ul className="grid gap-2">
+                {completedSteps.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between gap-3">
+                    <span className="truncate text-sm font-semibold">
+                      {s.label || s.operationId}
+                    </span>
+                    <span className="shrink-0 text-sm font-bold tabular-nums">
+                      {formatCurrency(stepLabourCost(s))}
+                    </span>
+                  </li>
+                ))}
+                <ChildTotal label="Labour Total" amount={labourPerPiece} />
+              </ul>
+            )}
+          </CostRow>
+        </ul>
+
+        <div className="border-t-2 border-primary/20 bg-primary-soft px-4 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold">Total Sample Cost</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                1 Piece
+              </p>
+            </div>
+            <p className="text-2xl font-extrabold tabular-nums text-primary">
+              {formatCurrency(perPiece)}
+            </p>
           </div>
-        )}
+        </div>
       </div>
 
-      <div className="grid gap-3">
-        <div className="rounded-2xl border border-border bg-gradient-to-br from-primary to-primary-glow p-5 text-primary-foreground shadow-md">
-          <p className="text-[11px] font-bold uppercase tracking-widest opacity-85">Sample Cost</p>
-          <p className="mt-1 text-3xl font-extrabold tracking-tight">₹{perPiece.toLocaleString()}</p>
-          <p className="mt-1 text-xs opacity-85">Per piece · Sample Development</p>
-        </div>
-        <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            Production Projection
-          </p>
-          <p className="mt-1 text-lg font-extrabold">₹{projectedProductionTotal.toLocaleString()}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {design.orderQuantity} pcs × ₹{perPiece.toLocaleString()}
-          </p>
-          <p className="mt-2 text-[11px] italic text-muted-foreground">
-            Informational only. Actual production cost is calculated after sample approval when a
-            Production Order is created.
-          </p>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Breakdown (1 Piece)</p>
-          <ul className="mt-2 space-y-2 text-sm">
-            {Object.entries(byCategory).map(([cat, amt]) => {
-              const pct = perPiece > 0 ? Math.round((amt / perPiece) * 100) : 0;
-              return (
-                <li key={cat}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">{cat}</span>
-                    <span className="text-muted-foreground">
-                      ₹{amt.toLocaleString()} · {pct}%
-                    </span>
-                  </div>
-                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+      <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-4">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          Production Projection
+        </p>
+        <p className="mt-1 text-lg font-extrabold tabular-nums">
+          ₹{projectedProductionTotal.toLocaleString()}
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+          {design.orderQuantity} pcs × ₹{perPiece.toLocaleString()}
+        </p>
+        <p className="mt-2 text-[11px] italic text-muted-foreground">
+          Informational only. Actual production cost is calculated after sample approval when a
+          Production Order is created.
+        </p>
       </div>
     </div>
   );
+}
+
+function CostRow({
+  title,
+  meta,
+  amount,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  meta?: string;
+  amount: number;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition hover:bg-muted/40"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <ChevronDown
+            className={
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform " +
+              (open ? "rotate-0" : "-rotate-90")
+            }
+          />
+          <span className="text-sm font-bold">{title}</span>
+          {meta && (
+            <span className="truncate text-xs text-muted-foreground">({meta})</span>
+          )}
+        </div>
+        <span className="shrink-0 text-sm font-extrabold tabular-nums">
+          {formatCurrency(amount)}
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-dashed border-border bg-muted/20 px-4 py-3">
+          {children}
+        </div>
+      )}
+    </li>
+  );
+}
+
+function ChildTotal({ label, amount }: { label: string; amount: number }) {
+  return (
+    <li className="mt-1 flex items-center justify-between border-t border-border pt-2">
+      <span className="text-sm font-bold">{label}</span>
+      <span className="text-sm font-extrabold tabular-nums text-primary">
+        {formatCurrency(amount)}
+      </span>
+    </li>
+  );
+}
+
+function EmptyChild({ text }: { text: string }) {
+  return <p className="py-2 text-center text-xs text-muted-foreground">{text}</p>;
 }
 
 
