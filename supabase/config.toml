@@ -1,1 +1,4 @@
 project_id = "bshmjxlansjtwgrwutej"
+
+[functions.erpnext-connection-test]
+verify_jwt = false
