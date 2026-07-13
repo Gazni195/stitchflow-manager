@@ -23,6 +23,9 @@ export type WorkflowStep = {
   completedAt: string | null;
   durationSeconds: number | null;
   hourlyRate: number;
+  garmentPart: string | null;
+  workArea: string | null;
+  customArea: string | null;
 };
 
 export type DesignWorkflow = {
