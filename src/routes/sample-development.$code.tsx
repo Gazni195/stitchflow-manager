@@ -23,7 +23,12 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
-import { AREA_TRACKED_OPERATION_IDS, WorkAreaDialog, formatWorkArea, type WorkAreaPayload } from "@/components/WorkAreaDialog";
+import {
+  AREA_TRACKED_OPERATION_IDS,
+  WorkAreaDialog,
+  formatWorkArea,
+  type WorkAreaPayload,
+} from "@/components/WorkAreaDialog";
 import { Switch } from "@/components/ui/switch";
 import { useRequireAuth } from "@/hooks/use-auth";
 import { useDesignByCode } from "@/lib/api/designs";
@@ -709,9 +714,6 @@ function formatMs(ms: number): string {
   return `${pad(Math.floor(totalSeconds / 3600))}:${pad(Math.floor((totalSeconds % 3600) / 60))}:${pad(totalSeconds % 60)}`;
 }
 
-
-
-
 // Elapsed time excluding any paused stretches: frozen at pausedAt while
 // paused, frozen at completedAt once done, otherwise counts up to `at`.
 function elapsedMs(session: OperationSession, at: Date): number {
@@ -770,7 +772,6 @@ function formatDurationSeconds(seconds: number | null): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-
 function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue: () => void }) {
   const { data: workflows, isLoading } = useWorkflows(design.id);
   const { data: catalog = [] } = useOperationCatalog();
@@ -785,6 +786,10 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   const [, forceTick] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Newly picked process, waiting on the Start Operation popup — nothing is
+  // saved as a workflow step until Start Operation is confirmed here, so
+  // Cancel simply forgets this and nothing is created.
+  const [newProcess, setNewProcess] = useState<{ operationId: string; name: string } | null>(null);
 
   // Re-render every second so elapsed-time counters keep ticking.
   useEffect(() => {
@@ -933,16 +938,58 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     setEditingId(null);
   }
 
-  async function commitPick(operationId: string) {
-    if (!sample) return;
-    const nextSeq = ordered.length ? Math.max(...ordered.map((s) => s.sequence)) + 1 : 1;
-    await addStep.mutateAsync({ workflowId: sample.id, operationId, sequence: nextSeq });
+  // Picking a process no longer creates a Pending Operation. It just
+  // remembers what was picked and opens the Start Operation popup for it.
+  function commitPick(operationId: string) {
+    const op = catalog.find((o) => o.id === operationId);
+    setNewProcess({ operationId, name: op?.name ?? operationId });
     setPickerOpen(false);
   }
 
   async function commitCustom(name: string) {
     const operationId = await addOperation.mutateAsync({ name });
-    await commitPick(operationId);
+    setNewProcess({ operationId, name });
+    setPickerOpen(false);
+  }
+
+  // Creates the workflow step and starts it in one go, only once Start
+  // Operation is confirmed. If the popup is cancelled instead, this never
+  // runs, so nothing is ever created.
+  async function createAndStart(
+    operationId: string,
+    workers: string[],
+    opts: { garmentPart?: string; workArea?: string | null; customArea?: string | null; estimatedHours?: string } = {},
+  ) {
+    if (!sample || workers.length === 0) return;
+    const nextSeq = ordered.length ? Math.max(...ordered.map((s) => s.sequence)) + 1 : 1;
+    const now = new Date();
+    const hours = opts.estimatedHours?.trim() ?? "";
+    const hoursNote = hours ? `Est. ${hours} hr${hours === "1" ? "" : "s"}` : "";
+    const stepId = await addStep.mutateAsync({ workflowId: sample.id, operationId, sequence: nextSeq });
+    patchSession(stepId, {
+      workers,
+      estimatedHours: hours,
+      startedAt: now,
+      pausedAt: null,
+      pausedMs: 0,
+      completedAt: null,
+    });
+    updateStep.mutate({
+      stepId,
+      patch: {
+        status: "in-progress",
+        assignedTo: joinWorkers(workers),
+        remarks: hoursNote || null,
+        startDate: today(),
+        startedAt: now.toISOString(),
+        completedAt: null,
+        durationSeconds: null,
+        ...(opts.garmentPart
+          ? { garmentPart: opts.garmentPart, workArea: opts.workArea ?? null, customArea: opts.customArea ?? null }
+          : {}),
+      },
+    });
+    setNewProcess(null);
   }
 
   if (isLoading) {
@@ -1059,6 +1106,32 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
           onPick={commitPick}
           onCreateCustom={commitCustom}
           onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      {newProcess && AREA_TRACKED_OPERATION_IDS.has(newProcess.operationId) && (
+        <WorkAreaDialog
+          operationName={newProcess.name}
+          workerOptions={WORKERS}
+          busy={busy}
+          onCancel={() => setNewProcess(null)}
+          onConfirm={(payload) =>
+            createAndStart(newProcess.operationId, payload.workers, {
+              garmentPart: payload.garmentPart,
+              workArea: payload.workArea,
+              customArea: payload.customArea,
+            })
+          }
+        />
+      )}
+
+      {newProcess && !AREA_TRACKED_OPERATION_IDS.has(newProcess.operationId) && (
+        <StartWorkersDialog
+          operationName={newProcess.name}
+          workerOptions={WORKERS}
+          busy={busy}
+          onCancel={() => setNewProcess(null)}
+          onConfirm={(workers, estimatedHours) => createAndStart(newProcess.operationId, workers, { estimatedHours })}
         />
       )}
 
@@ -1278,7 +1351,6 @@ function WorkflowTimeline({
         )}
       </div>
       <ul className="mt-3 grid gap-2">
-
         {history.map((step) => (
           <HistoryTimelineRow
             key={step.id}
@@ -1519,6 +1591,107 @@ function HistoryTimelineRow({
         </button>
       </div>
     </li>
+  );
+}
+
+// Same "Start Operation" popup style as WorkAreaDialog, used for processes
+// that don't track Garment Part / Area (e.g. Sample Approval, or a custom
+// process name) — same Workers + Estimated Hours fields as before, just
+// shown as a popup instead of appearing after landing in Pending Operations.
+function StartWorkersDialog({
+  operationName,
+  workerOptions,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  operationName: string;
+  workerOptions: string[];
+  busy?: boolean;
+  onCancel: () => void;
+  onConfirm: (workers: string[], estimatedHours: string) => void;
+}) {
+  const [workers, setWorkers] = useState<string[]>([]);
+  const [estimatedHours, setEstimatedHours] = useState("");
+
+  function toggleWorker(w: string) {
+    setWorkers((prev) => (prev.includes(w) ? prev.filter((x) => x !== w) : [...prev, w]));
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+      <div className="w-full max-w-md rounded-t-3xl bg-card p-5 shadow-xl sm:rounded-3xl">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Start Operation</p>
+            <h3 className="text-base font-bold">{operationName}</h3>
+          </div>
+          <button
+            onClick={onCancel}
+            className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-4">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Assigned Workers</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {workerOptions.map((w) => {
+              const active = workers.includes(w);
+              return (
+                <button
+                  key={w}
+                  onClick={() => toggleWorker(w)}
+                  className={
+                    "rounded-full border px-3 py-1 text-xs font-semibold transition " +
+                    (active
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-background hover:bg-accent")
+                  }
+                >
+                  {w}
+                </button>
+              );
+            })}
+          </div>
+          {workers.length === 0 && (
+            <p className="mt-1.5 text-[11px] text-muted-foreground">Select at least one worker.</p>
+          )}
+        </div>
+
+        <label className="mt-4 block w-40">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Estimated Hours</span>
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            inputMode="decimal"
+            placeholder="e.g. 2"
+            value={estimatedHours}
+            onChange={(e) => setEstimatedHours(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-1.5 text-sm font-semibold outline-none focus:border-primary"
+          />
+        </label>
+
+        <div className="mt-5 flex gap-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold hover:bg-accent"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(workers, estimatedHours)}
+            disabled={workers.length === 0 || busy}
+            className="inline-flex flex-[2] items-center justify-center gap-1.5 rounded-xl bg-primary px-3 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />} ▶ Start Operation
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1763,7 +1936,13 @@ function CostingPanel({ design }: { design: Design }) {
   const labourPerPiece = design.orderQuantity > 0 ? labourTotal / design.orderQuantity : 0;
 
   const [costs, setCosts] = useState<
-    { id: string; label: string; category: "Material" | "Labor" | "Overhead" | "Other"; amount: number; readOnly?: boolean }[]
+    {
+      id: string;
+      label: string;
+      category: "Material" | "Labor" | "Overhead" | "Other";
+      amount: number;
+      readOnly?: boolean;
+    }[]
   >(() => [
     { id: "c1", label: "Material (est.)", category: "Material", amount: 0 },
     { id: "c3", label: "Overheads", category: "Overhead", amount: 0 },
@@ -1864,7 +2043,6 @@ function CostingPanel({ design }: { design: Design }) {
           </div>
         )}
       </div>
-
 
       <div className="grid gap-3">
         <div className="rounded-2xl border border-border bg-gradient-to-br from-primary to-primary-glow p-5 text-primary-foreground shadow-md">
