@@ -220,6 +220,50 @@ export type Database = {
         }
         Relationships: []
       }
+      sample_approvals: {
+        Row: {
+          approved_at: string
+          approver_name: string
+          approver_user_id: string | null
+          created_at: string
+          design_id: string
+          id: string
+          notes: string | null
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string
+          approver_name: string
+          approver_user_id?: string | null
+          created_at?: string
+          design_id: string
+          id?: string
+          notes?: string | null
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string
+          approver_name?: string
+          approver_user_id?: string | null
+          created_at?: string
+          design_id?: string
+          id?: string
+          notes?: string | null
+          role?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sample_approvals_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workflow_steps: {
         Row: {
           assigned_to: string | null
