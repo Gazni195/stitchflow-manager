@@ -68,8 +68,27 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "approval", label: "Approval", icon: FileCheck2 },
 ];
 
-const MANDATORY_APPROVAL_ROLES = ["Designer", "Merchandiser", "Production Head"] as const;
-type ApprovalRoleName = (typeof MANDATORY_APPROVAL_ROLES)[number];
+const ACTIVE_APPROVAL_ROLES = ["Designer", "Merchandiser", "Production Head"] as const;
+type ApprovalRoleName = (typeof ACTIVE_APPROVAL_ROLES)[number];
+
+const APPROVAL_ROLE_ALIASES: Record<string, ApprovalRoleName> = {
+  designer: "Designer",
+  merchandiser: "Merchandiser",
+  "production head": "Production Head",
+};
+
+function normalizeApprovalRole(role: string): ApprovalRoleName | null {
+  return APPROVAL_ROLE_ALIASES[role.trim().toLowerCase()] ?? null;
+}
+
+function getActiveApprovalMap(approvals: SampleApproval[]) {
+  const byRole = new Map<ApprovalRoleName, SampleApproval>();
+  for (const approval of approvals) {
+    const role = normalizeApprovalRole(approval.role);
+    if (role && !byRole.has(role)) byRole.set(role, approval);
+  }
+  return byRole;
+}
 
 const SAMPLE_STAGES: { id: string; label: string }[] = [
   { id: "sample-created", label: "Sample Created" },
@@ -85,14 +104,14 @@ function computeStageIndex(design: Design, sample: DesignWorkflow | undefined, a
   if (design.status === "in_production" || design.status === "completed") return 6;
   if (design.status === "sample_approved") return 5;
 
-  const approvedRoles = new Set(approvals.map((a) => a.role));
-  const allApproved = MANDATORY_APPROVAL_ROLES.every((r) => approvedRoles.has(r));
+  const activeApprovals = getActiveApprovalMap(approvals);
+  const allApproved = ACTIVE_APPROVAL_ROLES.every((r) => activeApprovals.has(r));
   if (allApproved) return 5;
 
   const steps = sample?.steps.filter((s) => s.status !== "deleted") ?? [];
   const allStepsDone = steps.length > 0 && steps.every((s) => s.status === "completed" || s.status === "skipped");
 
-  if (allStepsDone || approvals.length > 0) return 4;
+  if (allStepsDone || activeApprovals.size > 0) return 4;
 
   const materialStep = steps.find((s) => s.operationId === "material-selection");
   const materialDone = materialStep?.status === "completed" || materialStep?.status === "skipped";
