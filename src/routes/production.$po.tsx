@@ -21,7 +21,6 @@ import {
   PlayCircle,
   StopCircle,
   Timer,
-  User,
   X,
   XCircle,
   type LucideIcon,
