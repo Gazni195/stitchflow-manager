@@ -34,6 +34,7 @@ import {
   useDeleteStep,
   useUpdateStep,
   useWorkflows,
+  type DesignWorkflow,
   type StepStatus,
   type WorkflowStep,
 } from "@/lib/api/workflows";
