@@ -2161,9 +2161,9 @@ function SampleHeader({
         <div className="min-w-0 rounded-2xl border border-border bg-background p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate text-sm font-bold">Workflow Progress</p>
-            <p className="shrink-0 text-[11px] font-semibold text-muted-foreground">
+            <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-1 text-[11px] font-bold text-primary">
               {SAMPLE_STAGES[currentIdx].label}
-            </p>
+            </span>
           </div>
           <ol className="mt-3 flex items-start gap-1 sm:gap-1.5">
             {SAMPLE_STAGES.map((step, i) => {
@@ -2179,7 +2179,7 @@ function SampleHeader({
                         (done
                           ? "bg-primary text-primary-foreground"
                           : current
-                            ? "bg-primary text-primary-foreground ring-2 ring-primary/20 sm:ring-4"
+                            ? "bg-primary text-primary-foreground ring-[3px] ring-primary/30 sm:ring-[5px]"
                             : "bg-muted text-muted-foreground")
                       }
                     >
@@ -2194,7 +2194,7 @@ function SampleHeader({
                   <span
                     className={
                       "hidden w-full truncate text-center text-[9px] font-semibold leading-tight sm:block " +
-                      (done || current ? "text-foreground" : "text-muted-foreground")
+                      (current ? "text-primary" : done ? "text-foreground" : "text-muted-foreground")
                     }
                     title={step.label}
                   >
