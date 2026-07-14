@@ -39,7 +39,6 @@ import {
 } from "@/lib/api/workflows";
 import { useSampleApprovals, useRecordApproval, type SampleApproval } from "@/lib/api/approvals";
 
-
 import {
   useAddDesignMaterial,
   useDesignMaterials,
@@ -82,11 +81,7 @@ const SAMPLE_STAGES: { id: string; label: string }[] = [
   { id: "production", label: "Production" },
 ];
 
-function computeStageIndex(
-  design: Design,
-  sample: DesignWorkflow | undefined,
-  approvals: SampleApproval[]
-): number {
+function computeStageIndex(design: Design, sample: DesignWorkflow | undefined, approvals: SampleApproval[]): number {
   if (design.status === "in_production" || design.status === "completed") return 6;
   if (design.status === "sample_approved") return 5;
 
@@ -104,7 +99,8 @@ function computeStageIndex(
 
   const makingSteps = steps.filter((s) => s.operationId === "sample-making");
   const anyMakingActive = makingSteps.some((s) => s.status === "in-progress" || s.status === "completed");
-  const allMakingDone = makingSteps.length > 0 && makingSteps.every((s) => s.status === "completed" || s.status === "skipped");
+  const allMakingDone =
+    makingSteps.length > 0 && makingSteps.every((s) => s.status === "completed" || s.status === "skipped");
 
   if (allMakingDone) return 3;
   if (anyMakingActive) return 2;
@@ -248,20 +244,76 @@ function DesignSample({ design }: { design: Design }) {
   );
 }
 
-
-/* ---------- Materials (Inventory-driven selection) ---------- */
+/* ---------- Materials (garment-part based Inventory selection) ---------- */
 //
 // Material Selection ONLY selects materials from the shared Inventory Master
-// (`/inventory`). Users pick an existing material, enter a quantity, and the
-// unit + cost per unit are loaded from inventory automatically. Amount is
-// computed as quantity × rate. The `rate` stored on `design_materials` is a
-// snapshot of the material's current `cost_per_unit` at the moment of
-// selection so historical samples stay stable even when inventory prices
-// change; refreshing a row re-snaps the current inventory price. Selections
-// persist in `design_materials` and drive the Costing tab.
+// (`/inventory`). The screen is organised the way a tailor actually thinks
+// about a sample: by garment part first (Top / Pant / Shawl-Dupatta), then
+// by material category within that part (Primary Fabric / Lining /
+// Accessories / Lace / Other Materials). Users pick an existing material,
+// enter a quantity, and the unit + cost per unit are loaded from inventory
+// automatically. Amount is computed as quantity × rate. The `rate` stored
+// on `design_materials` is a snapshot of the material's current
+// `cost_per_unit` at the moment of selection so historical samples stay
+// stable even when inventory prices change. Selections persist in
+// `design_materials` and drive the Costing tab.
+//
+// No schema change was needed for the garment-part × category split: both
+// are packed into the existing free-text `group_name` column as
+// "<Garment Part>::<Category>" (buildGroupKey/parseGroupKey below). Rows
+// saved before this redesign (a bare "Top"/"Lace"/etc.) are still readable
+// — parseGroupKey falls back to a best-effort mapping for those instead of
+// hiding them.
 
-const MATERIAL_GROUPS = ["Top", "Pant", "Shawl", "Lining", "Lace", "Accessories", "Other"] as const;
-type MaterialGroupName = (typeof MATERIAL_GROUPS)[number];
+type GarmentPartKey = "Top" | "Pant" | "Shawl / Dupatta";
+type GarmentPartDef = { key: GarmentPartKey; label: string; emoji: string };
+
+const GARMENT_PARTS: GarmentPartDef[] = [
+  { key: "Top", label: "Top", emoji: "👚" },
+  { key: "Pant", label: "Pant", emoji: "👖" },
+  { key: "Shawl / Dupatta", label: "Shawl / Dupatta", emoji: "🧣" },
+];
+
+const MATERIAL_CATEGORIES = ["Primary Fabric", "Lining", "Accessories", "Lace", "Other Materials"] as const;
+type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number];
+
+const GROUP_KEY_SEP = "::";
+
+function buildGroupKey(part: GarmentPartKey, category: MaterialCategory): string {
+  return `${part}${GROUP_KEY_SEP}${category}`;
+}
+
+const LEGACY_PART_MAP: Record<string, GarmentPartKey> = {
+  Top: "Top",
+  Pant: "Pant",
+  Shawl: "Shawl / Dupatta",
+};
+const LEGACY_CATEGORY_MAP: Record<string, MaterialCategory> = {
+  Lining: "Lining",
+  Lace: "Lace",
+  Accessories: "Accessories",
+  Other: "Other Materials",
+};
+
+function parseGroupKey(groupName: string): { part: GarmentPartKey; category: MaterialCategory } {
+  const idx = groupName.indexOf(GROUP_KEY_SEP);
+  if (idx >= 0) {
+    const part = groupName.slice(0, idx);
+    const category = groupName.slice(idx + GROUP_KEY_SEP.length);
+    if (GARMENT_PARTS.some((p) => p.key === part) && (MATERIAL_CATEGORIES as readonly string[]).includes(category)) {
+      return { part: part as GarmentPartKey, category: category as MaterialCategory };
+    }
+  }
+  // Legacy row from before this redesign — best-effort mapping so nothing
+  // saved earlier silently disappears from the screen.
+  if (LEGACY_PART_MAP[groupName]) {
+    return { part: LEGACY_PART_MAP[groupName], category: "Primary Fabric" };
+  }
+  if (LEGACY_CATEGORY_MAP[groupName]) {
+    return { part: "Top", category: LEGACY_CATEGORY_MAP[groupName] };
+  }
+  return { part: "Top", category: "Other Materials" };
+}
 
 export function computeMaterialTotal(items: DesignMaterial[]): number {
   return items.reduce((s, i) => s + i.amount, 0);
@@ -276,19 +328,25 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
   const removeLine = useRemoveDesignMaterial(design.id);
   const updateLine = useUpdateDesignMaterial(design.id);
 
-  const [pickerFor, setPickerFor] = useState<MaterialGroupName | null>(null);
+  const [openPart, setOpenPart] = useState<GarmentPartKey | null>("Top");
+  const [pickerFor, setPickerFor] = useState<{ part: GarmentPartKey; category: MaterialCategory } | null>(null);
 
-  const byGroup = MATERIAL_GROUPS.map((g) => ({
-    group: g,
-    rows: selected.filter((r) => r.groupName === g),
-  }));
+  const byPart = GARMENT_PARTS.map((p) => {
+    const rows = selected.filter((r) => parseGroupKey(r.groupName).part === p.key);
+    const byCategory = MATERIAL_CATEGORIES.map((c) => ({
+      category: c,
+      rows: rows.filter((r) => parseGroupKey(r.groupName).category === c),
+    }));
+    return { part: p, rows, byCategory };
+  });
+
   const materialTotal = computeMaterialTotal(selected);
   const activeInventory = inventory.filter((m) => m.status === "active");
 
-  async function handlePick(group: MaterialGroupName, material: Material, quantity: number) {
+  async function handlePick(part: GarmentPartKey, category: MaterialCategory, material: Material, quantity: number) {
     await addLine.mutateAsync({
       materialId: material.id,
-      groupName: group,
+      groupName: buildGroupKey(part, category),
       quantity,
       rate: material.costPerUnit,
     });
@@ -310,9 +368,7 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
     <div className="grid gap-3">
       <div className="flex items-center justify-between rounded-2xl border border-border bg-gradient-to-br from-primary-soft to-background p-4">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            Material total
-          </p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Material total</p>
           <p className="mt-0.5 text-2xl font-extrabold text-primary">
             ₹{materialTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
           </p>
@@ -333,16 +389,21 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        byGroup.map(({ group, rows }) => (
-          <MaterialGroupSection
-            key={group}
-            group={group}
-            rows={rows}
-            onAdd={() => setPickerFor(group)}
-            onRemove={(id) => removeLine.mutate(id)}
-            onQuantityChange={(id, qty) => updateLine.mutate({ id, quantity: qty })}
-          />
-        ))
+        <div className="grid gap-2">
+          {byPart.map(({ part, rows, byCategory }) => (
+            <GarmentPartCard
+              key={part.key}
+              part={part}
+              rows={rows}
+              byCategory={byCategory}
+              open={openPart === part.key}
+              onToggle={() => setOpenPart((cur) => (cur === part.key ? null : part.key))}
+              onAddToCategory={(category) => setPickerFor({ part: part.key, category })}
+              onRemove={(id) => removeLine.mutate(id)}
+              onQuantityChange={(id, qty) => updateLine.mutate({ id, quantity: qty })}
+            />
+          ))}
+        </div>
       )}
 
       {selected.length > 0 ? (
@@ -362,7 +423,8 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
 
       {pickerFor && (
         <MaterialPickerDialog
-          group={pickerFor}
+          part={pickerFor.part}
+          category={pickerFor.category}
           inventory={activeInventory}
           onClose={() => setPickerFor(null)}
           onSelect={handlePick}
@@ -373,42 +435,104 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
   );
 }
 
-function MaterialGroupSection({
-  group,
+// Compact, collapsed by default (except Top): an emoji "illustration",
+// the part name, and a small item/total summary. The "+" in the corner
+// both signals "there's more here" and doubles as the expand/collapse
+// control — tapping the whole card does the same thing.
+function GarmentPartCard({
+  part,
   rows,
-  onAdd,
+  byCategory,
+  open,
+  onToggle,
+  onAddToCategory,
   onRemove,
   onQuantityChange,
 }: {
-  group: MaterialGroupName;
+  part: GarmentPartDef;
   rows: DesignMaterial[];
-  onAdd: () => void;
+  byCategory: { category: MaterialCategory; rows: DesignMaterial[] }[];
+  open: boolean;
+  onToggle: () => void;
+  onAddToCategory: (category: MaterialCategory) => void;
   onRemove: (id: string) => void;
   onQuantityChange: (id: string, qty: number) => void;
 }) {
   const subtotal = rows.reduce((s, r) => s + r.amount, 0);
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="flex items-center justify-between gap-2 px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-sm font-bold">{group}</p>
+      <button onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-xl" aria-hidden>
+          {part.emoji}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold">{part.label}</p>
           <p className="text-[11px] text-muted-foreground">
-            {rows.length} item{rows.length === 1 ? "" : "s"} · ₹
-            {subtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            {rows.length === 0
+              ? "No materials yet"
+              : `${rows.length} item${rows.length === 1 ? "" : "s"} · ₹${subtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
           </p>
         </div>
+        <span
+          aria-hidden
+          className={
+            "grid h-7 w-7 shrink-0 place-items-center rounded-full border border-border text-muted-foreground transition-transform " +
+            (open ? "rotate-45" : "")
+          }
+        >
+          <Plus className="h-4 w-4" />
+        </span>
+      </button>
+
+      {open && (
+        <div className="grid gap-1.5 border-t border-border p-3">
+          {byCategory.map(({ category, rows: catRows }) => (
+            <CategorySection
+              key={category}
+              category={category}
+              rows={catRows}
+              onAdd={() => onAddToCategory(category)}
+              onRemove={onRemove}
+              onQuantityChange={onQuantityChange}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A category never shows anything until it has a saved row — no empty
+// placeholders, no unnecessary information, just the label and a "+".
+function CategorySection({
+  category,
+  rows,
+  onAdd,
+  onRemove,
+  onQuantityChange,
+}: {
+  category: MaterialCategory;
+  rows: DesignMaterial[];
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+  onQuantityChange: (id: string, qty: number) => void;
+}) {
+  return (
+    <div className="rounded-xl bg-muted/30 p-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-bold text-muted-foreground">{category}</p>
         <button
           onClick={onAdd}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-primary-soft px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/15"
+          aria-label={`Add material to ${category}`}
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary-soft text-primary hover:bg-primary/15"
         >
-          <Plus className="h-3.5 w-3.5" /> Add from Inventory
+          <Plus className="h-3.5 w-3.5" />
         </button>
       </div>
-
       {rows.length > 0 && (
-        <ul className="divide-y divide-border border-t border-border">
+        <ul className="mt-1.5 grid gap-1">
           {rows.map((r) => (
-            <MaterialLineRow
+            <CategoryMaterialRow
               key={r.id}
               row={r}
               onRemove={() => onRemove(r.id)}
@@ -421,7 +545,10 @@ function MaterialGroupSection({
   );
 }
 
-function MaterialLineRow({
+// One compact line per selected material — "• Muslin  3  m  ₹150.00 🗑".
+// Quantity stays editable inline; the amount recalculates as you type and
+// commits (replacing, never duplicating) once you tab or click away.
+function CategoryMaterialRow({
   row,
   onRemove,
   onQuantityChange,
@@ -444,58 +571,50 @@ function MaterialLineRow({
   }
 
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold">{mat?.name ?? "Deleted material"}</p>
-        <p className="truncate text-[11px] text-muted-foreground">
-          {mat?.code ?? "—"} · ₹{row.rate.toFixed(2)}/{mat?.unit ?? "unit"}
-          {mat && mat.availableStock < qty && (
-            <span className="ml-1 rounded-full bg-warning/20 px-1.5 py-0.5 text-[10px] font-bold text-warning-foreground">
-              stock {mat.availableStock}
-            </span>
-          )}
-        </p>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1">
-          <input
-            type="number"
-            min={0}
-            step={0.25}
-            inputMode="decimal"
-            value={qty || ""}
-            onChange={(e) => setQty(Math.max(0, Number(e.target.value) || 0))}
-            onBlur={(e) => commitQty(Number(e.target.value))}
-            className="w-20 rounded-lg border border-border bg-background px-2 py-1.5 text-right text-sm font-bold outline-none focus:border-primary"
-          />
-          <span className="text-[11px] text-muted-foreground">{mat?.unit ?? ""}</span>
-        </div>
-        <span className="w-20 text-right text-sm font-bold text-primary tabular-nums">
-          ₹{amount.toFixed(2)}
-        </span>
-        <button
-          onClick={onRemove}
-          aria-label="Remove"
-          className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
+    <li className="flex items-center gap-2 rounded-lg bg-background px-2.5 py-1.5">
+      <span className="text-muted-foreground" aria-hidden>
+        •
+      </span>
+      <span className="min-w-0 flex-1 truncate text-xs font-semibold">{mat?.name ?? "Deleted material"}</span>
+      <input
+        type="number"
+        min={0}
+        step={0.25}
+        inputMode="decimal"
+        value={qty || ""}
+        onChange={(e) => setQty(Math.max(0, Number(e.target.value) || 0))}
+        onBlur={(e) => commitQty(Number(e.target.value))}
+        className="w-14 shrink-0 rounded-md border border-border bg-card px-1.5 py-1 text-right text-xs font-bold outline-none focus:border-primary"
+      />
+      <span className="shrink-0 text-[10px] text-muted-foreground">{mat?.unit ?? ""}</span>
+      <span className="w-16 shrink-0 text-right text-xs font-bold text-primary tabular-nums">₹{amount.toFixed(2)}</span>
+      <button
+        onClick={onRemove}
+        aria-label="Remove"
+        className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
     </li>
   );
 }
 
+// The Material Inventory popup — unchanged behaviour (search, pick, enter
+// Quantity only, Unit + Rate load automatically, Amount computes live),
+// just labelled with which garment part and category it's adding into.
 function MaterialPickerDialog({
-  group,
+  part,
+  category,
   inventory,
   onClose,
   onSelect,
   busy,
 }: {
-  group: MaterialGroupName;
+  part: GarmentPartKey;
+  category: MaterialCategory;
   inventory: Material[];
   onClose: () => void;
-  onSelect: (group: MaterialGroupName, material: Material, quantity: number) => void;
+  onSelect: (part: GarmentPartKey, category: MaterialCategory, material: Material, quantity: number) => void;
   busy: boolean;
 }) {
   const [query, setQuery] = useState("");
@@ -514,7 +633,9 @@ function MaterialPickerDialog({
         <div className="flex items-center justify-between px-5 pt-5">
           <div>
             <h2 className="text-lg font-bold">Select material</h2>
-            <p className="text-xs text-muted-foreground">Adding to · {group}</p>
+            <p className="text-xs text-muted-foreground">
+              Adding to · {part} → {category}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -538,9 +659,7 @@ function MaterialPickerDialog({
               {filtered.length === 0 ? (
                 <div className="grid place-items-center gap-2 p-8 text-center">
                   <p className="text-sm font-semibold">No materials found</p>
-                  <p className="text-xs text-muted-foreground">
-                    Add materials in the Inventory module first.
-                  </p>
+                  <p className="text-xs text-muted-foreground">Add materials in the Inventory module first.</p>
                   <Link
                     to="/inventory"
                     className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
@@ -577,8 +696,7 @@ function MaterialPickerDialog({
             <div className="rounded-xl border border-border bg-primary-soft/40 p-3">
               <p className="text-sm font-bold">{chosen.name}</p>
               <p className="text-[11px] text-muted-foreground">
-                {chosen.code} · ₹{chosen.costPerUnit.toFixed(2)}/{chosen.unit} · stock{" "}
-                {chosen.availableStock}
+                {chosen.code} · ₹{chosen.costPerUnit.toFixed(2)}/{chosen.unit} · stock {chosen.availableStock}
               </p>
             </div>
             <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-3">
@@ -612,7 +730,7 @@ function MaterialPickerDialog({
                 Back
               </button>
               <button
-                onClick={() => onSelect(group, chosen, quantity)}
+                onClick={() => onSelect(part, category, chosen, quantity)}
                 disabled={busy || quantity <= 0}
                 className="ml-auto inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-60"
               >
@@ -624,30 +742,6 @@ function MaterialPickerDialog({
         )}
       </div>
     </div>
-  );
-}
-
-function CompactField({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <label className="block min-w-0">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
-      />
-    </label>
   );
 }
 
@@ -1645,9 +1739,7 @@ function CostingPanel({ design, onContinue }: { design: Design; onContinue: () =
   const { data: designMaterials = [] } = useDesignMaterials(design.id);
   const materialPerPiece = computeMaterialTotal(designMaterials);
 
-  const [overheadItems, setOverheadItems] = useState<
-    { id: string; label: string; amount: number }[]
-  >(() => [
+  const [overheadItems, setOverheadItems] = useState<{ id: string; label: string; amount: number }[]>(() => [
     { id: "oh-electricity", label: "Electricity", amount: 0 },
     { id: "oh-packing", label: "Packing", amount: 0 },
     { id: "oh-transport", label: "Transport", amount: 0 },
@@ -1658,8 +1750,7 @@ function CostingPanel({ design, onContinue }: { design: Design; onContinue: () =
   const projectedProductionTotal = perPiece * design.orderQuantity;
 
   const [openRow, setOpenRow] = useState<"material" | "overhead" | "labour" | null>("material");
-  const toggle = (k: "material" | "overhead" | "labour") =>
-    setOpenRow((cur) => (cur === k ? null : k));
+  const toggle = (k: "material" | "overhead" | "labour") => setOpenRow((cur) => (cur === k ? null : k));
 
   return (
     <div className="grid gap-4">
@@ -1690,16 +1781,12 @@ function CostingPanel({ design, onContinue }: { design: Design; onContinue: () =
                 {designMaterials.map((m) => (
                   <li key={m.id} className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">
-                        {m.material?.name ?? "Material"}
-                      </p>
+                      <p className="truncate text-sm font-semibold">{m.material?.name ?? "Material"}</p>
                       <p className="text-xs text-muted-foreground tabular-nums">
                         {m.quantity} {m.material?.unit ?? ""} × ₹{m.rate.toFixed(2)}
                       </p>
                     </div>
-                    <span className="shrink-0 text-sm font-bold tabular-nums">
-                      {formatCurrency(m.amount)}
-                    </span>
+                    <span className="shrink-0 text-sm font-bold tabular-nums">{formatCurrency(m.amount)}</span>
                   </li>
                 ))}
                 <ChildTotal label="Material Total" amount={materialPerPiece} />
@@ -1725,9 +1812,7 @@ function CostingPanel({ design, onContinue }: { design: Design; onContinue: () =
                     onChange={(e) =>
                       setOverheadItems((prev) =>
                         prev.map((x) =>
-                          x.id === o.id
-                            ? { ...x, amount: Math.max(0, Number(e.target.value) || 0) }
-                            : x,
+                          x.id === o.id ? { ...x, amount: Math.max(0, Number(e.target.value) || 0) } : x,
                         ),
                       )
                     }
@@ -1753,12 +1838,8 @@ function CostingPanel({ design, onContinue }: { design: Design; onContinue: () =
               <ul className="grid gap-2">
                 {completedSteps.map((s) => (
                   <li key={s.id} className="flex items-center justify-between gap-3">
-                    <span className="truncate text-sm font-semibold">
-                      {s.label || s.operationId}
-                    </span>
-                    <span className="shrink-0 text-sm font-bold tabular-nums">
-                      {formatCurrency(stepLabourCost(s))}
-                    </span>
+                    <span className="truncate text-sm font-semibold">{s.label || s.operationId}</span>
+                    <span className="shrink-0 text-sm font-bold tabular-nums">{formatCurrency(stepLabourCost(s))}</span>
                   </li>
                 ))}
                 <ChildTotal label="Labour Total" amount={labourPerPiece} />
@@ -1771,30 +1852,22 @@ function CostingPanel({ design, onContinue }: { design: Design; onContinue: () =
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-bold">Total Sample Cost</p>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                1 Piece
-              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">1 Piece</p>
             </div>
-            <p className="text-2xl font-extrabold tabular-nums text-primary">
-              {formatCurrency(perPiece)}
-            </p>
+            <p className="text-2xl font-extrabold tabular-nums text-primary">{formatCurrency(perPiece)}</p>
           </div>
         </div>
       </div>
 
       <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-4">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-          Production Projection
-        </p>
-        <p className="mt-1 text-lg font-extrabold tabular-nums">
-          ₹{projectedProductionTotal.toLocaleString()}
-        </p>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Production Projection</p>
+        <p className="mt-1 text-lg font-extrabold tabular-nums">₹{projectedProductionTotal.toLocaleString()}</p>
         <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
           {design.orderQuantity} pcs × ₹{perPiece.toLocaleString()}
         </p>
         <p className="mt-2 text-[11px] italic text-muted-foreground">
-          Informational only. Actual production cost is calculated after sample approval when a
-          Production Order is created.
+          Informational only. Actual production cost is calculated after sample approval when a Production Order is
+          created.
         </p>
       </div>
 
@@ -1834,24 +1907,15 @@ function CostRow({
         <div className="flex items-center gap-2 min-w-0">
           <ChevronDown
             className={
-              "h-4 w-4 shrink-0 text-muted-foreground transition-transform " +
-              (open ? "rotate-0" : "-rotate-90")
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform " + (open ? "rotate-0" : "-rotate-90")
             }
           />
           <span className="text-sm font-bold">{title}</span>
-          {meta && (
-            <span className="truncate text-xs text-muted-foreground">({meta})</span>
-          )}
+          {meta && <span className="truncate text-xs text-muted-foreground">({meta})</span>}
         </div>
-        <span className="shrink-0 text-sm font-extrabold tabular-nums">
-          {formatCurrency(amount)}
-        </span>
+        <span className="shrink-0 text-sm font-extrabold tabular-nums">{formatCurrency(amount)}</span>
       </button>
-      {open && (
-        <div className="border-t border-dashed border-border bg-muted/20 px-4 py-3">
-          {children}
-        </div>
-      )}
+      {open && <div className="border-t border-dashed border-border bg-muted/20 px-4 py-3">{children}</div>}
     </li>
   );
 }
@@ -1860,9 +1924,7 @@ function ChildTotal({ label, amount }: { label: string; amount: number }) {
   return (
     <li className="mt-1 flex items-center justify-between border-t border-border pt-2">
       <span className="text-sm font-bold">{label}</span>
-      <span className="text-sm font-extrabold tabular-nums text-primary">
-        {formatCurrency(amount)}
-      </span>
+      <span className="text-sm font-extrabold tabular-nums text-primary">{formatCurrency(amount)}</span>
     </li>
   );
 }
@@ -1871,9 +1933,7 @@ function EmptyChild({ text }: { text: string }) {
   return <p className="py-2 text-center text-xs text-muted-foreground">{text}</p>;
 }
 
-
 /* ---------- Approval ---------- */
-
 
 function ApprovalPanel({ design }: { design: Design }) {
   const { data: approvals = [], isLoading } = useSampleApprovals(design.id);
@@ -1888,17 +1948,13 @@ function ApprovalPanel({ design }: { design: Design }) {
     session?.user?.email ||
     "";
 
-  const byRole = new Map<string, (typeof approvals)[number]>(
-    approvals.map((a) => [a.role, a]),
-  );
+  const byRole = new Map<string, (typeof approvals)[number]>(approvals.map((a) => [a.role, a]));
   const approvedCount = MANDATORY_APPROVAL_ROLES.filter((r) => byRole.has(r)).length;
   const total = MANDATORY_APPROVAL_ROLES.length;
   const pct = Math.round((approvedCount / total) * 100);
   const allApproved = approvedCount === total;
   const sampleLocked =
-    design.status === "sample_approved" ||
-    design.status === "in_production" ||
-    design.status === "completed";
+    design.status === "sample_approved" || design.status === "in_production" || design.status === "completed";
 
   useEffect(() => {
     if (!allApproved || sampleLocked || autoRanRef.current) return;
@@ -1938,20 +1994,14 @@ function ApprovalPanel({ design }: { design: Design }) {
               role={role}
               existing={byRole.get(role) ?? null}
               disabled={sampleLocked || record.isPending || !currentUserName}
-              onApprove={() =>
-                record.mutateAsync({ role, approverName: currentUserName })
-              }
+              onApprove={() => record.mutateAsync({ role, approverName: currentUserName })}
             />
           ))}
           <li className="rounded-2xl border border-dashed border-border bg-muted/30 p-4 opacity-70">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Customer
-                </p>
-                <p className="mt-0.5 truncate text-base font-bold text-muted-foreground">
-                  {design.customer}
-                </p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Customer</p>
+                <p className="mt-0.5 truncate text-base font-bold text-muted-foreground">{design.customer}</p>
               </div>
               <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                 Coming soon
@@ -2026,9 +2076,7 @@ function ApprovalCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{role}</p>
-          <p className="mt-0.5 truncate text-base font-bold">
-            {isApproved ? existing!.approverName : "—"}
-          </p>
+          <p className="mt-0.5 truncate text-base font-bold">{isApproved ? existing!.approverName : "—"}</p>
         </div>
         <span
           className={
@@ -2044,8 +2092,7 @@ function ApprovalCard({
       {isApproved ? (
         <div className="mt-2 space-y-0.5 text-[11px] text-muted-foreground">
           <p>
-            <span className="font-semibold text-foreground">Approved by:</span>{" "}
-            {existing!.approverName}
+            <span className="font-semibold text-foreground">Approved by:</span> {existing!.approverName}
           </p>
           <p>
             <span className="font-semibold text-foreground">Approved on:</span>{" "}
@@ -2072,18 +2119,9 @@ function ApprovalCard({
   );
 }
 
-
-
-
 /* ---------- Shared ---------- */
 
-function SampleHeader({
-  design,
-  stageIndex,
-}: {
-  design: Design;
-  stageIndex: number;
-}) {
+function SampleHeader({ design, stageIndex }: { design: Design; stageIndex: number }) {
   const createdOn = new Date(design.createdAt).toLocaleDateString(undefined, {
     day: "2-digit",
     month: "short",
