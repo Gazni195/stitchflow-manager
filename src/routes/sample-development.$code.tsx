@@ -155,7 +155,7 @@ function DesignSamplePage() {
 }
 
 function DesignSample({ design }: { design: Design }) {
-  const [tab, setTab] = useState<TabId>("status");
+  const [tab, setTab] = useState<TabId>("materials");
   const { data: workflows, isLoading: wfLoading } = useWorkflows(design.id);
   const sample = workflows?.find((w) => w.kind === "sample");
   const bulk = workflows?.find((w) => w.kind === "bulk");
