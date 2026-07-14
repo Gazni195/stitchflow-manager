@@ -1967,9 +1967,9 @@ function ApprovalPanel({ design }: { design: Design }) {
     session?.user?.email ||
     "";
 
-  const byRole = new Map<string, (typeof approvals)[number]>(approvals.map((a) => [a.role, a]));
-  const approvedCount = MANDATORY_APPROVAL_ROLES.filter((r) => byRole.has(r)).length;
-  const total = MANDATORY_APPROVAL_ROLES.length;
+  const byRole = getActiveApprovalMap(approvals);
+  const approvedCount = ACTIVE_APPROVAL_ROLES.filter((r) => byRole.has(r)).length;
+  const total = ACTIVE_APPROVAL_ROLES.length;
   const pct = Math.round((approvedCount / total) * 100);
   const allApproved = approvedCount === total;
   const sampleLocked =
@@ -2007,7 +2007,7 @@ function ApprovalPanel({ design }: { design: Design }) {
         </div>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
-          {MANDATORY_APPROVAL_ROLES.map((role) => (
+          {ACTIVE_APPROVAL_ROLES.map((role) => (
             <ApprovalCard
               key={role}
               role={role}
@@ -2023,11 +2023,11 @@ function ApprovalPanel({ design }: { design: Design }) {
                 <p className="mt-0.5 truncate text-base font-bold text-muted-foreground">{design.customer}</p>
               </div>
               <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                Coming soon
+                Coming Soon
               </span>
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Customer approval will be enabled in a future release.
+              Not Required for the current approval workflow.
             </p>
           </li>
         </ul>
