@@ -1944,8 +1944,6 @@ function EmptyChild({ text }: { text: string }) {
 
 /* ---------- Approval ---------- */
 
-const MANDATORY_APPROVAL_ROLES = ["Designer", "Merchandiser", "Production Head"] as const;
-type ApprovalRoleName = (typeof MANDATORY_APPROVAL_ROLES)[number];
 
 function ApprovalPanel({ design }: { design: Design }) {
   const { data: approvals = [], isLoading } = useSampleApprovals(design.id);
