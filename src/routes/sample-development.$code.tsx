@@ -70,6 +70,51 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "approval", label: "Approval", icon: FileCheck2 },
 ];
 
+const MANDATORY_APPROVAL_ROLES = ["Designer", "Merchandiser", "Production Head"] as const;
+type ApprovalRoleName = (typeof MANDATORY_APPROVAL_ROLES)[number];
+
+const SAMPLE_STAGES: { id: string; label: string }[] = [
+  { id: "sample-created", label: "Sample Created" },
+  { id: "material-selection", label: "Material Selection" },
+  { id: "sample-making", label: "Sample Making" },
+  { id: "costing", label: "Costing" },
+  { id: "approval", label: "Approval" },
+  { id: "ready-for-production", label: "Ready for Production" },
+  { id: "production", label: "Production" },
+];
+
+function computeStageIndex(
+  design: Design,
+  sample: DesignWorkflow | undefined,
+  approvals: SampleApproval[]
+): number {
+  if (design.status === "in_production" || design.status === "completed") return 6;
+  if (design.status === "sample_approved") return 5;
+
+  const approvedRoles = new Set(approvals.map((a) => a.role));
+  const allApproved = MANDATORY_APPROVAL_ROLES.every((r) => approvedRoles.has(r));
+  if (allApproved) return 5;
+
+  const steps = sample?.steps.filter((s) => s.status !== "deleted") ?? [];
+  const allStepsDone = steps.length > 0 && steps.every((s) => s.status === "completed" || s.status === "skipped");
+
+  if (allStepsDone || approvals.length > 0) return 4;
+
+  const materialStep = steps.find((s) => s.operationId === "material-selection");
+  const materialDone = materialStep?.status === "completed" || materialStep?.status === "skipped";
+
+  const makingSteps = steps.filter((s) => s.operationId === "sample-making");
+  const anyMakingActive = makingSteps.some((s) => s.status === "in-progress" || s.status === "completed");
+  const allMakingDone = makingSteps.length > 0 && makingSteps.every((s) => s.status === "completed" || s.status === "skipped");
+
+  if (allMakingDone) return 3;
+  if (anyMakingActive) return 2;
+  if (materialDone) return 2;
+  if (materialStep || steps.length > 0) return 1;
+
+  return 0;
+}
+
 function DesignSamplePage() {
   useRequireAuth();
   const { code } = Route.useParams();
