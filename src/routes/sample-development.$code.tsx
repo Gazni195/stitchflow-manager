@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -14,7 +14,6 @@ import {
   Plus,
   RotateCcw,
   Scissors,
-  Sparkles,
   Trash2,
   X,
   XCircle,
@@ -61,10 +60,9 @@ export const Route = createFileRoute("/sample-development/$code")({
   component: DesignSamplePage,
 });
 
-type TabId = "status" | "materials" | "making" | "costing" | "approval";
+type TabId = "materials" | "making" | "costing" | "approval";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
-  { id: "status", label: "Sample Status", icon: Sparkles },
   { id: "materials", label: "Material Selection", icon: Layers },
   { id: "making", label: "Sample Making", icon: Scissors },
   { id: "costing", label: "Costing", icon: Coins },
@@ -156,7 +154,7 @@ function DesignSamplePage() {
 }
 
 function DesignSample({ design }: { design: Design }) {
-  const [tab, setTab] = useState<TabId>("status");
+  const [tab, setTab] = useState<TabId>("materials");
   const { data: workflows, isLoading: wfLoading } = useWorkflows(design.id);
   const sample = workflows?.find((w) => w.kind === "sample");
   const bulk = workflows?.find((w) => w.kind === "bulk");
@@ -239,7 +237,6 @@ function DesignSample({ design }: { design: Design }) {
           </div>
 
           <div className="pt-5">
-            {tab === "status" && <StatusPanel design={design} stageIndex={stageIndex} setTab={setTab} />}
             {tab === "materials" && <MaterialsPanel design={design} onCompleted={() => setTab("making")} />}
             {tab === "making" && <SampleMakingPanel design={design} onContinue={() => setTab("costing")} />}
             {tab === "costing" && <CostingPanel design={design} onContinue={() => setTab("approval")} />}
@@ -251,46 +248,6 @@ function DesignSample({ design }: { design: Design }) {
   );
 }
 
-/* ---------- Status ---------- */
-
-function StatusPanel({ design, stageIndex, setTab }: { design: Design; stageIndex: number; setTab: (tab: TabId) => void }) {
-  const navigate = useNavigate();
-  const currentIdx = Math.min(Math.max(stageIndex, 0), SAMPLE_STAGES.length - 1);
-
-  function handleContinue() {
-    if (currentIdx <= 1) setTab("materials");
-    else if (currentIdx === 2) setTab("making");
-    else if (currentIdx === 3) setTab("costing");
-    else if (currentIdx === 4) setTab("approval");
-    else navigate({ to: "/production" });
-  }
-
-  const buttonLabel = (() => {
-    if (currentIdx <= 1) return "Continue to Material Selection";
-    if (currentIdx === 2) return "Continue to Sample Making";
-    if (currentIdx === 3) return "Continue to Costing";
-    if (currentIdx === 4) return "Continue to Approval";
-    return "Continue to Production";
-  })();
-
-  return (
-    <div className="grid gap-5">
-      {design.notes && (
-        <div className="rounded-2xl border border-border bg-background p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Notes</p>
-          <p className="mt-1 text-sm">{design.notes}</p>
-        </div>
-      )}
-
-      <button
-        onClick={handleContinue}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
-      >
-        {buttonLabel} <ArrowRight className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
 
 /* ---------- Materials (Inventory-driven selection) ---------- */
 //
