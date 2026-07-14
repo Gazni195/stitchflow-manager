@@ -1,29 +1,55 @@
+// Bulk Production details — mirrors the Sample module UX so operators
+// never have to relearn the flow: same tabbed shell, same "Start …"
+// primary button, same Running / Completed timeline. The only substantive
+// difference is that "Sample Making" becomes "Bulk Production", which
+// supports multiple concurrent activities (Cutting, Hand Work, Machine
+// Embroidery, Stitching, Printing, Washing, QC, Packing) with automatic
+// factory-clock-aware time tracking.
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
+  ArrowRight,
+  BarChart3,
   CheckCircle2,
-  ChevronRight,
-  Lock,
+  Clock,
+  Coffee,
+  Factory,
+  FileCheck2,
+  Layers,
   Loader2,
-  Package,
   PlayCircle,
+  StopCircle,
+  Timer,
   User,
   X,
+  XCircle,
+  type LucideIcon,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
 import { useRequireAuth } from "@/hooks/use-auth";
+import { useProductionOrder, computeProgress } from "@/lib/api/production";
 import {
-  useCompleteProcess,
-  useIssueBundle,
-  useProductionOrder,
-  computeProgress,
-  OP_NAME,
-  type ProcessOperationId,
-  type ProductionProcess,
-  type WorkerType,
-} from "@/lib/api/production";
+  ACTIVITY_OPERATIONS,
+  ACTIVITY_OP_NAME,
+  currentProductionStage,
+  useCancelActivity,
+  useCompleteActivity,
+  useProductionActivities,
+  useStartActivity,
+  type ActivityOperationId,
+  type ProductionActivity,
+} from "@/lib/api/production-activities";
+import { useDesignMaterials, type DesignMaterial } from "@/lib/api/materials";
+import {
+  DEFAULT_FACTORY_CALENDAR,
+  effectiveWorkingSeconds,
+  elapsedSeconds,
+  factoryStatusAt,
+  formatClock,
+  formatDuration,
+} from "@/lib/factory-clock";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/production/$po")({
@@ -31,18 +57,24 @@ export const Route = createFileRoute("/production/$po")({
   component: ProductionDetails,
 });
 
-const WORKER_TYPES: { id: WorkerType; label: string }[] = [
-  { id: "hand_worker", label: "Hand Worker" },
-  { id: "machine_operator", label: "Machine Operator" },
-  { id: "vendor", label: "Vendor" },
+type TabId = "materials" | "bulk" | "summary";
+const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
+  { id: "materials", label: "Material Selection", icon: Layers },
+  { id: "bulk", label: "Bulk Production", icon: Factory },
+  { id: "summary", label: "Production Summary", icon: BarChart3 },
+];
+
+const PRODUCTION_STAGES = [
+  { id: "material", label: "Material Selection" },
+  { id: "bulk", label: "Bulk Production" },
+  { id: "summary", label: "Production Summary" },
 ];
 
 function ProductionDetails() {
   useRequireAuth();
   const { po } = Route.useParams();
   const { data: order, isLoading } = useProductionOrder(po);
-  const [issueFor, setIssueFor] = useState<ProductionProcess | null>(null);
-  const [completeFor, setCompleteFor] = useState<ProductionProcess | null>(null);
+  const [tab, setTab] = useState<TabId>("materials");
 
   if (isLoading) {
     return (
@@ -58,7 +90,10 @@ function ProductionDetails() {
       <AppShell title={po}>
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
           <p className="text-sm text-muted-foreground">Production Order not found.</p>
-          <Link to="/production" className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-primary">
+          <Link
+            to="/production"
+            className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-primary"
+          >
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Production
           </Link>
         </div>
@@ -66,281 +101,685 @@ function ProductionDetails() {
     );
   }
 
-  const pct = computeProgress(order.processes);
+  const stageIndex = tab === "materials" ? 0 : tab === "bulk" ? 1 : 2;
 
   return (
     <AppShell
       title={order.code}
       subtitle={`${order.designCode} · ${order.designName}`}
       action={
-        <Link to="/production" className="hidden items-center gap-1 text-xs font-bold text-muted-foreground hover:text-foreground sm:inline-flex">
-          <ArrowLeft className="h-3.5 w-3.5" /> All Orders
+        <Link
+          to="/production"
+          aria-label="Back to production"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3 sm:py-2.5 sm:text-sm sm:font-semibold sm:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">All Orders</span>
         </Link>
       }
     >
       <div className="grid gap-5">
-        {/* Header */}
-        <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
-          <div className="grid gap-4 p-5 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-center">
-            <div className="grid gap-3">
-              <div>
-                <p className="text-[11px] font-bold tracking-widest text-muted-foreground">{order.code}</p>
-                <h2 className="text-xl font-extrabold">{order.designName}</h2>
-                <p className="text-xs text-muted-foreground">
-                  {order.customer} · Started {new Date(order.startDate).toLocaleDateString()}
-                  {order.supervisor ? ` · Supervisor ${order.supervisor}` : ""}
-                </p>
-              </div>
-              <dl className="grid grid-cols-3 gap-2 text-xs">
-                <Stat label="Order Qty" value={`${order.orderQuantity} Pcs`} />
-                <Stat label="Progress" value={`${pct}%`} />
-                <Stat label="Status" value={order.status === "completed" ? "Completed" : "Running"} />
-              </dl>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-              </div>
-            </div>
-            <div className="relative aspect-square w-full max-w-[180px] overflow-hidden rounded-2xl bg-primary-soft sm:ml-auto">
-              <DesignImage path={order.imagePath ?? null} alt={order.designName ?? ""} />
-            </div>
-          </div>
-        </section>
+        <ProductionHeader order={order} stageIndex={stageIndex} />
 
-        {/* Operations */}
-        <section className="grid gap-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold">Operations</h3>
-            <span className="text-xs text-muted-foreground">Bundle-based · Sequential unlock</span>
+        <section>
+          <div className="flex gap-2 overflow-x-auto border-b border-border">
+            {TABS.map((t) => {
+              const Icon = t.icon;
+              const isActive = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={
+                    "inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition " +
+                    (isActive
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground")
+                  }
+                >
+                  <Icon className="h-4 w-4" />
+                  {t.label}
+                </button>
+              );
+            })}
           </div>
-          <ul className="grid gap-3">
-            {(order.processes ?? []).map((p) => (
-              <ProcessRow
-                key={p.id}
-                p={p}
-                onIssue={() => setIssueFor(p)}
-                onComplete={() => setCompleteFor(p)}
+
+          <div className="pt-5">
+            {tab === "materials" && (
+              <MaterialsPanel designId={order.designId} onContinue={() => setTab("bulk")} />
+            )}
+            {tab === "bulk" && (
+              <BulkProductionPanel
+                productionOrderId={order.id}
+                orderQuantity={order.orderQuantity}
+                onContinue={() => setTab("summary")}
               />
-            ))}
-          </ul>
+            )}
+            {tab === "summary" && (
+              <SummaryPanel productionOrderId={order.id} orderQuantity={order.orderQuantity} />
+            )}
+          </div>
         </section>
       </div>
-
-      {issueFor && (
-        <IssueBundleDialog process={issueFor} poCode={order.code} onClose={() => setIssueFor(null)} />
-      )}
-      {completeFor && (
-        <CompleteProcessDialog process={completeFor} poCode={order.code} onClose={() => setCompleteFor(null)} />
-      )}
     </AppShell>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+/* ---------- Header (image + facts + workflow progress) ---------- */
+
+function ProductionHeader({
+  order,
+  stageIndex,
+}: {
+  order: NonNullable<ReturnType<typeof useProductionOrder>["data"]>;
+  stageIndex: number;
+}) {
+  const { data: activities = [] } = useProductionActivities(order.id);
+  const stage = currentProductionStage(activities);
+  const pct = computeProgress(order.processes);
+
   return (
-    <div className="rounded-lg border border-border bg-background p-2">
-      <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 text-sm font-bold">{value}</dd>
+    <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+      <div className="relative aspect-[16/10] w-full bg-primary-soft">
+        <DesignImage path={order.imagePath ?? null} alt={order.designName ?? ""} />
+      </div>
+
+      <div className="grid gap-4 p-3 sm:p-5">
+        <div className="min-w-0">
+          <p className="truncate text-[11px] font-bold tracking-widest text-muted-foreground">{order.code}</p>
+          <h2 className="truncate text-xl font-extrabold tracking-tight sm:text-2xl">{order.designName}</h2>
+          <p className="mt-1 truncate text-sm text-muted-foreground">
+            {order.customer} · Started {new Date(order.startDate).toLocaleDateString()}
+            {order.supervisor ? ` · Supervisor ${order.supervisor}` : ""}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Fact label="Order Qty" value={`${order.orderQuantity.toLocaleString()} Pcs`} />
+          <Fact label="Current Stage" value={stage.label} />
+          <Fact label="Progress" value={`${pct}%`} />
+          <FactoryStatusFact />
+        </div>
+
+        <div className="min-w-0 rounded-2xl border border-border bg-background p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="truncate text-sm font-bold">Workflow Progress</p>
+            <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-1 text-[11px] font-bold text-primary">
+              {PRODUCTION_STAGES[stageIndex].label}
+            </span>
+          </div>
+          <ol className="mt-3 flex items-start gap-1 sm:gap-1.5">
+            {PRODUCTION_STAGES.map((step, i) => {
+              const n = i + 1;
+              const done = i < stageIndex;
+              const current = i === stageIndex;
+              return (
+                <li key={step.id} className="flex min-w-0 flex-1 flex-col items-center gap-1 sm:gap-1.5">
+                  <div className="flex w-full items-center gap-1 sm:gap-1.5">
+                    <span
+                      className={
+                        "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold transition sm:h-8 sm:w-8 sm:text-[11px] " +
+                        (done
+                          ? "bg-primary text-primary-foreground"
+                          : current
+                            ? "bg-primary text-primary-foreground ring-[3px] ring-primary/30 sm:ring-[5px]"
+                            : "bg-muted text-muted-foreground")
+                      }
+                    >
+                      {done ? "✓" : n}
+                    </span>
+                    {i < PRODUCTION_STAGES.length - 1 && (
+                      <span
+                        className={"h-0.5 min-w-0 flex-1 rounded-full " + (i < stageIndex ? "bg-primary" : "bg-muted")}
+                      />
+                    )}
+                  </div>
+                  <span
+                    className={
+                      "hidden w-full truncate text-center text-[9px] font-semibold leading-tight sm:block " +
+                      (current ? "text-primary" : done ? "text-foreground" : "text-muted-foreground")
+                    }
+                    title={step.label}
+                  >
+                    {step.label}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-background p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-1 truncate text-sm font-bold">{value}</p>
     </div>
   );
 }
 
-function ProcessRow({
-  p,
-  onIssue,
+function FactoryStatusFact() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 15_000);
+    return () => clearInterval(id);
+  }, []);
+  const status = factoryStatusAt(now, DEFAULT_FACTORY_CALENDAR);
+  const label =
+    status.kind === "working"
+      ? "Working"
+      : status.kind === "break"
+        ? `${status.name} Break`
+        : status.reason === "off-hours"
+          ? "Closed"
+          : status.reason === "weekly-off"
+            ? "Weekly Off"
+            : "Holiday";
+  return (
+    <div className="rounded-xl border border-border bg-background p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Factory · {formatClock(now)}</p>
+      <p
+        className={cn(
+          "mt-1 truncate text-sm font-bold",
+          status.kind === "working" && "text-success",
+          status.kind === "break" && "text-warning",
+          status.kind === "closed" && "text-muted-foreground",
+        )}
+      >
+        {label}
+      </p>
+    </div>
+  );
+}
+
+/* ---------- Materials tab ---------- */
+
+function MaterialsPanel({ designId, onContinue }: { designId: string; onContinue: () => void }) {
+  const { data: selected = [], isLoading } = useDesignMaterials(designId);
+  const total = selected.reduce((s, r) => s + r.amount, 0);
+
+  const grouped = useMemo(() => {
+    const byGroup = new Map<string, DesignMaterial[]>();
+    for (const row of selected) {
+      const key = row.groupName.split("::")[0] || "Other";
+      byGroup.set(key, [...(byGroup.get(key) ?? []), row]);
+    }
+    return Array.from(byGroup.entries());
+  }, [selected]);
+
+  return (
+    <div className="grid gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-gradient-to-br from-primary-soft to-background p-4">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Material Total (per piece)</p>
+          <p className="mt-0.5 text-2xl font-extrabold text-primary">
+            ₹{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {selected.length} item{selected.length === 1 ? "" : "s"} · locked from the approved sample
+          </p>
+        </div>
+        <Link
+          to="/inventory"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold text-primary hover:bg-primary-soft/40"
+        >
+          <Layers className="h-3.5 w-3.5" /> Open Inventory
+        </Link>
+      </div>
+
+      {isLoading ? (
+        <div className="grid place-items-center rounded-2xl border border-border bg-card p-10">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : selected.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+          <Layers className="mx-auto h-6 w-6 text-muted-foreground" />
+          <p className="mt-2 text-sm text-muted-foreground">No materials on this design yet.</p>
+        </div>
+      ) : (
+        <div className="grid gap-2">
+          {grouped.map(([partKey, rows]) => (
+            <div key={partKey} className="overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-4 py-2.5">
+                <p className="text-sm font-bold">{partKey}</p>
+                <p className="text-[11px] text-muted-foreground">{rows.length} item{rows.length === 1 ? "" : "s"}</p>
+              </div>
+              <ul className="divide-y divide-border">
+                {rows.map((r) => (
+                  <li key={r.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold">{r.material?.name ?? "—"}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        {r.material?.code ?? ""} · {r.quantity} {r.material?.unit ?? ""} × ₹{r.rate}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-bold">
+                      ₹{r.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex justify-end">
+        <button
+          onClick={onContinue}
+          className="inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+        >
+          Continue to Bulk Production <ArrowRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Bulk Production tab ---------- */
+
+function BulkProductionPanel({
+  productionOrderId,
+  orderQuantity,
+  onContinue,
+}: {
+  productionOrderId: string;
+  orderQuantity: number;
+  onContinue: () => void;
+}) {
+  const { data: activities = [], isLoading } = useProductionActivities(productionOrderId);
+  const [startOpen, setStartOpen] = useState(false);
+  const [completeFor, setCompleteFor] = useState<ProductionActivity | null>(null);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => tick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const running = activities.filter((a) => a.status === "running");
+  const completed = activities.filter((a) => a.status === "completed");
+
+  return (
+    <div className="grid gap-4">
+      <button
+        onClick={() => setStartOpen(true)}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-base font-bold text-primary-foreground shadow-sm hover:opacity-90"
+      >
+        <PlayCircle className="h-5 w-5" /> Start Production
+      </button>
+
+      {/* Running Activities */}
+      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Running Activities</p>
+          <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-bold text-primary">
+            {running.length}
+          </span>
+        </div>
+        {isLoading ? (
+          <div className="mt-3 grid place-items-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : running.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">No activities running right now.</p>
+        ) : (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {running.map((a) => (
+              <RunningActivityCard
+                key={a.id}
+                activity={a}
+                productionOrderId={productionOrderId}
+                onComplete={() => setCompleteFor(a)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Completed Activities */}
+      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Completed Activities</p>
+          <span className="rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-bold text-success">
+            {completed.length}
+          </span>
+        </div>
+        {completed.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">No completed activities yet.</p>
+        ) : (
+          <ul className="mt-3 grid gap-2">
+            {completed.map((a) => (
+              <CompletedActivityRow key={a.id} activity={a} />
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          onClick={onContinue}
+          className="inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+        >
+          View Production Summary <ArrowRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      {startOpen && (
+        <StartActivityDialog
+          productionOrderId={productionOrderId}
+          orderQuantity={orderQuantity}
+          onClose={() => setStartOpen(false)}
+        />
+      )}
+      {completeFor && (
+        <CompleteActivityDialog
+          activity={completeFor}
+          productionOrderId={productionOrderId}
+          onClose={() => setCompleteFor(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function RunningActivityCard({
+  activity,
+  productionOrderId,
   onComplete,
 }: {
-  p: ProductionProcess;
-  onIssue: () => void;
+  activity: ProductionActivity;
+  productionOrderId: string;
   onComplete: () => void;
 }) {
-  const opName = OP_NAME[p.operationId as ProcessOperationId] ?? p.operationId;
+  const now = new Date();
+  const start = new Date(activity.startedAt);
+  const elapsed = elapsedSeconds(start, now);
+  const effective = effectiveWorkingSeconds(start, now);
+  const cancel = useCancelActivity(productionOrderId);
+
   return (
-    <li
-      className={cn(
-        "rounded-2xl border bg-card p-4 shadow-sm",
-        p.status === "completed" ? "border-success/40" : "border-border",
+    <div className="rounded-2xl border border-primary/30 bg-primary-soft/30 p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
+            🟣 {ACTIVITY_OP_NAME[activity.operationId]}
+          </p>
+          <p className="mt-0.5 truncate text-sm font-bold">{activity.assignedTo}</p>
+        </div>
+        <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
+          Running
+        </span>
+      </div>
+      <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <Meta icon={<Clock className="h-3 w-3" />} label="Started" value={formatClock(start)} />
+        <Meta icon={<Timer className="h-3 w-3" />} label="Elapsed" value={formatDuration(elapsed)} />
+        <Meta icon={<CheckCircle2 className="h-3 w-3" />} label="Effective" value={formatDuration(effective)} />
+        <Meta label="Issued" value={`${activity.issuedQty} pcs`} />
+      </dl>
+      {activity.notes && (
+        <p className="mt-2 rounded-lg bg-background/60 px-2 py-1.5 text-xs text-muted-foreground">{activity.notes}</p>
       )}
-    >
-      <div className="flex items-start gap-3">
-        <StageBadge status={p.status} sequence={p.sequence} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-bold">{opName}</p>
-            <StatusPill status={p.status} />
-          </div>
-          {p.status !== "locked" && p.status !== "pending" && (
-            <dl className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-              <Meta label="Worker" value={p.assignedTo ?? "—"} icon={<User className="h-3 w-3" />} />
-              <Meta
-                label="Worker Type"
-                value={
-                  p.workerType === "hand_worker"
-                    ? "Hand Worker"
-                    : p.workerType === "machine_operator"
-                    ? "Machine Op."
-                    : p.workerType === "vendor"
-                    ? "Vendor"
-                    : "—"
-                }
-              />
-              <Meta label="Issued" value={p.issuedQty != null ? `${p.issuedQty} pcs` : "—"} />
-              <Meta label="Returned" value={p.returnedQty != null ? `${p.returnedQty} pcs` : "—"} />
-            </dl>
-          )}
-          {p.notes && <p className="mt-2 rounded-lg bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">{p.notes}</p>}
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={onComplete}
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-success px-3 py-2 text-xs font-bold text-success-foreground hover:opacity-90"
+        >
+          <StopCircle className="h-3.5 w-3.5" /> Complete
+        </button>
+        <button
+          onClick={() => {
+            if (window.confirm("Cancel this activity? Time is not counted.")) cancel.mutate(activity.id);
+          }}
+          disabled={cancel.isPending}
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-muted-foreground hover:bg-accent"
+        >
+          <XCircle className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CompletedActivityRow({ activity }: { activity: ProductionActivity }) {
+  return (
+    <li className="grid gap-2 rounded-2xl border border-border bg-background p-3 text-xs sm:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-bold">{ACTIVITY_OP_NAME[activity.operationId]}</p>
+          <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">Completed</span>
+          <span className="truncate text-muted-foreground">{activity.assignedTo}</span>
         </div>
-        <div className="shrink-0">
-          {p.status === "locked" && (
-            <span className="inline-flex items-center gap-1 rounded-lg bg-muted px-3 py-2 text-xs font-bold text-muted-foreground">
-              <Lock className="h-3.5 w-3.5" /> Locked
-            </span>
-          )}
-          {p.status === "pending" && (
-            <button
-              onClick={onIssue}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:opacity-90"
-            >
-              <PlayCircle className="h-3.5 w-3.5" /> Start Process
-            </button>
-          )}
-          {p.status === "issued" && (
-            <button
-              onClick={onComplete}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-success px-3 py-2 text-xs font-bold text-success-foreground hover:opacity-90"
-            >
-              <Package className="h-3.5 w-3.5" /> Complete Process
-            </button>
-          )}
-          {p.status === "completed" && (
-            <span className="inline-flex items-center gap-1 rounded-lg bg-success/15 px-3 py-2 text-xs font-bold text-success">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Done
-            </span>
-          )}
-        </div>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Start {formatClock(new Date(activity.startedAt))}
+          {activity.completedAt ? ` · End ${formatClock(new Date(activity.completedAt))}` : ""}
+          {activity.effectiveSeconds != null ? ` · ⏱ ${formatDuration(activity.effectiveSeconds)} effective` : ""}
+        </p>
+      </div>
+      <div className="flex items-center gap-3 sm:justify-end">
+        <span className="text-[11px] text-muted-foreground">
+          📦 {activity.issuedQty} → 📥 {activity.returnedQty ?? "—"}
+        </span>
       </div>
     </li>
   );
 }
 
-function StageBadge({ status, sequence }: { status: ProductionProcess["status"]; sequence: number }) {
+function Meta({ icon, label, value }: { icon?: React.ReactNode; label: string; value: string }) {
   return (
-    <div
-      className={cn(
-        "grid h-9 w-9 shrink-0 place-items-center rounded-xl text-sm font-black",
-        status === "completed"
-          ? "bg-success text-success-foreground"
-          : status === "issued"
-          ? "bg-primary text-primary-foreground"
-          : status === "pending"
-          ? "bg-primary-soft text-primary"
-          : "bg-muted text-muted-foreground",
-      )}
-    >
-      {status === "completed" ? <CheckCircle2 className="h-4 w-4" /> : sequence}
-    </div>
-  );
-}
-
-function StatusPill({ status }: { status: ProductionProcess["status"] }) {
-  const map: Record<ProductionProcess["status"], string> = {
-    locked: "bg-muted text-muted-foreground",
-    pending: "bg-primary-soft text-primary",
-    issued: "bg-warning/15 text-warning",
-    completed: "bg-success/15 text-success",
-  };
-  const label: Record<ProductionProcess["status"], string> = {
-    locked: "Locked",
-    pending: "Pending",
-    issued: "Issued",
-    completed: "Completed",
-  };
-  return (
-    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold", map[status])}>
-      {label[status]}
-    </span>
-  );
-}
-
-function Meta({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
-  return (
-    <div className="rounded-md bg-background/60 px-2 py-1">
+    <div className="rounded-md bg-background/70 px-2 py-1">
       <dt className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 inline-flex items-center gap-1 font-semibold">{icon}{value}</dd>
+      <dd className="mt-0.5 inline-flex items-center gap-1 font-semibold">
+        {icon}
+        {value}
+      </dd>
     </div>
   );
 }
 
-// --------- Dialogs ---------
-function IssueBundleDialog({
-  process,
-  poCode,
+/* ---------- Summary tab ---------- */
+
+function SummaryPanel({
+  productionOrderId,
+  orderQuantity,
+}: {
+  productionOrderId: string;
+  orderQuantity: number;
+}) {
+  const { data: activities = [], isLoading } = useProductionActivities(productionOrderId);
+  const completed = activities.filter((a) => a.status === "completed");
+
+  const totalIssued = activities.reduce((s, a) => s + a.issuedQty, 0);
+  const totalReturned = completed.reduce((s, a) => s + (a.returnedQty ?? 0), 0);
+  const totalEffective = completed.reduce((s, a) => s + (a.effectiveSeconds ?? 0), 0);
+  const totalElapsed = completed.reduce((s, a) => s + (a.elapsedSeconds ?? 0), 0);
+
+  // Per-operation rollup
+  const perOp = ACTIVITY_OPERATIONS.map((op) => {
+    const rows = completed.filter((a) => a.operationId === op.id);
+    const issued = rows.reduce((s, a) => s + a.issuedQty, 0);
+    const returned = rows.reduce((s, a) => s + (a.returnedQty ?? 0), 0);
+    const eff = rows.reduce((s, a) => s + (a.effectiveSeconds ?? 0), 0);
+    return { op, count: rows.length, issued, returned, eff };
+  }).filter((r) => r.count > 0);
+
+  if (isLoading) {
+    return (
+      <div className="grid place-items-center rounded-2xl border border-border bg-card p-10">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-3 sm:grid-cols-4">
+        <SummaryCard label="Order Qty" value={`${orderQuantity} pcs`} />
+        <SummaryCard label="Issued" value={`${totalIssued} pcs`} />
+        <SummaryCard label="Returned" value={`${totalReturned} pcs`} />
+        <SummaryCard label="Effective Time" value={formatDuration(totalEffective)} subtitle={`Elapsed ${formatDuration(totalElapsed)}`} />
+      </div>
+
+      <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+        <div className="border-b border-border px-4 py-3">
+          <p className="text-sm font-bold">Per-Operation Rollup</p>
+          <p className="text-[11px] text-muted-foreground">
+            Effective working time excludes break windows, off-hours, and weekly-off days.
+          </p>
+        </div>
+        {perOp.length === 0 ? (
+          <div className="p-6 text-center text-sm text-muted-foreground">
+            No completed activities yet — start production to see the rollup.
+          </div>
+        ) : (
+          <table className="w-full min-w-[520px] text-sm">
+            <thead className="bg-muted/40 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <tr>
+                <th className="px-4 py-2.5 text-left">Operation</th>
+                <th className="px-4 py-2.5 text-right">Activities</th>
+                <th className="px-4 py-2.5 text-right">Issued</th>
+                <th className="px-4 py-2.5 text-right">Returned</th>
+                <th className="px-4 py-2.5 text-right">Effective</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {perOp.map((r) => (
+                <tr key={r.op.id}>
+                  <td className="px-4 py-2.5 font-semibold">{r.op.name}</td>
+                  <td className="px-4 py-2.5 text-right">{r.count}</td>
+                  <td className="px-4 py-2.5 text-right">{r.issued}</td>
+                  <td className="px-4 py-2.5 text-right">{r.returned}</td>
+                  <td className="px-4 py-2.5 text-right">{formatDuration(r.eff)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
+        <div className="mb-2 flex items-center gap-2">
+          <FileCheck2 className="h-4 w-4 text-muted-foreground" />
+          <p className="text-sm font-bold">Activity Log</p>
+        </div>
+        {activities.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No activities recorded yet.</p>
+        ) : (
+          <ul className="grid gap-2">
+            {activities.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background p-3 text-xs">
+                <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-bold text-primary">
+                  {ACTIVITY_OP_NAME[a.operationId]}
+                </span>
+                <span className="font-semibold">{a.assignedTo}</span>
+                <span className="text-muted-foreground">· 📦 {a.issuedQty}</span>
+                {a.returnedQty != null && <span className="text-muted-foreground">→ 📥 {a.returnedQty}</span>}
+                <span className="ml-auto text-muted-foreground">
+                  {formatClock(new Date(a.startedAt))}
+                  {a.completedAt ? ` – ${formatClock(new Date(a.completedAt))}` : ""}
+                  {a.effectiveSeconds != null ? ` · ⏱ ${formatDuration(a.effectiveSeconds)}` : ""}
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-bold",
+                    a.status === "running" && "bg-primary text-primary-foreground",
+                    a.status === "completed" && "bg-success/15 text-success",
+                    a.status === "cancelled" && "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {a.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value, subtitle }: { label: string; value: string; subtitle?: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-1 text-lg font-extrabold">{value}</p>
+      {subtitle && <p className="text-[10px] text-muted-foreground">{subtitle}</p>}
+    </div>
+  );
+}
+
+/* ---------- Dialogs ---------- */
+
+function StartActivityDialog({
+  productionOrderId,
+  orderQuantity,
   onClose,
 }: {
-  process: ProductionProcess;
-  poCode: string;
+  productionOrderId: string;
+  orderQuantity: number;
   onClose: () => void;
 }) {
-  const opName = OP_NAME[process.operationId as ProcessOperationId] ?? process.operationId;
-  const [workerType, setWorkerType] = useState<WorkerType>("hand_worker");
-  const [assignedTo, setAssignedTo] = useState<string>("");
-  const [qty, setQty] = useState<number>(0);
-  const [notes, setNotes] = useState<string>("");
-  const issue = useIssueBundle(poCode);
+  const [operationId, setOperationId] = useState<ActivityOperationId | "">("");
+  const [assignedTo, setAssignedTo] = useState("");
+  const [issuedQty, setIssuedQty] = useState<number>(0);
+  const [notes, setNotes] = useState("");
+  const start = useStartActivity(productionOrderId);
 
   async function submit() {
-    if (!assignedTo.trim() || qty < 1) return;
-    await issue.mutateAsync({
-      processId: process.id,
-      workerType,
+    if (!operationId || !assignedTo.trim() || issuedQty < 1) return;
+    await start.mutateAsync({
+      operationId,
       assignedTo: assignedTo.trim(),
-      issuedQty: qty,
-      notes: notes.trim(),
+      issuedQty,
+      notes,
     });
     onClose();
   }
 
   return (
-    <DialogShell title="Start Process" subtitle="Issue a bundle for this operation" onClose={onClose}>
+    <DialogShell title="Start Production" subtitle="Log a new bulk production activity" onClose={onClose}>
       <div className="grid gap-4 p-5">
-        <Field label="Operation">
-          <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-bold">{opName}</div>
-        </Field>
-        <Field label="Worker Type">
-          <div className="grid grid-cols-3 gap-2">
-            {WORKER_TYPES.map((w) => (
+        <Field label="Select Activity">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {ACTIVITY_OPERATIONS.map((op) => (
               <button
-                key={w.id}
+                key={op.id}
                 type="button"
-                onClick={() => setWorkerType(w.id)}
+                onClick={() => setOperationId(op.id)}
                 className={cn(
                   "rounded-lg border px-2 py-2 text-xs font-bold",
-                  workerType === w.id ? "border-primary bg-primary-soft text-primary" : "border-border bg-background text-foreground hover:bg-accent",
+                  operationId === op.id
+                    ? "border-primary bg-primary-soft text-primary"
+                    : "border-border bg-background text-foreground hover:bg-accent",
                 )}
               >
-                {w.label}
+                {op.name}
               </button>
             ))}
           </div>
         </Field>
-        <Field label="Assign To">
+        <Field label="Assign Worker / Team / Line">
           <input
             value={assignedTo}
             onChange={(e) => setAssignedTo(e.target.value)}
-            placeholder="e.g. HW-07 / Vendor Name"
+            placeholder="e.g. HW Team 01 / Line 2 / Vendor X"
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
           />
         </Field>
-        <Field label="Issue Quantity">
+        <Field label={`Issue Quantity (Order ${orderQuantity} pcs)`}>
           <input
             type="number"
             min={1}
-            value={qty || ""}
-            onChange={(e) => setQty(Number(e.target.value))}
+            value={issuedQty || ""}
+            onChange={(e) => setIssuedQty(Number(e.target.value))}
             placeholder="e.g. 40"
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
           />
         </Field>
-        <Field label="Notes">
+        <Field label="Notes (optional)">
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -349,52 +788,53 @@ function IssueBundleDialog({
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
           />
         </Field>
-        {issue.error && <p className="text-xs text-destructive">{(issue.error as Error).message}</p>}
+        {start.error && <p className="text-xs text-destructive">{(start.error as Error).message}</p>}
       </div>
       <DialogFooter onCancel={onClose}>
         <button
           onClick={submit}
-          disabled={issue.isPending || !assignedTo.trim() || qty < 1}
+          disabled={start.isPending || !operationId || !assignedTo.trim() || issuedQty < 1}
           className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-60"
         >
-          {issue.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          Issue Bundle
+          {start.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlayCircle className="h-3.5 w-3.5" />}
+          Start Activity
         </button>
       </DialogFooter>
     </DialogShell>
   );
 }
 
-function CompleteProcessDialog({
-  process,
-  poCode,
+function CompleteActivityDialog({
+  activity,
+  productionOrderId,
   onClose,
 }: {
-  process: ProductionProcess;
-  poCode: string;
+  activity: ProductionActivity;
+  productionOrderId: string;
   onClose: () => void;
 }) {
-  const opName = OP_NAME[process.operationId as ProcessOperationId] ?? process.operationId;
-  const [returned, setReturned] = useState<number>(process.issuedQty ?? 0);
-  const complete = useCompleteProcess(poCode);
+  const [returned, setReturned] = useState<number>(activity.issuedQty);
+  const complete = useCompleteActivity(productionOrderId);
+  const now = new Date();
+  const start = new Date(activity.startedAt);
+  const eff = effectiveWorkingSeconds(start, now);
+  const elp = elapsedSeconds(start, now);
 
   async function submit() {
-    await complete.mutateAsync({ processId: process.id, returnedQty: returned });
+    await complete.mutateAsync({ activity, returnedQty: returned });
     onClose();
   }
 
   return (
-    <DialogShell title="Complete Process" subtitle={opName} onClose={onClose}>
+    <DialogShell title="Complete Activity" subtitle={ACTIVITY_OP_NAME[activity.operationId]} onClose={onClose}>
       <div className="grid gap-4 p-5">
         <div className="rounded-xl bg-muted/50 p-3 text-xs">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Assigned To</span>
-            <span className="font-bold">{process.assignedTo ?? "—"}</span>
-          </div>
-          <div className="mt-1 flex justify-between">
-            <span className="text-muted-foreground">Issued Qty</span>
-            <span className="font-bold">{process.issuedQty ?? 0} pcs</span>
-          </div>
+          <RowKV k="Assigned To" v={activity.assignedTo} />
+          <RowKV k="Issued Qty" v={`${activity.issuedQty} pcs`} />
+          <RowKV k="Started" v={formatClock(start)} />
+          <RowKV k="End (now)" v={formatClock(now)} />
+          <RowKV k="Elapsed" v={formatDuration(elp)} />
+          <RowKV k="Effective Working" v={formatDuration(eff)} />
         </div>
         <Field label="Return Quantity">
           <input
@@ -405,6 +845,9 @@ function CompleteProcessDialog({
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
           />
         </Field>
+        <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+          <Coffee className="h-3 w-3" /> Break windows and non-working hours are excluded automatically.
+        </p>
         {complete.error && <p className="text-xs text-destructive">{(complete.error as Error).message}</p>}
       </div>
       <DialogFooter onCancel={onClose}>
@@ -414,10 +857,19 @@ function CompleteProcessDialog({
           className="inline-flex items-center gap-1.5 rounded-lg bg-success px-4 py-2 text-xs font-bold text-success-foreground hover:opacity-90 disabled:opacity-60"
         >
           {complete.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-          Complete Process
+          Complete Activity
         </button>
       </DialogFooter>
     </DialogShell>
+  );
+}
+
+function RowKV({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex justify-between py-0.5">
+      <span className="text-muted-foreground">{k}</span>
+      <span className="font-bold">{v}</span>
+    </div>
   );
 }
 
