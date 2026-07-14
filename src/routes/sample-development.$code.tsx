@@ -14,7 +14,6 @@ import {
   Plus,
   RotateCcw,
   Scissors,
-  Sparkles,
   Trash2,
   X,
   XCircle,
