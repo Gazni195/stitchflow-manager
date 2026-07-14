@@ -68,27 +68,8 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "approval", label: "Approval", icon: FileCheck2 },
 ];
 
-const ACTIVE_APPROVAL_ROLES = ["Designer", "Merchandiser", "Production Head"] as const;
-type ApprovalRoleName = (typeof ACTIVE_APPROVAL_ROLES)[number];
-
-const APPROVAL_ROLE_ALIASES: Record<string, ApprovalRoleName> = {
-  designer: "Designer",
-  merchandiser: "Merchandiser",
-  "production head": "Production Head",
-};
-
-function normalizeApprovalRole(role: string): ApprovalRoleName | null {
-  return APPROVAL_ROLE_ALIASES[role.trim().toLowerCase()] ?? null;
-}
-
-function getActiveApprovalMap(approvals: SampleApproval[]) {
-  const byRole = new Map<ApprovalRoleName, SampleApproval>();
-  for (const approval of approvals) {
-    const role = normalizeApprovalRole(approval.role);
-    if (role && !byRole.has(role)) byRole.set(role, approval);
-  }
-  return byRole;
-}
+const MANDATORY_APPROVAL_ROLES = ["Designer", "Merchandiser", "Production Head"] as const;
+type ApprovalRoleName = (typeof MANDATORY_APPROVAL_ROLES)[number];
 
 const SAMPLE_STAGES: { id: string; label: string }[] = [
   { id: "sample-created", label: "Sample Created" },
@@ -104,14 +85,14 @@ function computeStageIndex(design: Design, sample: DesignWorkflow | undefined, a
   if (design.status === "in_production" || design.status === "completed") return 6;
   if (design.status === "sample_approved") return 5;
 
-  const activeApprovals = getActiveApprovalMap(approvals);
-  const allApproved = ACTIVE_APPROVAL_ROLES.every((r) => activeApprovals.has(r));
+  const approvedRoles = new Set(approvals.map((a) => a.role));
+  const allApproved = MANDATORY_APPROVAL_ROLES.every((r) => approvedRoles.has(r));
   if (allApproved) return 5;
 
   const steps = sample?.steps.filter((s) => s.status !== "deleted") ?? [];
   const allStepsDone = steps.length > 0 && steps.every((s) => s.status === "completed" || s.status === "skipped");
 
-  if (allStepsDone || activeApprovals.size > 0) return 4;
+  if (allStepsDone || approvals.length > 0) return 4;
 
   const materialStep = steps.find((s) => s.operationId === "material-selection");
   const materialDone = materialStep?.status === "completed" || materialStep?.status === "skipped";
@@ -267,15 +248,18 @@ function DesignSample({ design }: { design: Design }) {
 //
 // Material Selection ONLY selects materials from the shared Inventory Master
 // (`/inventory`). The screen is organised the way a tailor actually thinks
-// about a sample: by garment part first (Top / Pant / Shawl-Dupatta), then
-// by material category within that part (Primary Fabric / Lining /
-// Accessories / Lace / Other Materials). Users pick an existing material,
-// enter a quantity, and the unit + cost per unit are loaded from inventory
-// automatically. Amount is computed as quantity × rate. The `rate` stored
-// on `design_materials` is a snapshot of the material's current
-// `cost_per_unit` at the moment of selection so historical samples stay
-// stable even when inventory prices change. Selections persist in
-// `design_materials` and drive the Costing tab.
+// about a sample: by garment part (Top / Pant / Shawl-Dupatta). Category
+// (Primary Fabric / Lining / Accessories / Lace / Other) is asked once,
+// inside the popup, when a material is added — it is never shown as a
+// permanent section on the main screen, only the materials actually
+// selected are. Quantity is never edited inline: tapping a saved material
+// reopens the same popup, pre-filled, where it can be swapped, requantified
+// or deleted. Unit + Rate always load from Inventory automatically; the
+// user only ever types Quantity. Amount = Quantity × Rate. The `rate`
+// stored on `design_materials` is a snapshot of the material's current
+// `cost_per_unit` at the moment of selection (or re-selection) so
+// historical samples stay stable even when inventory prices change later.
+// Selections persist in `design_materials` and drive the Costing tab.
 //
 // No schema change was needed for the garment-part × category split: both
 // are packed into the existing free-text `group_name` column as
@@ -293,7 +277,7 @@ const GARMENT_PARTS: GarmentPartDef[] = [
   { key: "Shawl / Dupatta", label: "Shawl / Dupatta", emoji: "🧣" },
 ];
 
-const MATERIAL_CATEGORIES = ["Primary Fabric", "Lining", "Accessories", "Lace", "Other Materials"] as const;
+const MATERIAL_CATEGORIES = ["Primary Fabric", "Lining", "Accessories", "Lace", "Other"] as const;
 type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number];
 
 const GROUP_KEY_SEP = "::";
@@ -311,7 +295,8 @@ const LEGACY_CATEGORY_MAP: Record<string, MaterialCategory> = {
   Lining: "Lining",
   Lace: "Lace",
   Accessories: "Accessories",
-  Other: "Other Materials",
+  Other: "Other",
+  "Other Materials": "Other",
 };
 
 function parseGroupKey(groupName: string): { part: GarmentPartKey; category: MaterialCategory } {
@@ -322,6 +307,9 @@ function parseGroupKey(groupName: string): { part: GarmentPartKey; category: Mat
     if (GARMENT_PARTS.some((p) => p.key === part) && (MATERIAL_CATEGORIES as readonly string[]).includes(category)) {
       return { part: part as GarmentPartKey, category: category as MaterialCategory };
     }
+    if (GARMENT_PARTS.some((p) => p.key === part) && LEGACY_CATEGORY_MAP[category]) {
+      return { part: part as GarmentPartKey, category: LEGACY_CATEGORY_MAP[category] };
+    }
   }
   // Legacy row from before this redesign — best-effort mapping so nothing
   // saved earlier silently disappears from the screen.
@@ -331,12 +319,14 @@ function parseGroupKey(groupName: string): { part: GarmentPartKey; category: Mat
   if (LEGACY_CATEGORY_MAP[groupName]) {
     return { part: "Top", category: LEGACY_CATEGORY_MAP[groupName] };
   }
-  return { part: "Top", category: "Other Materials" };
+  return { part: "Top", category: "Other" };
 }
 
 export function computeMaterialTotal(items: DesignMaterial[]): number {
   return items.reduce((s, i) => s + i.amount, 0);
 }
+
+type PickerState = { mode: "add"; part: GarmentPartKey } | { mode: "edit"; row: DesignMaterial };
 
 function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: () => void }) {
   const { data: workflows } = useWorkflows(design.id);
@@ -348,28 +338,37 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
   const updateLine = useUpdateDesignMaterial(design.id);
 
   const [openPart, setOpenPart] = useState<GarmentPartKey | null>("Top");
-  const [pickerFor, setPickerFor] = useState<{ part: GarmentPartKey; category: MaterialCategory } | null>(null);
+  const [picker, setPicker] = useState<PickerState | null>(null);
 
-  const byPart = GARMENT_PARTS.map((p) => {
-    const rows = selected.filter((r) => parseGroupKey(r.groupName).part === p.key);
-    const byCategory = MATERIAL_CATEGORIES.map((c) => ({
-      category: c,
-      rows: rows.filter((r) => parseGroupKey(r.groupName).category === c),
-    }));
-    return { part: p, rows, byCategory };
-  });
+  const byPart = GARMENT_PARTS.map((p) => ({
+    part: p,
+    rows: selected.filter((r) => parseGroupKey(r.groupName).part === p.key),
+  }));
 
   const materialTotal = computeMaterialTotal(selected);
   const activeInventory = inventory.filter((m) => m.status === "active");
 
-  async function handlePick(part: GarmentPartKey, category: MaterialCategory, material: Material, quantity: number) {
+  // Saves — always replaces the one existing row when editing, so nothing
+  // is ever duplicated. Material Total recalculates immediately because
+  // both the panel and Costing read the same live design_materials data.
+  async function handleSaveNew(part: GarmentPartKey, category: MaterialCategory, material: Material, quantity: number) {
     await addLine.mutateAsync({
       materialId: material.id,
       groupName: buildGroupKey(part, category),
       quantity,
       rate: material.costPerUnit,
     });
-    setPickerFor(null);
+    setPicker(null);
+  }
+
+  async function handleSaveEdit(row: DesignMaterial, material: Material, quantity: number) {
+    await updateLine.mutateAsync({ id: row.id, quantity, materialId: material.id, rate: material.costPerUnit });
+    setPicker(null);
+  }
+
+  async function handleDelete(row: DesignMaterial) {
+    await removeLine.mutateAsync(row.id);
+    setPicker(null);
   }
 
   async function completeMaterialSelection() {
@@ -382,6 +381,7 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
   }
 
   const isLoading = invLoading || selLoading;
+  const pickerBusy = addLine.isPending || updateLine.isPending || removeLine.isPending;
 
   return (
     <div className="grid gap-3">
@@ -409,17 +409,15 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
         </div>
       ) : (
         <div className="grid gap-2">
-          {byPart.map(({ part, rows, byCategory }) => (
+          {byPart.map(({ part, rows }) => (
             <GarmentPartCard
               key={part.key}
               part={part}
               rows={rows}
-              byCategory={byCategory}
               open={openPart === part.key}
               onToggle={() => setOpenPart((cur) => (cur === part.key ? null : part.key))}
-              onAddToCategory={(category) => setPickerFor({ part: part.key, category })}
-              onRemove={(id) => removeLine.mutate(id)}
-              onQuantityChange={(id, qty) => updateLine.mutate({ id, quantity: qty })}
+              onAddMaterial={() => setPicker({ mode: "add", part: part.key })}
+              onEditMaterial={(row) => setPicker({ mode: "edit", row })}
             />
           ))}
         </div>
@@ -440,14 +438,15 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
         </p>
       )}
 
-      {pickerFor && (
+      {picker && (
         <MaterialPickerDialog
-          part={pickerFor.part}
-          category={pickerFor.category}
+          picker={picker}
           inventory={activeInventory}
-          onClose={() => setPickerFor(null)}
-          onSelect={handlePick}
-          busy={addLine.isPending}
+          busy={pickerBusy}
+          onClose={() => setPicker(null)}
+          onSaveNew={handleSaveNew}
+          onSaveEdit={handleSaveEdit}
+          onDelete={handleDelete}
         />
       )}
     </div>
@@ -455,27 +454,23 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
 }
 
 // Compact, collapsed by default (except Top): an emoji "illustration",
-// the part name, and a small item/total summary. The "+" in the corner
-// both signals "there's more here" and doubles as the expand/collapse
-// control — tapping the whole card does the same thing.
+// the part name, a small item/total summary, and — only once expanded —
+// the flat list of whatever's actually been selected plus one
+// "+ Add Material" button. No category headers are ever shown here.
 function GarmentPartCard({
   part,
   rows,
-  byCategory,
   open,
   onToggle,
-  onAddToCategory,
-  onRemove,
-  onQuantityChange,
+  onAddMaterial,
+  onEditMaterial,
 }: {
   part: GarmentPartDef;
   rows: DesignMaterial[];
-  byCategory: { category: MaterialCategory; rows: DesignMaterial[] }[];
   open: boolean;
   onToggle: () => void;
-  onAddToCategory: (category: MaterialCategory) => void;
-  onRemove: (id: string) => void;
-  onQuantityChange: (id: string, qty: number) => void;
+  onAddMaterial: () => void;
+  onEditMaterial: (row: DesignMaterial) => void;
 }) {
   const subtotal = rows.reduce((s, r) => s + r.amount, 0);
   return (
@@ -504,141 +499,87 @@ function GarmentPartCard({
       </button>
 
       {open && (
-        <div className="grid gap-1.5 border-t border-border p-3">
-          {byCategory.map(({ category, rows: catRows }) => (
-            <CategorySection
-              key={category}
-              category={category}
-              rows={catRows}
-              onAdd={() => onAddToCategory(category)}
-              onRemove={onRemove}
-              onQuantityChange={onQuantityChange}
-            />
-          ))}
+        <div className="grid gap-2 border-t border-border p-3">
+          {rows.length > 0 && (
+            <ul className="grid gap-1.5">
+              {rows.map((r) => (
+                <SelectedMaterialRow key={r.id} row={r} onClick={() => onEditMaterial(r)} />
+              ))}
+            </ul>
+          )}
+          <button
+            onClick={onAddMaterial}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-background py-2 text-xs font-semibold text-primary hover:bg-primary-soft/40"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Material
+          </button>
         </div>
       )}
     </div>
   );
 }
 
-// A category never shows anything until it has a saved row — no empty
-// placeholders, no unnecessary information, just the label and a "+".
-function CategorySection({
-  category,
-  rows,
-  onAdd,
-  onRemove,
-  onQuantityChange,
-}: {
-  category: MaterialCategory;
-  rows: DesignMaterial[];
-  onAdd: () => void;
-  onRemove: (id: string) => void;
-  onQuantityChange: (id: string, qty: number) => void;
-}) {
-  return (
-    <div className="rounded-xl bg-muted/30 p-2.5">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-bold text-muted-foreground">{category}</p>
-        <button
-          onClick={onAdd}
-          aria-label={`Add material to ${category}`}
-          className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary-soft text-primary hover:bg-primary/15"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      {rows.length > 0 && (
-        <ul className="mt-1.5 grid gap-1">
-          {rows.map((r) => (
-            <CategoryMaterialRow
-              key={r.id}
-              row={r}
-              onRemove={() => onRemove(r.id)}
-              onQuantityChange={(qty) => onQuantityChange(r.id, qty)}
-            />
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-// One compact line per selected material — "• Muslin  3  m  ₹150.00 🗑".
-// Quantity stays editable inline; the amount recalculates as you type and
-// commits (replacing, never duplicating) once you tab or click away.
-function CategoryMaterialRow({
-  row,
-  onRemove,
-  onQuantityChange,
-}: {
-  row: DesignMaterial;
-  onRemove: () => void;
-  onQuantityChange: (qty: number) => void;
-}) {
-  const [qty, setQty] = useState(row.quantity);
-  useEffect(() => {
-    setQty(row.quantity);
-  }, [row.quantity]);
+// Display-only — tapping it is the only way to change anything about this
+// row (per the "no inline editing" rule), so the whole row is one big
+// tap target that reopens the same popup, pre-filled.
+function SelectedMaterialRow({ row, onClick }: { row: DesignMaterial; onClick: () => void }) {
   const mat = row.material;
-  const amount = qty * row.rate;
-
-  function commitQty(next: number) {
-    const clean = Math.max(0, Number(next) || 0);
-    setQty(clean);
-    if (clean !== row.quantity) onQuantityChange(clean);
-  }
-
   return (
-    <li className="flex items-center gap-2 rounded-lg bg-background px-2.5 py-1.5">
-      <span className="text-muted-foreground" aria-hidden>
-        •
-      </span>
-      <span className="min-w-0 flex-1 truncate text-xs font-semibold">{mat?.name ?? "Deleted material"}</span>
-      <input
-        type="number"
-        min={0}
-        step={0.25}
-        inputMode="decimal"
-        value={qty || ""}
-        onChange={(e) => setQty(Math.max(0, Number(e.target.value) || 0))}
-        onBlur={(e) => commitQty(Number(e.target.value))}
-        className="w-14 shrink-0 rounded-md border border-border bg-card px-1.5 py-1 text-right text-xs font-bold outline-none focus:border-primary"
-      />
-      <span className="shrink-0 text-[10px] text-muted-foreground">{mat?.unit ?? ""}</span>
-      <span className="w-16 shrink-0 text-right text-xs font-bold text-primary tabular-nums">₹{amount.toFixed(2)}</span>
+    <li>
       <button
-        onClick={onRemove}
-        aria-label="Remove"
-        className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+        onClick={onClick}
+        className="flex w-full items-start justify-between gap-3 rounded-xl bg-muted/30 px-3 py-2 text-left hover:bg-muted/50"
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">
+            <span className="text-muted-foreground" aria-hidden>
+              •{" "}
+            </span>
+            {mat?.name ?? "Deleted material"}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {row.quantity} {mat?.unit ?? ""}
+          </p>
+        </div>
+        <span className="shrink-0 text-sm font-bold text-primary tabular-nums">₹{row.amount.toFixed(2)}</span>
       </button>
     </li>
   );
 }
 
-// The Material Inventory popup — unchanged behaviour (search, pick, enter
-// Quantity only, Unit + Rate load automatically, Amount computes live),
-// just labelled with which garment part and category it's adding into.
+// One popup for both adding and editing.
+// Add:  Step 1 — pick a Category  ->  Step 2 — search + pick a Material,
+//       enter Quantity, Save.
+// Edit: opens straight on Step 2 with the current material + quantity
+//       filled in; "Change Material" goes back into the search list.
+//       Category is fixed once a material is first added (not re-askable
+//       on edit) and Delete Material is available.
 function MaterialPickerDialog({
-  part,
-  category,
+  picker,
   inventory,
-  onClose,
-  onSelect,
   busy,
+  onClose,
+  onSaveNew,
+  onSaveEdit,
+  onDelete,
 }: {
-  part: GarmentPartKey;
-  category: MaterialCategory;
+  picker: PickerState;
   inventory: Material[];
-  onClose: () => void;
-  onSelect: (part: GarmentPartKey, category: MaterialCategory, material: Material, quantity: number) => void;
   busy: boolean;
+  onClose: () => void;
+  onSaveNew: (part: GarmentPartKey, category: MaterialCategory, material: Material, quantity: number) => void;
+  onSaveEdit: (row: DesignMaterial, material: Material, quantity: number) => void;
+  onDelete: (row: DesignMaterial) => void;
 }) {
+  const isEdit = picker.mode === "edit";
+  const part = isEdit ? parseGroupKey(picker.row.groupName).part : picker.part;
+  const category = isEdit ? parseGroupKey(picker.row.groupName).category : null;
+
+  const [step, setStep] = useState<"category" | "search" | "detail">(isEdit ? "detail" : "category");
+  const [chosenCategory, setChosenCategory] = useState<MaterialCategory | null>(category);
   const [query, setQuery] = useState("");
-  const [chosen, setChosen] = useState<Material | null>(null);
-  const [quantity, setQuantity] = useState<number>(1);
+  const [chosen, setChosen] = useState<Material | null>(isEdit ? picker.row.material : null);
+  const [quantity, setQuantity] = useState<number>(isEdit ? picker.row.quantity : 1);
 
   const q = query.trim().toLowerCase();
   const filtered = q
@@ -646,15 +587,25 @@ function MaterialPickerDialog({
     : inventory;
   const amount = chosen ? chosen.costPerUnit * quantity : 0;
 
+  function save() {
+    if (!chosen || quantity <= 0) return;
+    if (isEdit) {
+      onSaveEdit(picker.row, chosen, quantity);
+    } else if (chosenCategory) {
+      onSaveNew(part, chosenCategory, chosen, quantity);
+    }
+  }
+
+  const title = isEdit ? "Edit material" : "Add material";
+  const subtitle = isEdit ? `${part} → ${category}` : chosenCategory ? `${part} → ${chosenCategory}` : part;
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-end sm:place-items-center bg-foreground/40 p-0 sm:p-4">
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-t-3xl sm:rounded-3xl border border-border bg-card shadow-2xl">
         <div className="flex items-center justify-between px-5 pt-5">
           <div>
-            <h2 className="text-lg font-bold">Select material</h2>
-            <p className="text-xs text-muted-foreground">
-              Adding to · {part} → {category}
-            </p>
+            <h2 className="text-lg font-bold">{title}</h2>
+            <p className="text-xs text-muted-foreground">{subtitle}</p>
           </div>
           <button
             onClick={onClose}
@@ -665,7 +616,29 @@ function MaterialPickerDialog({
           </button>
         </div>
 
-        {!chosen ? (
+        {/* Step 1 (add only): choose a category */}
+        {step === "category" && (
+          <div className="grid gap-2 px-5 pb-5 pt-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              Select Material Category
+            </p>
+            {MATERIAL_CATEGORIES.map((c) => (
+              <button
+                key={c}
+                onClick={() => {
+                  setChosenCategory(c);
+                  setStep("search");
+                }}
+                className="flex items-center justify-between rounded-xl border border-border bg-background px-4 py-3 text-left text-sm font-semibold hover:border-primary/40 hover:bg-primary-soft/30"
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Step 2 (both): search Inventory and pick a material */}
+        {step === "search" && (
           <div className="flex min-h-0 flex-1 flex-col gap-3 px-5 pb-5 pt-3">
             <input
               autoFocus
@@ -691,7 +664,10 @@ function MaterialPickerDialog({
                   {filtered.map((m) => (
                     <li key={m.id}>
                       <button
-                        onClick={() => setChosen(m)}
+                        onClick={() => {
+                          setChosen(m);
+                          setStep("detail");
+                        }}
                         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-accent"
                       >
                         <div className="min-w-0">
@@ -709,14 +685,33 @@ function MaterialPickerDialog({
                 </ul>
               )}
             </div>
+            {isEdit && (
+              <button
+                onClick={() => setStep("detail")}
+                className="rounded-xl border border-border px-3 py-2.5 text-xs font-bold text-muted-foreground hover:bg-accent"
+              >
+                Cancel
+              </button>
+            )}
           </div>
-        ) : (
+        )}
+
+        {/* Step 3 / detail (both): quantity + amount, Save, Change Material, Delete */}
+        {step === "detail" && chosen && (
           <div className="grid gap-3 px-5 pb-5 pt-3">
-            <div className="rounded-xl border border-border bg-primary-soft/40 p-3">
-              <p className="text-sm font-bold">{chosen.name}</p>
-              <p className="text-[11px] text-muted-foreground">
-                {chosen.code} · ₹{chosen.costPerUnit.toFixed(2)}/{chosen.unit} · stock {chosen.availableStock}
-              </p>
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-primary-soft/40 p-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold">{chosen.name}</p>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {chosen.code} · ₹{chosen.costPerUnit.toFixed(2)}/{chosen.unit} · stock {chosen.availableStock}
+                </p>
+              </div>
+              <button
+                onClick={() => setStep("search")}
+                className="shrink-0 rounded-lg border border-border bg-background px-2.5 py-1.5 text-[11px] font-bold text-primary hover:bg-primary-soft/40"
+              >
+                Change Material
+              </button>
             </div>
             <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-3">
               <label className="block min-w-0">
@@ -742,19 +737,29 @@ function MaterialPickerDialog({
               </div>
             </div>
             <div className="flex gap-2">
+              {isEdit ? (
+                <button
+                  onClick={() => onDelete(picker.row)}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/30 px-3 py-2.5 text-xs font-bold text-destructive hover:bg-destructive/10 disabled:opacity-60"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </button>
+              ) : (
+                <button
+                  onClick={() => setStep("category")}
+                  className="rounded-xl border border-border px-3 py-2.5 text-xs font-bold text-muted-foreground hover:bg-accent"
+                >
+                  Back
+                </button>
+              )}
               <button
-                onClick={() => setChosen(null)}
-                className="rounded-xl border border-border px-3 py-2.5 text-xs font-bold text-muted-foreground hover:bg-accent"
-              >
-                Back
-              </button>
-              <button
-                onClick={() => onSelect(part, category, chosen, quantity)}
+                onClick={save}
                 disabled={busy || quantity <= 0}
                 className="ml-auto inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-60"
               >
                 {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-                Add to sample
+                Save
               </button>
             </div>
           </div>
@@ -1967,9 +1972,9 @@ function ApprovalPanel({ design }: { design: Design }) {
     session?.user?.email ||
     "";
 
-  const byRole = getActiveApprovalMap(approvals);
-  const approvedCount = ACTIVE_APPROVAL_ROLES.filter((r) => byRole.has(r)).length;
-  const total = ACTIVE_APPROVAL_ROLES.length;
+  const byRole = new Map<string, (typeof approvals)[number]>(approvals.map((a) => [a.role, a]));
+  const approvedCount = MANDATORY_APPROVAL_ROLES.filter((r) => byRole.has(r)).length;
+  const total = MANDATORY_APPROVAL_ROLES.length;
   const pct = Math.round((approvedCount / total) * 100);
   const allApproved = approvedCount === total;
   const sampleLocked =
@@ -2007,7 +2012,7 @@ function ApprovalPanel({ design }: { design: Design }) {
         </div>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
-          {ACTIVE_APPROVAL_ROLES.map((role) => (
+          {MANDATORY_APPROVAL_ROLES.map((role) => (
             <ApprovalCard
               key={role}
               role={role}
@@ -2023,11 +2028,11 @@ function ApprovalPanel({ design }: { design: Design }) {
                 <p className="mt-0.5 truncate text-base font-bold text-muted-foreground">{design.customer}</p>
               </div>
               <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                Coming Soon
+                Coming soon
               </span>
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Not Required for the current approval workflow.
+              Customer approval will be enabled in a future release.
             </p>
           </li>
         </ul>
