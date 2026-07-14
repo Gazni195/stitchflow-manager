@@ -122,6 +122,7 @@ export function useWorkflows(designId: string | undefined) {
 function invalidate(qc: ReturnType<typeof useQueryClient>, designId: string) {
   qc.invalidateQueries({ queryKey: ["workflows", designId] });
   qc.invalidateQueries({ queryKey: ["designs"] });
+  qc.invalidateQueries({ predicate: (query) => query.queryKey[0] === "design" });
 }
 
 export function useAddStep(designId: string) {

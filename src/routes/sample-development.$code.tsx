@@ -68,8 +68,27 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "approval", label: "Approval", icon: FileCheck2 },
 ];
 
-const MANDATORY_APPROVAL_ROLES = ["Designer", "Merchandiser", "Production Head"] as const;
-type ApprovalRoleName = (typeof MANDATORY_APPROVAL_ROLES)[number];
+const ACTIVE_APPROVAL_ROLES = ["Designer", "Merchandiser", "Production Head"] as const;
+type ApprovalRoleName = (typeof ACTIVE_APPROVAL_ROLES)[number];
+
+const APPROVAL_ROLE_ALIASES: Record<string, ApprovalRoleName> = {
+  designer: "Designer",
+  merchandiser: "Merchandiser",
+  "production head": "Production Head",
+};
+
+function normalizeApprovalRole(role: string): ApprovalRoleName | null {
+  return APPROVAL_ROLE_ALIASES[role.trim().toLowerCase()] ?? null;
+}
+
+function getActiveApprovalMap(approvals: SampleApproval[]) {
+  const byRole = new Map<ApprovalRoleName, SampleApproval>();
+  for (const approval of approvals) {
+    const role = normalizeApprovalRole(approval.role);
+    if (role && !byRole.has(role)) byRole.set(role, approval);
+  }
+  return byRole;
+}
 
 const SAMPLE_STAGES: { id: string; label: string }[] = [
   { id: "sample-created", label: "Sample Created" },
@@ -85,14 +104,14 @@ function computeStageIndex(design: Design, sample: DesignWorkflow | undefined, a
   if (design.status === "in_production" || design.status === "completed") return 6;
   if (design.status === "sample_approved") return 5;
 
-  const approvedRoles = new Set(approvals.map((a) => a.role));
-  const allApproved = MANDATORY_APPROVAL_ROLES.every((r) => approvedRoles.has(r));
+  const activeApprovals = getActiveApprovalMap(approvals);
+  const allApproved = ACTIVE_APPROVAL_ROLES.every((r) => activeApprovals.has(r));
   if (allApproved) return 5;
 
   const steps = sample?.steps.filter((s) => s.status !== "deleted") ?? [];
   const allStepsDone = steps.length > 0 && steps.every((s) => s.status === "completed" || s.status === "skipped");
 
-  if (allStepsDone || approvals.length > 0) return 4;
+  if (allStepsDone || activeApprovals.size > 0) return 4;
 
   const materialStep = steps.find((s) => s.operationId === "material-selection");
   const materialDone = materialStep?.status === "completed" || materialStep?.status === "skipped";
@@ -1948,9 +1967,9 @@ function ApprovalPanel({ design }: { design: Design }) {
     session?.user?.email ||
     "";
 
-  const byRole = new Map<string, (typeof approvals)[number]>(approvals.map((a) => [a.role, a]));
-  const approvedCount = MANDATORY_APPROVAL_ROLES.filter((r) => byRole.has(r)).length;
-  const total = MANDATORY_APPROVAL_ROLES.length;
+  const byRole = getActiveApprovalMap(approvals);
+  const approvedCount = ACTIVE_APPROVAL_ROLES.filter((r) => byRole.has(r)).length;
+  const total = ACTIVE_APPROVAL_ROLES.length;
   const pct = Math.round((approvedCount / total) * 100);
   const allApproved = approvedCount === total;
   const sampleLocked =
@@ -1988,7 +2007,7 @@ function ApprovalPanel({ design }: { design: Design }) {
         </div>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
-          {MANDATORY_APPROVAL_ROLES.map((role) => (
+          {ACTIVE_APPROVAL_ROLES.map((role) => (
             <ApprovalCard
               key={role}
               role={role}
@@ -2004,11 +2023,11 @@ function ApprovalPanel({ design }: { design: Design }) {
                 <p className="mt-0.5 truncate text-base font-bold text-muted-foreground">{design.customer}</p>
               </div>
               <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                Coming soon
+                Coming Soon
               </span>
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Customer approval will be enabled in a future release.
+              Not Required for the current approval workflow.
             </p>
           </li>
         </ul>
