@@ -220,6 +220,68 @@ export type Database = {
         }
         Relationships: []
       }
+      production_activities: {
+        Row: {
+          assigned_to: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          effective_seconds: number | null
+          elapsed_seconds: number | null
+          id: string
+          issued_qty: number
+          notes: string | null
+          operation_id: string
+          production_order_id: string
+          returned_qty: number | null
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_seconds?: number | null
+          elapsed_seconds?: number | null
+          id?: string
+          issued_qty: number
+          notes?: string | null
+          operation_id: string
+          production_order_id: string
+          returned_qty?: number | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_seconds?: number | null
+          elapsed_seconds?: number | null
+          id?: string
+          issued_qty?: number
+          notes?: string | null
+          operation_id?: string
+          production_order_id?: string
+          returned_qty?: number | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_activities_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production_orders: {
         Row: {
           code: string
