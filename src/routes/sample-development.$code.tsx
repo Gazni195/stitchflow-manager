@@ -249,46 +249,6 @@ function DesignSample({ design }: { design: Design }) {
   );
 }
 
-/* ---------- Status ---------- */
-
-function StatusPanel({ design, stageIndex, setTab }: { design: Design; stageIndex: number; setTab: (tab: TabId) => void }) {
-  const navigate = useNavigate();
-  const currentIdx = Math.min(Math.max(stageIndex, 0), SAMPLE_STAGES.length - 1);
-
-  function handleContinue() {
-    if (currentIdx <= 1) setTab("materials");
-    else if (currentIdx === 2) setTab("making");
-    else if (currentIdx === 3) setTab("costing");
-    else if (currentIdx === 4) setTab("approval");
-    else navigate({ to: "/production" });
-  }
-
-  const buttonLabel = (() => {
-    if (currentIdx <= 1) return "Continue to Material Selection";
-    if (currentIdx === 2) return "Continue to Sample Making";
-    if (currentIdx === 3) return "Continue to Costing";
-    if (currentIdx === 4) return "Continue to Approval";
-    return "Continue to Production";
-  })();
-
-  return (
-    <div className="grid gap-5">
-      {design.notes && (
-        <div className="rounded-2xl border border-border bg-background p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Notes</p>
-          <p className="mt-1 text-sm">{design.notes}</p>
-        </div>
-      )}
-
-      <button
-        onClick={handleContinue}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
-      >
-        {buttonLabel} <ArrowRight className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
 
 /* ---------- Materials (Inventory-driven selection) ---------- */
 //
