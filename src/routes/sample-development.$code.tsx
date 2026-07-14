@@ -61,10 +61,9 @@ export const Route = createFileRoute("/sample-development/$code")({
   component: DesignSamplePage,
 });
 
-type TabId = "status" | "materials" | "making" | "costing" | "approval";
+type TabId = "materials" | "making" | "costing" | "approval";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
-  { id: "status", label: "Sample Status", icon: Sparkles },
   { id: "materials", label: "Material Selection", icon: Layers },
   { id: "making", label: "Sample Making", icon: Scissors },
   { id: "costing", label: "Costing", icon: Coins },
