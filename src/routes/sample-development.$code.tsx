@@ -34,6 +34,7 @@ import {
   useDeleteStep,
   useUpdateStep,
   useWorkflows,
+  type DesignWorkflow,
   type StepStatus,
   type WorkflowStep,
 } from "@/lib/api/workflows";
@@ -69,6 +70,51 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "costing", label: "Costing", icon: Coins },
   { id: "approval", label: "Approval", icon: FileCheck2 },
 ];
+
+const MANDATORY_APPROVAL_ROLES = ["Designer", "Merchandiser", "Production Head"] as const;
+type ApprovalRoleName = (typeof MANDATORY_APPROVAL_ROLES)[number];
+
+const SAMPLE_STAGES: { id: string; label: string }[] = [
+  { id: "sample-created", label: "Sample Created" },
+  { id: "material-selection", label: "Material Selection" },
+  { id: "sample-making", label: "Sample Making" },
+  { id: "costing", label: "Costing" },
+  { id: "approval", label: "Approval" },
+  { id: "ready-for-production", label: "Ready for Production" },
+  { id: "production", label: "Production" },
+];
+
+function computeStageIndex(
+  design: Design,
+  sample: DesignWorkflow | undefined,
+  approvals: SampleApproval[]
+): number {
+  if (design.status === "in_production" || design.status === "completed") return 6;
+  if (design.status === "sample_approved") return 5;
+
+  const approvedRoles = new Set(approvals.map((a) => a.role));
+  const allApproved = MANDATORY_APPROVAL_ROLES.every((r) => approvedRoles.has(r));
+  if (allApproved) return 5;
+
+  const steps = sample?.steps.filter((s) => s.status !== "deleted") ?? [];
+  const allStepsDone = steps.length > 0 && steps.every((s) => s.status === "completed" || s.status === "skipped");
+
+  if (allStepsDone || approvals.length > 0) return 4;
+
+  const materialStep = steps.find((s) => s.operationId === "material-selection");
+  const materialDone = materialStep?.status === "completed" || materialStep?.status === "skipped";
+
+  const makingSteps = steps.filter((s) => s.operationId === "sample-making");
+  const anyMakingActive = makingSteps.some((s) => s.status === "in-progress" || s.status === "completed");
+  const allMakingDone = makingSteps.length > 0 && makingSteps.every((s) => s.status === "completed" || s.status === "skipped");
+
+  if (allMakingDone) return 3;
+  if (anyMakingActive) return 2;
+  if (materialDone) return 2;
+  if (materialStep || steps.length > 0) return 1;
+
+  return 0;
+}
 
 function DesignSamplePage() {
   useRequireAuth();
@@ -114,6 +160,8 @@ function DesignSample({ design }: { design: Design }) {
   const { data: workflows, isLoading: wfLoading } = useWorkflows(design.id);
   const sample = workflows?.find((w) => w.kind === "sample");
   const bulk = workflows?.find((w) => w.kind === "bulk");
+  const { data: approvals = [] } = useSampleApprovals(design.id);
+  const stageIndex = computeStageIndex(design, sample, approvals);
   const qc = useQueryClient();
   const creatingRef = useRef(false);
 
@@ -138,13 +186,6 @@ function DesignSample({ design }: { design: Design }) {
       creatingRef.current = false;
     })();
   }, [wfLoading, workflows, sample, bulk, design.id, qc]);
-
-  const auditableSteps = sample?.steps.filter((s) => s.status !== "deleted") ?? [];
-  const stage: "In Development" | "Ready for Review" | "Approved" = bulk
-    ? "Approved"
-    : auditableSteps.length > 0 && auditableSteps.every((s) => s.status === "completed" || s.status === "skipped")
-      ? "Ready for Review"
-      : "In Development";
 
   return (
     <AppShell
@@ -171,7 +212,7 @@ function DesignSample({ design }: { design: Design }) {
         </Link>
 
         {/* Mockup-style summary: image hero + facts + workflow progress dots */}
-        <SampleHeader design={design} stage={stage} />
+        <SampleHeader design={design} stageIndex={stageIndex} />
 
         {/* Tabs */}
         <section>
@@ -198,7 +239,7 @@ function DesignSample({ design }: { design: Design }) {
           </div>
 
           <div className="pt-5">
-            {tab === "status" && <StatusPanel design={design} stage={stage} onContinue={() => setTab("materials")} />}
+            {tab === "status" && <StatusPanel design={design} stageIndex={stageIndex} onContinue={() => setTab("materials")} />}
             {tab === "materials" && <MaterialsPanel design={design} onCompleted={() => setTab("making")} />}
             {tab === "making" && <SampleMakingPanel design={design} onContinue={() => setTab("costing")} />}
             {tab === "costing" && <CostingPanel design={design} onContinue={() => setTab("approval")} />}
@@ -212,52 +253,53 @@ function DesignSample({ design }: { design: Design }) {
 
 /* ---------- Status ---------- */
 
-function StatusPanel({ design, stage, onContinue }: { design: Design; stage: "In Development" | "Ready for Review" | "Approved"; onContinue: () => void }) {
-  const steps: { id: string; label: string; icon: LucideIcon }[] = [
-    { id: "Requested", label: "Requested", icon: Sparkles },
-    { id: "In Development", label: "In Development", icon: Clock },
-    { id: "Ready for Review", label: "Ready for Review", icon: FileCheck2 },
-    { id: "Approved", label: "Approved", icon: CheckCircle2 },
-  ];
-  const currentIdx = steps.findIndex((s) => s.id === stage);
+function StatusPanel({ design, stageIndex, onContinue }: { design: Design; stageIndex: number; onContinue: () => void }) {
+  const currentIdx = Math.min(Math.max(stageIndex, 0), SAMPLE_STAGES.length - 1);
+  const nextStage = SAMPLE_STAGES[Math.min(currentIdx + 1, SAMPLE_STAGES.length - 1)];
+
   return (
-    <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold">Sample lifecycle</h3>
-        <span className="rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary">{stage}</span>
+    <div className="grid gap-5">
+      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <h3 className="text-base font-bold">Sample Workflow</h3>
+        <ol className="mt-4 space-y-3">
+          {SAMPLE_STAGES.map((step, i) => {
+            const done = i < currentIdx;
+            const current = i === currentIdx;
+            return (
+              <li key={step.id} className="flex items-center gap-3">
+                <div
+                  className={
+                    "grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold " +
+                    (done
+                      ? "bg-primary text-primary-foreground"
+                      : current
+                        ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
+                        : "bg-muted text-muted-foreground")
+                  }
+                >
+                  {done ? "✓" : i + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className={"truncate text-sm font-semibold " + (current ? "text-foreground" : done ? "text-foreground" : "text-muted-foreground")}>
+                    {step.label}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {done ? "Completed" : current ? "Current stage" : "Pending"}
+                  </p>
+                </div>
+                {current && (
+                  <span className="shrink-0 rounded-full bg-primary/15 px-2 py-1 text-[10px] font-bold text-primary">
+                    Current
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
       </div>
-      <ol className="mt-5 space-y-4">
-        {steps.map((step, i) => {
-          const done = i < currentIdx || stage === "Approved";
-          const current = i === currentIdx && stage !== "Approved";
-          const Icon = step.icon;
-          return (
-            <li key={step.id} className="flex items-start gap-3">
-              <div
-                className={
-                  "grid h-9 w-9 shrink-0 place-items-center rounded-xl " +
-                  (done
-                    ? "bg-primary text-primary-foreground"
-                    : current
-                      ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
-                      : "bg-muted text-muted-foreground")
-                }
-              >
-                <Icon className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold">{step.label}</p>
-                <p className="text-xs text-muted-foreground">
-                  {done ? "Completed" : current ? "In progress" : "Pending"}
-                </p>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
 
       {design.notes && (
-        <div className="mt-5 rounded-2xl border border-border bg-background p-4">
+        <div className="rounded-2xl border border-border bg-background p-4">
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Notes</p>
           <p className="mt-1 text-sm">{design.notes}</p>
         </div>
@@ -265,9 +307,9 @@ function StatusPanel({ design, stage, onContinue }: { design: Design; stage: "In
 
       <button
         onClick={onContinue}
-        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
       >
-        Continue to Material Selection <ArrowRight className="h-4 w-4" />
+        Continue to {nextStage.label} <ArrowRight className="h-4 w-4" />
       </button>
     </div>
   );
@@ -1898,8 +1940,6 @@ function EmptyChild({ text }: { text: string }) {
 
 /* ---------- Approval ---------- */
 
-const MANDATORY_APPROVAL_ROLES = ["Designer", "Merchandiser", "Production Head"] as const;
-type ApprovalRoleName = (typeof MANDATORY_APPROVAL_ROLES)[number];
 
 function ApprovalPanel({ design }: { design: Design }) {
   const { data: approvals = [], isLoading } = useSampleApprovals(design.id);
@@ -2105,97 +2145,89 @@ function ApprovalCard({
 
 function SampleHeader({
   design,
-  stage,
+  stageIndex,
 }: {
   design: Design;
-  stage: "In Development" | "Ready for Review" | "Approved";
+  stageIndex: number;
 }) {
-  // Mock financial + designer facts for UI-first pass.
-  const targetCostPerPc = 1250;
-  const estMargin = "25%";
-  const designer = "Rifa";
   const createdOn = new Date(design.createdAt).toLocaleDateString(undefined, {
     day: "2-digit",
     month: "short",
     year: "numeric",
   });
 
-  // 7-step workflow dots (per mockup). Mark step 3 as current when In Development.
-  const total = 7;
-  const currentIdx = stage === "Approved" ? total : stage === "Ready for Review" ? 5 : 3;
+  const total = SAMPLE_STAGES.length;
+  const currentIdx = Math.min(Math.max(stageIndex, 0), total - 1);
 
   return (
     <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
       <div className="relative aspect-[16/10] w-full bg-primary-soft">
         <DesignImage path={design.imagePath} alt={design.name} />
-        <span
-          className={
-            "absolute right-3 top-3 rounded-full px-3 py-1 text-[11px] font-bold shadow-sm " +
-            STATUS_TONE[design.status]
-          }
-        >
-          {STATUS_LABEL[design.status]}
-        </span>
       </div>
 
       <div className="grid gap-4 p-3 sm:p-5">
         <div className="min-w-0">
           <p className="truncate text-[11px] font-bold tracking-widest text-muted-foreground">{design.code}</p>
           <h2 className="truncate text-xl font-extrabold tracking-tight sm:text-2xl">{design.name}</h2>
+          <p className="mt-1 truncate text-sm text-muted-foreground">{design.customer}</p>
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <Fact label="Order Qty (Planned)" value={`${design.orderQuantity.toLocaleString()} Pcs`} />
+          <Fact label="Order Qty" value={`${design.orderQuantity.toLocaleString()} Pcs`} />
           <Fact label="Category" value={design.category || "—"} />
-          <Fact label="Target Cost (Per Pc)" value={`₹${targetCostPerPc.toLocaleString()}`} />
-          <Fact label="Est. Margin" value={estMargin} />
+          <Fact label="Product Type" value={design.productType || "—"} />
+          <Fact label="Color" value={design.color || "—"} />
           <Fact label="Created On" value={createdOn} />
-          <Fact label="Designer" value={designer} />
+          <Fact label="Status" value={STATUS_LABEL[design.status]} />
         </div>
 
         <div className="min-w-0 rounded-2xl border border-border bg-background p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate text-sm font-bold">Workflow Progress</p>
             <p className="shrink-0 text-[11px] font-semibold text-muted-foreground">
-              Step {Math.min(currentIdx, total)} of {total}
+              {SAMPLE_STAGES[currentIdx].label}
             </p>
           </div>
-          <ol className="mt-3 flex items-center gap-1 sm:gap-1.5">
-            {Array.from({ length: total }, (_, i) => i + 1).map((n) => {
-              const done = n < currentIdx;
-              const current = n === currentIdx;
+          <ol className="mt-3 flex items-start gap-1 sm:gap-1.5">
+            {SAMPLE_STAGES.map((step, i) => {
+              const n = i + 1;
+              const done = i < currentIdx;
+              const current = i === currentIdx;
               return (
-                <li key={n} className="flex min-w-0 flex-1 items-center gap-1 sm:gap-1.5">
+                <li key={step.id} className="flex min-w-0 flex-1 flex-col items-center gap-1 sm:gap-1.5">
+                  <div className="flex w-full items-center gap-1 sm:gap-1.5">
+                    <span
+                      className={
+                        "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold transition sm:h-8 sm:w-8 sm:text-[11px] " +
+                        (done
+                          ? "bg-primary text-primary-foreground"
+                          : current
+                            ? "bg-primary text-primary-foreground ring-2 ring-primary/20 sm:ring-4"
+                            : "bg-muted text-muted-foreground")
+                      }
+                    >
+                      {done ? "✓" : n}
+                    </span>
+                    {i < total - 1 && (
+                      <span
+                        className={"h-0.5 min-w-0 flex-1 rounded-full " + (i < currentIdx ? "bg-primary" : "bg-muted")}
+                      />
+                    )}
+                  </div>
                   <span
                     className={
-                      "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold transition sm:h-8 sm:w-8 sm:text-[11px] " +
-                      (done
-                        ? "bg-primary text-primary-foreground"
-                        : current
-                          ? "bg-primary text-primary-foreground ring-2 ring-primary/20 sm:ring-4"
-                          : "bg-muted text-muted-foreground")
+                      "hidden w-full truncate text-center text-[9px] font-semibold leading-tight sm:block " +
+                      (done || current ? "text-foreground" : "text-muted-foreground")
                     }
+                    title={step.label}
                   >
-                    {done ? "✓" : n}
+                    {step.label}
                   </span>
-                  {n < total && (
-                    <span
-                      className={"h-0.5 min-w-0 flex-1 rounded-full " + (n < currentIdx ? "bg-primary" : "bg-muted")}
-                    />
-                  )}
                 </li>
               );
             })}
           </ol>
         </div>
-
-        <Link
-          to="/designs/$code/workflow"
-          params={{ code: design.code }}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
-        >
-          View Workflow
-        </Link>
       </div>
     </section>
   );
