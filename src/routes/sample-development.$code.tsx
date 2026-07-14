@@ -239,7 +239,7 @@ function DesignSample({ design }: { design: Design }) {
           </div>
 
           <div className="pt-5">
-            {tab === "status" && <StatusPanel design={design} stageIndex={stageIndex} onContinue={() => setTab("materials")} />}
+            {tab === "status" && <StatusPanel design={design} stageIndex={stageIndex} setTab={setTab} />}
             {tab === "materials" && <MaterialsPanel design={design} onCompleted={() => setTab("making")} />}
             {tab === "making" && <SampleMakingPanel design={design} onContinue={() => setTab("costing")} />}
             {tab === "costing" && <CostingPanel design={design} onContinue={() => setTab("approval")} />}
