@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -239,7 +239,7 @@ function DesignSample({ design }: { design: Design }) {
           </div>
 
           <div className="pt-5">
-            {tab === "status" && <StatusPanel design={design} stageIndex={stageIndex} onContinue={() => setTab("materials")} />}
+            {tab === "status" && <StatusPanel design={design} stageIndex={stageIndex} setTab={setTab} />}
             {tab === "materials" && <MaterialsPanel design={design} onCompleted={() => setTab("making")} />}
             {tab === "making" && <SampleMakingPanel design={design} onContinue={() => setTab("costing")} />}
             {tab === "costing" && <CostingPanel design={design} onContinue={() => setTab("approval")} />}
@@ -253,51 +253,28 @@ function DesignSample({ design }: { design: Design }) {
 
 /* ---------- Status ---------- */
 
-function StatusPanel({ design, stageIndex, onContinue }: { design: Design; stageIndex: number; onContinue: () => void }) {
+function StatusPanel({ design, stageIndex, setTab }: { design: Design; stageIndex: number; setTab: (tab: TabId) => void }) {
+  const navigate = useNavigate();
   const currentIdx = Math.min(Math.max(stageIndex, 0), SAMPLE_STAGES.length - 1);
-  const nextStage = SAMPLE_STAGES[Math.min(currentIdx + 1, SAMPLE_STAGES.length - 1)];
+
+  function handleContinue() {
+    if (currentIdx <= 1) setTab("materials");
+    else if (currentIdx === 2) setTab("making");
+    else if (currentIdx === 3) setTab("costing");
+    else if (currentIdx === 4) setTab("approval");
+    else navigate({ to: "/production" });
+  }
+
+  const buttonLabel = (() => {
+    if (currentIdx <= 1) return "Continue to Material Selection";
+    if (currentIdx === 2) return "Continue to Sample Making";
+    if (currentIdx === 3) return "Continue to Costing";
+    if (currentIdx === 4) return "Continue to Approval";
+    return "Continue to Production";
+  })();
 
   return (
     <div className="grid gap-5">
-      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-        <h3 className="text-base font-bold">Sample Workflow</h3>
-        <ol className="mt-4 space-y-3">
-          {SAMPLE_STAGES.map((step, i) => {
-            const done = i < currentIdx;
-            const current = i === currentIdx;
-            return (
-              <li key={step.id} className="flex items-center gap-3">
-                <div
-                  className={
-                    "grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold " +
-                    (done
-                      ? "bg-primary text-primary-foreground"
-                      : current
-                        ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
-                        : "bg-muted text-muted-foreground")
-                  }
-                >
-                  {done ? "✓" : i + 1}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className={"truncate text-sm font-semibold " + (current ? "text-foreground" : done ? "text-foreground" : "text-muted-foreground")}>
-                    {step.label}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {done ? "Completed" : current ? "Current stage" : "Pending"}
-                  </p>
-                </div>
-                {current && (
-                  <span className="shrink-0 rounded-full bg-primary/15 px-2 py-1 text-[10px] font-bold text-primary">
-                    Current
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      </div>
-
       {design.notes && (
         <div className="rounded-2xl border border-border bg-background p-4">
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Notes</p>
@@ -306,10 +283,10 @@ function StatusPanel({ design, stageIndex, onContinue }: { design: Design; stage
       )}
 
       <button
-        onClick={onContinue}
+        onClick={handleContinue}
         className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
       >
-        Continue to {nextStage.label} <ArrowRight className="h-4 w-4" />
+        {buttonLabel} <ArrowRight className="h-4 w-4" />
       </button>
     </div>
   );
@@ -2184,9 +2161,9 @@ function SampleHeader({
         <div className="min-w-0 rounded-2xl border border-border bg-background p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate text-sm font-bold">Workflow Progress</p>
-            <p className="shrink-0 text-[11px] font-semibold text-muted-foreground">
+            <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-1 text-[11px] font-bold text-primary">
               {SAMPLE_STAGES[currentIdx].label}
-            </p>
+            </span>
           </div>
           <ol className="mt-3 flex items-start gap-1 sm:gap-1.5">
             {SAMPLE_STAGES.map((step, i) => {
@@ -2202,7 +2179,7 @@ function SampleHeader({
                         (done
                           ? "bg-primary text-primary-foreground"
                           : current
-                            ? "bg-primary text-primary-foreground ring-2 ring-primary/20 sm:ring-4"
+                            ? "bg-primary text-primary-foreground ring-[3px] ring-primary/30 sm:ring-[5px]"
                             : "bg-muted text-muted-foreground")
                       }
                     >
@@ -2217,7 +2194,7 @@ function SampleHeader({
                   <span
                     className={
                       "hidden w-full truncate text-center text-[9px] font-semibold leading-tight sm:block " +
-                      (done || current ? "text-foreground" : "text-muted-foreground")
+                      (current ? "text-primary" : done ? "text-foreground" : "text-muted-foreground")
                     }
                     title={step.label}
                   >
