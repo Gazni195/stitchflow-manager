@@ -166,12 +166,7 @@ export function useDesignMaterials(designId: string | undefined) {
 export function useAddDesignMaterial(designId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: {
-      materialId: string;
-      groupName: string;
-      quantity: number;
-      rate: number;
-    }) => {
+    mutationFn: async (input: { materialId: string; groupName: string; quantity: number; rate: number }) => {
       const { error } = await supabase.from("design_materials").insert({
         design_id: designId,
         material_id: input.materialId,
@@ -190,9 +185,10 @@ export function useAddDesignMaterial(designId: string) {
 export function useUpdateDesignMaterial(designId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id: string; quantity: number; rate?: number }) => {
-      const patch: { quantity: number; rate?: number } = { quantity: input.quantity };
+    mutationFn: async (input: { id: string; quantity: number; rate?: number; materialId?: string }) => {
+      const patch: { quantity: number; rate?: number; material_id?: string } = { quantity: input.quantity };
       if (typeof input.rate === "number") patch.rate = input.rate;
+      if (input.materialId) patch.material_id = input.materialId;
       const { error } = await supabase.from("design_materials").update(patch).eq("id", input.id);
       if (error) throw error;
     },
