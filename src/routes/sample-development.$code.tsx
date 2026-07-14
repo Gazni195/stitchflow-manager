@@ -253,52 +253,53 @@ function DesignSample({ design }: { design: Design }) {
 
 /* ---------- Status ---------- */
 
-function StatusPanel({ design, stage, onContinue }: { design: Design; stage: "In Development" | "Ready for Review" | "Approved"; onContinue: () => void }) {
-  const steps: { id: string; label: string; icon: LucideIcon }[] = [
-    { id: "Requested", label: "Requested", icon: Sparkles },
-    { id: "In Development", label: "In Development", icon: Clock },
-    { id: "Ready for Review", label: "Ready for Review", icon: FileCheck2 },
-    { id: "Approved", label: "Approved", icon: CheckCircle2 },
-  ];
-  const currentIdx = steps.findIndex((s) => s.id === stage);
+function StatusPanel({ design, stageIndex, onContinue }: { design: Design; stageIndex: number; onContinue: () => void }) {
+  const currentIdx = Math.min(Math.max(stageIndex, 0), SAMPLE_STAGES.length - 1);
+  const nextStage = SAMPLE_STAGES[Math.min(currentIdx + 1, SAMPLE_STAGES.length - 1)];
+
   return (
-    <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold">Sample lifecycle</h3>
-        <span className="rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary">{stage}</span>
+    <div className="grid gap-5">
+      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <h3 className="text-base font-bold">Sample Workflow</h3>
+        <ol className="mt-4 space-y-3">
+          {SAMPLE_STAGES.map((step, i) => {
+            const done = i < currentIdx;
+            const current = i === currentIdx;
+            return (
+              <li key={step.id} className="flex items-center gap-3">
+                <div
+                  className={
+                    "grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold " +
+                    (done
+                      ? "bg-primary text-primary-foreground"
+                      : current
+                        ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
+                        : "bg-muted text-muted-foreground")
+                  }
+                >
+                  {done ? "✓" : i + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className={"truncate text-sm font-semibold " + (current ? "text-foreground" : done ? "text-foreground" : "text-muted-foreground")}>
+                    {step.label}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {done ? "Completed" : current ? "Current stage" : "Pending"}
+                  </p>
+                </div>
+                {current && (
+                  <span className="shrink-0 rounded-full bg-primary/15 px-2 py-1 text-[10px] font-bold text-primary">
+                    Current
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
       </div>
-      <ol className="mt-5 space-y-4">
-        {steps.map((step, i) => {
-          const done = i < currentIdx || stage === "Approved";
-          const current = i === currentIdx && stage !== "Approved";
-          const Icon = step.icon;
-          return (
-            <li key={step.id} className="flex items-start gap-3">
-              <div
-                className={
-                  "grid h-9 w-9 shrink-0 place-items-center rounded-xl " +
-                  (done
-                    ? "bg-primary text-primary-foreground"
-                    : current
-                      ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
-                      : "bg-muted text-muted-foreground")
-                }
-              >
-                <Icon className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold">{step.label}</p>
-                <p className="text-xs text-muted-foreground">
-                  {done ? "Completed" : current ? "In progress" : "Pending"}
-                </p>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
 
       {design.notes && (
-        <div className="mt-5 rounded-2xl border border-border bg-background p-4">
+        <div className="rounded-2xl border border-border bg-background p-4">
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Notes</p>
           <p className="mt-1 text-sm">{design.notes}</p>
         </div>
@@ -306,9 +307,9 @@ function StatusPanel({ design, stage, onContinue }: { design: Design; stage: "In
 
       <button
         onClick={onContinue}
-        className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
       >
-        Continue to Material Selection <ArrowRight className="h-4 w-4" />
+        Continue to {nextStage.label} <ArrowRight className="h-4 w-4" />
       </button>
     </div>
   );
