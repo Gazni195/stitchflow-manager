@@ -160,6 +160,8 @@ function DesignSample({ design }: { design: Design }) {
   const { data: workflows, isLoading: wfLoading } = useWorkflows(design.id);
   const sample = workflows?.find((w) => w.kind === "sample");
   const bulk = workflows?.find((w) => w.kind === "bulk");
+  const { data: approvals = [] } = useSampleApprovals(design.id);
+  const stageIndex = computeStageIndex(design, sample, approvals);
   const qc = useQueryClient();
   const creatingRef = useRef(false);
 
@@ -184,13 +186,6 @@ function DesignSample({ design }: { design: Design }) {
       creatingRef.current = false;
     })();
   }, [wfLoading, workflows, sample, bulk, design.id, qc]);
-
-  const auditableSteps = sample?.steps.filter((s) => s.status !== "deleted") ?? [];
-  const stage: "In Development" | "Ready for Review" | "Approved" = bulk
-    ? "Approved"
-    : auditableSteps.length > 0 && auditableSteps.every((s) => s.status === "completed" || s.status === "skipped")
-      ? "Ready for Review"
-      : "In Development";
 
   return (
     <AppShell
@@ -217,7 +212,7 @@ function DesignSample({ design }: { design: Design }) {
         </Link>
 
         {/* Mockup-style summary: image hero + facts + workflow progress dots */}
-        <SampleHeader design={design} stage={stage} />
+        <SampleHeader design={design} stageIndex={stageIndex} />
 
         {/* Tabs */}
         <section>
