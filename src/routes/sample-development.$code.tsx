@@ -19,7 +19,7 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
 import { WorkAreaDialog, formatWorkArea, type WorkAreaPayload } from "@/components/WorkAreaDialog";
@@ -805,8 +805,6 @@ function MaterialPickerDialog({
 // is a distinct, named function — deliberately, so a future Activity Log
 // can hook into them individually without restructuring this screen.
 
-const WORKERS = ["Ameen", "Suresh", "Fathima", "Anwar", "Vikas", "Meera"];
-
 function parseWorkers(assignedTo: string | null): string[] {
   return (assignedTo ?? "")
     .split(",")
@@ -905,9 +903,36 @@ function formatDurationSeconds(seconds: number | null): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
+type ErpEmployee = { employee: string; employee_name: string; status: string };
+type ErpEmployeesResponse = { success: boolean; employees?: ErpEmployee[]; error?: string };
+
+// Live Active-employee names from ERPNext, via the existing read-only
+// erpnext-employees-test Edge Function. Never hardcoded and never persisted
+// beyond this query's own cache — every page load/refresh re-fetches the
+// current Active list, so newly added employees appear and Inactive ones
+// stop appearing without any code change. If ERPNext is unreachable this
+// safely resolves to an empty list rather than breaking the page; already
+// -assigned worker names on existing steps are plain saved text (assignedTo)
+// and are unaffected by this list either way.
+function useActiveErpWorkers() {
+  return useQuery({
+    queryKey: ["erpnext-active-employees"],
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await supabase.functions.invoke<ErpEmployeesResponse>("erpnext-employees-test");
+      if (error || !data?.success) return [];
+      return (data.employees ?? [])
+        .map((e) => e.employee_name)
+        .filter((n): n is string => !!n && n.trim() !== "")
+        .sort((a, b) => a.localeCompare(b));
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue: () => void }) {
   const { data: workflows, isLoading } = useWorkflows(design.id);
   const { data: catalog = [] } = useOperationCatalog();
+  const { data: activeWorkerNames = [] } = useActiveErpWorkers();
   const updateStep = useUpdateStep(design.id);
   const addStep = useAddStep(design.id);
   const deleteStep = useDeleteStep(design.id);
@@ -1136,6 +1161,7 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
                   catalog={catalog}
                   session={session}
                   workers={workers}
+                  workerOptions={activeWorkerNames}
                   now={now}
                   onAddWorker={(w) => addWorker(step, w)}
                   onRemoveWorker={(w) => removeWorker(step, w)}
@@ -1182,7 +1208,7 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       {newProcess && (
         <WorkAreaDialog
           operationName={newProcess.name}
-          workerOptions={WORKERS}
+          workerOptions={activeWorkerNames}
           busy={busy}
           onCancel={() => setNewProcess(null)}
           onConfirm={(payload) => createAndStart(newProcess.operationId, payload)}
@@ -1233,8 +1259,16 @@ function WorkerChips({ workers, onRemove }: { workers: string[]; onRemove?: (wor
   );
 }
 
-function AddWorkerControl({ workers, onAdd }: { workers: string[]; onAdd: (worker: string) => void }) {
-  const available = WORKERS.filter((w) => !workers.includes(w));
+function AddWorkerControl({
+  workers,
+  workerOptions,
+  onAdd,
+}: {
+  workers: string[];
+  workerOptions: string[];
+  onAdd: (worker: string) => void;
+}) {
+  const available = workerOptions.filter((w) => !workers.includes(w));
   if (available.length === 0) return null;
   return (
     <select
@@ -1259,6 +1293,7 @@ function RunningOperationCard({
   catalog,
   session,
   workers,
+  workerOptions,
   now,
   onAddWorker,
   onRemoveWorker,
@@ -1272,6 +1307,7 @@ function RunningOperationCard({
   catalog: CatalogOperation[];
   session: OperationSession;
   workers: string[];
+  workerOptions: string[];
   now: Date;
   onAddWorker: (worker: string) => void;
   onRemoveWorker: (worker: string) => void;
@@ -1308,7 +1344,7 @@ function RunningOperationCard({
         <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Workers</span>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <WorkerChips workers={workers} onRemove={onRemoveWorker} />
-          <AddWorkerControl workers={workers} onAdd={onAddWorker} />
+          <AddWorkerControl workers={workers} workerOptions={workerOptions} onAdd={onAddWorker} />
         </div>
       </div>
 
