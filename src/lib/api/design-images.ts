@@ -9,6 +9,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+// Temporary cast until the design_images migration regenerates Supabase types.
+const designImagesTable = () => (supabase as any).from("design_images");
+
 export const DESIGN_IMAGE_LABELS = [
   "Front View",
   "Back View",
