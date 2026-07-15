@@ -210,6 +210,9 @@ function ProductionHeader({
           <FactoryStatusFact />
         </div>
 
+        <AssignedLineRow order={order} />
+
+
         <div className="min-w-0 rounded-2xl border border-border bg-background p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate text-sm font-bold">Workflow Progress</p>
