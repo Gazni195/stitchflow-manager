@@ -369,26 +369,6 @@ function StartProductionDialog({ design, onClose }: { design: PendingDesign; onC
     </div>
   );
 }
-        <div className="flex justify-end gap-2 border-t border-border bg-muted/30 px-5 py-3">
-          <button
-            onClick={onClose}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold hover:bg-accent"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={start.isPending}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-60"
-          >
-            {start.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlayCircle className="h-3.5 w-3.5" />}
-            Start Production
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
