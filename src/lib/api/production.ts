@@ -293,3 +293,46 @@ export function currentStage(processes: ProductionProcess[] | undefined): string
   if (active) return OP_NAME[active.operationId];
   return "Completed";
 }
+
+// ---------- Assigned Line ----------
+export function useAssignLine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { productionOrderId: string; line: string }) => {
+      const { error } = await supabase
+        .from("production_orders")
+        .update({ assigned_line: v.line })
+        .eq("id", v.productionOrderId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["production"] });
+    },
+  });
+}
+
+export function useOrdersByLine(lineName: string | undefined) {
+  return useQuery({
+    queryKey: ["production", "by-line", lineName],
+    enabled: !!lineName,
+    queryFn: async (): Promise<ProductionOrder[]> => {
+      const { data, error } = await supabase
+        .from("production_orders")
+        .select("*, designs(code, name, customer, image_path)")
+        .eq("assigned_line", lineName!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const orders = (data as unknown as DbPO[]).map(mapPO);
+      const ids = orders.map((o) => o.id);
+      if (!ids.length) return orders;
+      const { data: procs } = await supabase
+        .from("production_processes")
+        .select("*")
+        .in("production_order_id", ids)
+        .order("sequence", { ascending: true });
+      const list = (procs as unknown as DbProc[] ?? []).map(mapProc);
+      return orders.map((o) => ({ ...o, processes: list.filter((p) => p.productionOrderId === o.id) }));
+    },
+  });
+}
+
