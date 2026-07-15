@@ -56,6 +56,7 @@ import {
   factoryStatusAt,
   formatClock,
   formatDuration,
+  formatHMS,
 } from "@/lib/factory-clock";
 import { cn } from "@/lib/utils";
 
@@ -97,10 +98,7 @@ function ProductionDetails() {
       <AppShell title={po}>
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
           <p className="text-sm text-muted-foreground">Production Order not found.</p>
-          <Link
-            to="/production"
-            className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-primary"
-          >
+          <Link to="/production" className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-primary">
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Production
           </Link>
         </div>
@@ -167,9 +165,7 @@ function ProductionDetails() {
                 onContinue={() => setTab("summary")}
               />
             )}
-            {tab === "summary" && (
-              <SummaryPanel productionOrderId={order.id} orderQuantity={order.orderQuantity} />
-            )}
+            {tab === "summary" && <SummaryPanel productionOrderId={order.id} orderQuantity={order.orderQuantity} />}
           </div>
         </section>
       </div>
@@ -293,7 +289,9 @@ function FactoryStatusFact() {
             : "Holiday";
   return (
     <div className="rounded-xl border border-border bg-background p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Factory · {formatClock(now)}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Factory · {formatClock(now)}
+      </p>
       <p
         className={cn(
           "mt-1 truncate text-sm font-bold",
@@ -416,9 +414,7 @@ function MaterialsPanel({
       ) : requirements.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
           <Layers className="mx-auto h-6 w-6 text-muted-foreground" />
-          <p className="mt-2 text-sm text-muted-foreground">
-            No materials in the approved sample BOM.
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">No materials in the approved sample BOM.</p>
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -646,8 +642,6 @@ function Stat({
   );
 }
 
-
-
 function SampleReference({ selected }: { selected: DesignMaterial[] }) {
   const byPart = new Map<string, DesignMaterial[]>();
   for (const row of selected) {
@@ -695,9 +689,7 @@ function ReservationList({
     <div className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="border-b border-border/60 bg-muted/40 px-4 py-2.5">
         <p className="text-sm font-bold">Reserved Rolls / Lots</p>
-        <p className="text-[11px] text-muted-foreground">
-          Inventory earmarked for this production order.
-        </p>
+        <p className="text-[11px] text-muted-foreground">Inventory earmarked for this production order.</p>
       </div>
       <ul className="divide-y divide-border">
         {reservations.map((r) => {
@@ -827,7 +819,6 @@ function ReserveDialog({
   );
 }
 
-
 /* ---------- Bulk Production tab ---------- */
 
 function BulkProductionPanel({
@@ -934,6 +925,15 @@ function BulkProductionPanel({
   );
 }
 
+// Running Activities re-render every second via the parent's tick timer
+// (see ActivitiesSection). `now` is recomputed fresh on every one of those
+// renders, so this always reflects the true current second — nothing here
+// is cached or frozen at mount time. Effective Working Time is the only
+// number shown live: it already excludes off-hours, weekly-off days, and
+// every break window automatically (effectiveWorkingSeconds), including
+// pausing through a break and resuming after it ends, since it's
+// recomputed from the factory calendar on every tick rather than just
+// counted up.
 function RunningActivityCard({
   activity,
   productionOrderId,
@@ -945,7 +945,6 @@ function RunningActivityCard({
 }) {
   const now = new Date();
   const start = new Date(activity.startedAt);
-  const elapsed = elapsedSeconds(start, now);
   const effective = effectiveWorkingSeconds(start, now);
   const cancel = useCancelActivity(productionOrderId);
 
@@ -954,20 +953,31 @@ function RunningActivityCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
-            🟣 {ACTIVITY_OP_NAME[activity.operationId]}
+            {ACTIVITY_OP_NAME[activity.operationId]}
           </p>
           <p className="mt-0.5 truncate text-sm font-bold">{activity.assignedTo}</p>
         </div>
-        <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
-          Running
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
+          🟢 Running
         </span>
       </div>
-      <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
-        <Meta icon={<Clock className="h-3 w-3" />} label="Started" value={formatClock(start)} />
-        <Meta icon={<Timer className="h-3 w-3" />} label="Elapsed" value={formatDuration(elapsed)} />
-        <Meta icon={<CheckCircle2 className="h-3 w-3" />} label="Effective" value={formatDuration(effective)} />
-        <Meta label="Issued" value={`${activity.issuedQty} pcs`} />
-      </dl>
+
+      <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Clock className="h-3 w-3" /> Started:
+        <span className="font-bold text-foreground">{formatClock(start)}</span>
+      </p>
+
+      <div className="mt-2 rounded-xl border border-primary/20 bg-background/70 p-3 text-center">
+        <p className="flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          <Timer className="h-3 w-3" /> Live Timer · Effective Working Time
+        </p>
+        <p className="mt-1 font-mono text-2xl font-extrabold tabular-nums text-primary">{formatHMS(effective)}</p>
+      </div>
+
+      <p className="mt-2 text-xs text-muted-foreground">
+        Issued Qty: <span className="font-bold text-foreground">{activity.issuedQty} pcs</span>
+      </p>
+
       {activity.notes && (
         <p className="mt-2 rounded-lg bg-background/60 px-2 py-1.5 text-xs text-muted-foreground">{activity.notes}</p>
       )}
@@ -992,6 +1002,9 @@ function RunningActivityCard({
   );
 }
 
+// Completed activities never tick — they only ever display the final
+// values already saved to the database (elapsedSeconds/effectiveSeconds,
+// stamped once at Complete), never a live recomputation.
 function CompletedActivityRow({ activity }: { activity: ProductionActivity }) {
   return (
     <li className="grid gap-2 rounded-2xl border border-border bg-background p-3 text-xs sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -1001,11 +1014,23 @@ function CompletedActivityRow({ activity }: { activity: ProductionActivity }) {
           <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">Completed</span>
           <span className="truncate text-muted-foreground">{activity.assignedTo}</span>
         </div>
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          Start {formatClock(new Date(activity.startedAt))}
-          {activity.completedAt ? ` · End ${formatClock(new Date(activity.completedAt))}` : ""}
-          {activity.effectiveSeconds != null ? ` · ⏱ ${formatDuration(activity.effectiveSeconds)} effective` : ""}
-        </p>
+        <div className="mt-1.5 grid gap-0.5 text-[11px] text-muted-foreground">
+          <p>
+            Started: <span className="font-bold text-foreground">{formatClock(new Date(activity.startedAt))}</span>
+          </p>
+          {activity.completedAt && (
+            <p>
+              Completed:{" "}
+              <span className="font-bold text-foreground">{formatClock(new Date(activity.completedAt))}</span>
+            </p>
+          )}
+          {activity.effectiveSeconds != null && (
+            <p>
+              Total Effective Time:{" "}
+              <span className="font-mono font-bold text-foreground">{formatHMS(activity.effectiveSeconds)}</span>
+            </p>
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-3 sm:justify-end">
         <span className="text-[11px] text-muted-foreground">
@@ -1016,27 +1041,9 @@ function CompletedActivityRow({ activity }: { activity: ProductionActivity }) {
   );
 }
 
-function Meta({ icon, label, value }: { icon?: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="rounded-md bg-background/70 px-2 py-1">
-      <dt className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 inline-flex items-center gap-1 font-semibold">
-        {icon}
-        {value}
-      </dd>
-    </div>
-  );
-}
-
 /* ---------- Summary tab ---------- */
 
-function SummaryPanel({
-  productionOrderId,
-  orderQuantity,
-}: {
-  productionOrderId: string;
-  orderQuantity: number;
-}) {
+function SummaryPanel({ productionOrderId, orderQuantity }: { productionOrderId: string; orderQuantity: number }) {
   const { data: activities = [], isLoading } = useProductionActivities(productionOrderId);
   const completed = activities.filter((a) => a.status === "completed");
 
@@ -1068,7 +1075,11 @@ function SummaryPanel({
         <SummaryCard label="Order Qty" value={`${orderQuantity} pcs`} />
         <SummaryCard label="Issued" value={`${totalIssued} pcs`} />
         <SummaryCard label="Returned" value={`${totalReturned} pcs`} />
-        <SummaryCard label="Effective Time" value={formatDuration(totalEffective)} subtitle={`Elapsed ${formatDuration(totalElapsed)}`} />
+        <SummaryCard
+          label="Effective Time"
+          value={formatDuration(totalEffective)}
+          subtitle={`Elapsed ${formatDuration(totalElapsed)}`}
+        />
       </div>
 
       <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
@@ -1118,7 +1129,10 @@ function SummaryPanel({
         ) : (
           <ul className="grid gap-2">
             {activities.map((a) => (
-              <li key={a.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background p-3 text-xs">
+              <li
+                key={a.id}
+                className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background p-3 text-xs"
+              >
                 <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-bold text-primary">
                   {ACTIVITY_OP_NAME[a.operationId]}
                 </span>
@@ -1304,7 +1318,11 @@ function CompleteActivityDialog({
           disabled={complete.isPending}
           className="inline-flex items-center gap-1.5 rounded-lg bg-success px-4 py-2 text-xs font-bold text-success-foreground hover:opacity-90 disabled:opacity-60"
         >
-          {complete.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+          {complete.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          )}
           Complete Activity
         </button>
       </DialogFooter>
