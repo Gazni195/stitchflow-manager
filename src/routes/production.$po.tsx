@@ -644,6 +644,9 @@ function Stat({
       </p>
     </div>
   );
+}
+
+
 
 function SampleReference({ selected }: { selected: DesignMaterial[] }) {
   const byPart = new Map<string, DesignMaterial[]>();
