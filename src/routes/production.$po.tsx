@@ -30,7 +30,8 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
 import { useRequireAuth } from "@/hooks/use-auth";
-import { useProductionOrder, computeProgress } from "@/lib/api/production";
+import { useProductionOrder, computeProgress, useAssignLine } from "@/lib/api/production";
+import { PRODUCTION_LINES, slugForLine } from "@/lib/lines";
 import {
   ACTIVITY_OPERATIONS,
   ACTIVITY_OP_NAME,
@@ -209,6 +210,9 @@ function ProductionHeader({
           <FactoryStatusFact />
         </div>
 
+        <AssignedLineRow order={order} />
+
+
         <div className="min-w-0 rounded-2xl border border-border bg-background p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate text-sm font-bold">Workflow Progress</p>
@@ -305,6 +309,87 @@ function FactoryStatusFact() {
     </div>
   );
 }
+
+/* ---------- Assigned Line row (view + change) ---------- */
+
+function AssignedLineRow({
+  order,
+}: {
+  order: NonNullable<ReturnType<typeof useProductionOrder>["data"]>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [line, setLine] = useState<string>(order.assignedLine ?? "");
+  const assign = useAssignLine();
+
+  useEffect(() => {
+    setLine(order.assignedLine ?? "");
+  }, [order.assignedLine]);
+
+  async function save() {
+    if (!line) return;
+    await assign.mutateAsync({ productionOrderId: order.id, line });
+    setEditing(false);
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-background p-3 sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Assigned Production Line
+          </p>
+          {order.assignedLine ? (
+            <Link
+              to="/lines/$line"
+              params={{ line: slugForLine(order.assignedLine) ?? "" }}
+              className="mt-0.5 inline-flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
+            >
+              <Factory className="h-4 w-4" /> {order.assignedLine}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : (
+            <p className="mt-0.5 text-sm font-bold text-warning">No line assigned</p>
+          )}
+        </div>
+        {!editing ? (
+          <button
+            onClick={() => setEditing(true)}
+            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-bold hover:bg-accent"
+          >
+            {order.assignedLine ? "Change" : "Assign Line"}
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <select
+              value={line}
+              onChange={(e) => setLine(e.target.value)}
+              className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs"
+            >
+              <option value="">Select…</option>
+              {PRODUCTION_LINES.map((l) => (
+                <option key={l.slug} value={l.name}>{l.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={save}
+              disabled={!line || assign.isPending}
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-60"
+            >
+              {assign.isPending ? "Saving…" : "Save"}
+            </button>
+            <button
+              onClick={() => { setEditing(false); setLine(order.assignedLine ?? ""); }}
+              className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-bold hover:bg-accent"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 /* ---------- Materials tab: Bulk Requirement (per-piece × order qty, merged) ---------- */
 

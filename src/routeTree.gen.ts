@@ -26,9 +26,11 @@ import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SampleDevelopmentIndexRouteImport } from './routes/sample-development.index'
 import { Route as ProductionIndexRouteImport } from './routes/production.index'
+import { Route as LinesIndexRouteImport } from './routes/lines.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
 import { Route as ProductionPoRouteImport } from './routes/production.$po'
+import { Route as LinesLineRouteImport } from './routes/lines.$line'
 import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
 import { Route as DesignsCodeWorkflowRouteImport } from './routes/designs.$code.workflow'
 
@@ -117,6 +119,11 @@ const ProductionIndexRoute = ProductionIndexRouteImport.update({
   path: '/production/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LinesIndexRoute = LinesIndexRouteImport.update({
+  id: '/lines/',
+  path: '/lines/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DesignsIndexRoute = DesignsIndexRouteImport.update({
   id: '/designs/',
   path: '/designs/',
@@ -130,6 +137,11 @@ const SampleDevelopmentCodeRoute = SampleDevelopmentCodeRouteImport.update({
 const ProductionPoRoute = ProductionPoRouteImport.update({
   id: '/production/$po',
   path: '/production/$po',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LinesLineRoute = LinesLineRouteImport.update({
+  id: '/lines/$line',
+  path: '/lines/$line',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DesignsCodeRoute = DesignsCodeRouteImport.update({
@@ -160,9 +172,11 @@ export interface FileRoutesByFullPath {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
+  '/lines/': typeof LinesIndexRoute
   '/production/': typeof ProductionIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
@@ -184,9 +198,11 @@ export interface FileRoutesByTo {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs': typeof DesignsIndexRoute
+  '/lines': typeof LinesIndexRoute
   '/production': typeof ProductionIndexRoute
   '/sample-development': typeof SampleDevelopmentIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
@@ -209,9 +225,11 @@ export interface FileRoutesById {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
+  '/lines/': typeof LinesIndexRoute
   '/production/': typeof ProductionIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
@@ -235,9 +253,11 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
     | '/designs/'
+    | '/lines/'
     | '/production/'
     | '/sample-development/'
     | '/designs/$code/workflow'
@@ -259,9 +279,11 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
     | '/designs'
+    | '/lines'
     | '/production'
     | '/sample-development'
     | '/designs/$code/workflow'
@@ -283,9 +305,11 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
     | '/designs/'
+    | '/lines/'
     | '/production/'
     | '/sample-development/'
     | '/designs/$code/workflow'
@@ -308,9 +332,11 @@ export interface RootRouteChildren {
   StitchingRoute: typeof StitchingRoute
   StockRoute: typeof StockRoute
   DesignsCodeRoute: typeof DesignsCodeRouteWithChildren
+  LinesLineRoute: typeof LinesLineRoute
   ProductionPoRoute: typeof ProductionPoRoute
   SampleDevelopmentCodeRoute: typeof SampleDevelopmentCodeRoute
   DesignsIndexRoute: typeof DesignsIndexRoute
+  LinesIndexRoute: typeof LinesIndexRoute
   ProductionIndexRoute: typeof ProductionIndexRoute
   SampleDevelopmentIndexRoute: typeof SampleDevelopmentIndexRoute
 }
@@ -436,6 +462,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductionIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lines/': {
+      id: '/lines/'
+      path: '/lines'
+      fullPath: '/lines/'
+      preLoaderRoute: typeof LinesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/designs/': {
       id: '/designs/'
       path: '/designs'
@@ -455,6 +488,13 @@ declare module '@tanstack/react-router' {
       path: '/production/$po'
       fullPath: '/production/$po'
       preLoaderRoute: typeof ProductionPoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lines/$line': {
+      id: '/lines/$line'
+      path: '/lines/$line'
+      fullPath: '/lines/$line'
+      preLoaderRoute: typeof LinesLineRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/designs/$code': {
@@ -503,9 +543,11 @@ const rootRouteChildren: RootRouteChildren = {
   StitchingRoute: StitchingRoute,
   StockRoute: StockRoute,
   DesignsCodeRoute: DesignsCodeRouteWithChildren,
+  LinesLineRoute: LinesLineRoute,
   ProductionPoRoute: ProductionPoRoute,
   SampleDevelopmentCodeRoute: SampleDevelopmentCodeRoute,
   DesignsIndexRoute: DesignsIndexRoute,
+  LinesIndexRoute: LinesIndexRoute,
   ProductionIndexRoute: ProductionIndexRoute,
   SampleDevelopmentIndexRoute: SampleDevelopmentIndexRoute,
 }

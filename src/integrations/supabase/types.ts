@@ -284,6 +284,7 @@ export type Database = {
       }
       production_orders: {
         Row: {
+          assigned_line: string | null
           code: string
           completed_at: string | null
           created_at: string
@@ -297,6 +298,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_line?: string | null
           code: string
           completed_at?: string | null
           created_at?: string
@@ -310,6 +312,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_line?: string | null
           code?: string
           completed_at?: string | null
           created_at?: string
