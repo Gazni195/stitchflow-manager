@@ -337,6 +337,7 @@ function MaterialsPanel({
   const { data: selected = [], isLoading } = useDesignMaterials(designId);
   const { data: reservations = [] } = useProductionReservations(productionOrderId);
   const [reserveFor, setReserveFor] = useState<BulkRequirement | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showSample, setShowSample] = useState(false);
 
   const requirements = useMemo<BulkRequirement[]>(() => {
