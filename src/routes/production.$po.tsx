@@ -426,75 +426,108 @@ function MaterialsPanel({
             <p className="text-sm font-bold">Bulk Material Requirement</p>
             <p className="text-[11px] text-muted-foreground">Sample per-piece × {orderQuantity} pcs</p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead className="bg-background text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2.5 text-left">Material</th>
-                  <th className="px-4 py-2.5 text-right">Per Piece</th>
-                  <th className="px-4 py-2.5 text-right">Required</th>
-                  <th className="px-4 py-2.5 text-right">Available</th>
-                  <th className="px-4 py-2.5 text-right">Reserved</th>
-                  <th className="px-4 py-2.5 text-right">Remaining</th>
-                  <th className="px-4 py-2.5 text-right"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {requirements.map((r) => {
-                  const short = r.availableStock < r.remaining;
-                  const done = r.remaining === 0;
-                  return (
-                    <tr key={r.materialId}>
-                      <td className="px-4 py-2.5">
-                        <p className="font-semibold">{r.name}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {r.code} · used in {r.parts.map((p) => p.part).join(", ")}
-                        </p>
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-mono text-xs">
-                        {r.perPiece} {r.unit}
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-bold">
-                        {r.required.toLocaleString(undefined, { maximumFractionDigits: 2 })} {r.unit}
-                      </td>
-                      <td
-                        className={cn(
-                          "px-4 py-2.5 text-right",
-                          short ? "text-destructive font-semibold" : "text-muted-foreground",
-                        )}
-                      >
-                        {r.availableStock.toLocaleString(undefined, { maximumFractionDigits: 2 })} {r.unit}
-                      </td>
-                      <td className="px-4 py-2.5 text-right text-primary font-semibold">
-                        {r.reserved.toLocaleString(undefined, { maximumFractionDigits: 2 })} {r.unit}
-                      </td>
-                      <td
-                        className={cn(
-                          "px-4 py-2.5 text-right font-bold",
-                          done ? "text-success" : "text-warning",
-                        )}
-                      >
-                        {r.remaining.toLocaleString(undefined, { maximumFractionDigits: 2 })} {r.unit}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <button
-                          onClick={() => setReserveFor(r)}
-                          className={cn(
-                            "inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold",
-                            done
-                              ? "border-border bg-background text-muted-foreground hover:bg-accent"
-                              : "border-primary bg-primary text-primary-foreground hover:opacity-90",
-                          )}
-                        >
-                          <Layers className="h-3 w-3" /> Reserve
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ul className="divide-y divide-border">
+            {requirements.map((r) => {
+              const short = r.availableStock < r.remaining;
+              const done = r.remaining === 0;
+              const open = expandedId === r.materialId;
+              const breakdownTotal = r.parts.reduce((s, p) => s + p.qty * orderQuantity, 0);
+              return (
+                <li key={r.materialId}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(open ? null : r.materialId)}
+                    className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-accent/40"
+                  >
+                    <span className="mt-1 text-muted-foreground">
+                      {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate font-semibold">{r.name}</p>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          {r.code}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] sm:grid-cols-5">
+                        <Stat label="Per Piece" value={`${r.perPiece} ${r.unit}`} />
+                        <Stat
+                          label="Estimated Qty"
+                          value={`${r.required.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${r.unit}`}
+                          bold
+                        />
+                        <Stat
+                          label="Available"
+                          value={`${r.availableStock.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${r.unit}`}
+                          tone={short ? "danger" : "muted"}
+                        />
+                        <Stat
+                          label="Reserved"
+                          value={`${r.reserved.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${r.unit}`}
+                          tone="primary"
+                        />
+                        <Stat
+                          label="Remaining to Reserve"
+                          value={`${r.remaining.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${r.unit}`}
+                          tone={done ? "success" : "warning"}
+                          bold
+                        />
+                      </div>
+                    </div>
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setReserveFor(r);
+                      }}
+                      className={cn(
+                        "inline-flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold",
+                        done
+                          ? "border-border bg-background text-muted-foreground hover:bg-accent"
+                          : "border-primary bg-primary text-primary-foreground hover:opacity-90",
+                      )}
+                    >
+                      <Layers className="h-3 w-3" /> Reserve
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="border-t border-border/60 bg-muted/20 px-4 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Breakdown
+                      </p>
+                      <ul className="mt-2 divide-y divide-border/60 rounded-lg border border-border/60 bg-background">
+                        {r.parts.map((p, i) => (
+                          <li
+                            key={`${p.part}-${i}`}
+                            className="grid grid-cols-[1fr_auto] items-center gap-2 px-3 py-2 text-xs"
+                          >
+                            <span className="font-medium">{p.part}</span>
+                            <span className="font-mono text-muted-foreground">
+                              {p.qty} {r.unit} × {orderQuantity} pcs ={" "}
+                              <span className="font-bold text-foreground">
+                                {(p.qty * orderQuantity).toLocaleString(undefined, {
+                                  maximumFractionDigits: 2,
+                                })}{" "}
+                                {r.unit}
+                              </span>
+                            </span>
+                          </li>
+                        ))}
+                        <li className="flex items-center justify-between bg-muted/40 px-3 py-2 text-xs">
+                          <span className="font-semibold">Total Estimated</span>
+                          <span className="font-mono font-bold">
+                            {breakdownTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })} {r.unit}
+                          </span>
+                        </li>
+                      </ul>
+                      <p className="mt-2 text-[10px] text-muted-foreground">
+                        Breakdown is for reference only. Reserve stock from the material row above.
+                      </p>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
