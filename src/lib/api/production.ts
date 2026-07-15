@@ -39,6 +39,7 @@ export type ProductionOrder = {
   orderQuantity: number;
   startDate: string;
   supervisor: string | null;
+  assignedLine: string | null;
   status: "running" | "completed";
   completedAt: string | null;
   createdAt: string;
@@ -57,6 +58,7 @@ type DbPO = {
   order_quantity: number;
   start_date: string;
   supervisor: string | null;
+  assigned_line: string | null;
   status: "running" | "completed";
   completed_at: string | null;
   created_at: string;
@@ -67,6 +69,7 @@ type DbPO = {
     image_path: string | null;
   } | null;
 };
+
 type DbProc = {
   id: string;
   production_order_id: string;
