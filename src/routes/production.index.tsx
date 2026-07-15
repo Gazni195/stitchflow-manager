@@ -208,6 +208,19 @@ function OrdersTable({ orders, completed = false }: { orders: ProductionOrder[];
                     )}
                   </td>
                   <td className="px-4 py-3">
+                    {o.assignedLine ? (
+                      <Link
+                        to="/lines/$line"
+                        params={{ line: slugForLine(o.assignedLine) ?? "" }}
+                        className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-foreground hover:text-primary"
+                      >
+                        <Factory className="h-3 w-3" /> {o.assignedLine}
+                      </Link>
+                    ) : (
+                      <span className="text-xs italic text-muted-foreground">Unassigned</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
                         <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
