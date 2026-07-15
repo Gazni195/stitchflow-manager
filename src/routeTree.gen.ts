@@ -30,6 +30,7 @@ import { Route as LinesIndexRouteImport } from './routes/lines.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
 import { Route as ProductionPoRouteImport } from './routes/production.$po'
+import { Route as LinesLineRouteImport } from './routes/lines.$line'
 import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
 import { Route as DesignsCodeWorkflowRouteImport } from './routes/designs.$code.workflow'
 
@@ -138,6 +139,11 @@ const ProductionPoRoute = ProductionPoRouteImport.update({
   path: '/production/$po',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LinesLineRoute = LinesLineRouteImport.update({
+  id: '/lines/$line',
+  path: '/lines/$line',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DesignsCodeRoute = DesignsCodeRouteImport.update({
   id: '/designs/$code',
   path: '/designs/$code',
@@ -166,6 +172,7 @@ export interface FileRoutesByFullPath {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
@@ -191,6 +198,7 @@ export interface FileRoutesByTo {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs': typeof DesignsIndexRoute
@@ -217,6 +225,7 @@ export interface FileRoutesById {
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/designs/': typeof DesignsIndexRoute
@@ -244,6 +253,7 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
     | '/designs/'
@@ -269,6 +279,7 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
     | '/designs'
@@ -294,6 +305,7 @@ export interface FileRouteTypes {
     | '/stitching'
     | '/stock'
     | '/designs/$code'
+    | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
     | '/designs/'
@@ -320,6 +332,7 @@ export interface RootRouteChildren {
   StitchingRoute: typeof StitchingRoute
   StockRoute: typeof StockRoute
   DesignsCodeRoute: typeof DesignsCodeRouteWithChildren
+  LinesLineRoute: typeof LinesLineRoute
   ProductionPoRoute: typeof ProductionPoRoute
   SampleDevelopmentCodeRoute: typeof SampleDevelopmentCodeRoute
   DesignsIndexRoute: typeof DesignsIndexRoute
@@ -477,6 +490,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductionPoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lines/$line': {
+      id: '/lines/$line'
+      path: '/lines/$line'
+      fullPath: '/lines/$line'
+      preLoaderRoute: typeof LinesLineRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/designs/$code': {
       id: '/designs/$code'
       path: '/designs/$code'
@@ -523,6 +543,7 @@ const rootRouteChildren: RootRouteChildren = {
   StitchingRoute: StitchingRoute,
   StockRoute: StockRoute,
   DesignsCodeRoute: DesignsCodeRouteWithChildren,
+  LinesLineRoute: LinesLineRoute,
   ProductionPoRoute: ProductionPoRoute,
   SampleDevelopmentCodeRoute: SampleDevelopmentCodeRoute,
   DesignsIndexRoute: DesignsIndexRoute,

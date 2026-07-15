@@ -30,7 +30,8 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
 import { useRequireAuth } from "@/hooks/use-auth";
-import { useProductionOrder, computeProgress } from "@/lib/api/production";
+import { useProductionOrder, computeProgress, useAssignLine } from "@/lib/api/production";
+import { PRODUCTION_LINES, slugForLine } from "@/lib/lines";
 import {
   ACTIVITY_OPERATIONS,
   ACTIVITY_OP_NAME,
