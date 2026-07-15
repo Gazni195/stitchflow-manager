@@ -12,6 +12,8 @@ import {
   ArrowRight,
   BarChart3,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
   Coffee,
   Factory,
