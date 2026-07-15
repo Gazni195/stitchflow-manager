@@ -391,6 +391,57 @@ export type Database = {
           },
         ]
       }
+      production_reservations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          lot_code: string | null
+          material_id: string
+          notes: string | null
+          production_order_id: string
+          quantity: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lot_code?: string | null
+          material_id: string
+          notes?: string | null
+          production_order_id: string
+          quantity: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lot_code?: string | null
+          material_id?: string
+          notes?: string | null
+          production_order_id?: string
+          quantity?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_reservations_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_reservations_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sample_approvals: {
         Row: {
           approved_at: string
@@ -536,6 +587,10 @@ export type Database = {
         Returns: undefined
       }
       has_design_access: { Args: { _design_id: string }; Returns: boolean }
+      has_production_order_access: {
+        Args: { _po_id: string }
+        Returns: boolean
+      }
       has_workflow_access: { Args: { _workflow_id: string }; Returns: boolean }
       issue_bundle: {
         Args: {

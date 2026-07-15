@@ -42,6 +42,12 @@ import {
 } from "@/lib/api/production-activities";
 import { useDesignMaterials, type DesignMaterial } from "@/lib/api/materials";
 import {
+  useProductionReservations,
+  useAddReservation,
+  useRemoveReservation,
+  type ProductionReservation,
+} from "@/lib/api/production-reservations";
+import {
   DEFAULT_FACTORY_CALENDAR,
   effectiveWorkingSeconds,
   elapsedSeconds,
@@ -145,7 +151,12 @@ function ProductionDetails() {
 
           <div className="pt-5">
             {tab === "materials" && (
-              <MaterialsPanel designId={order.designId} onContinue={() => setTab("bulk")} />
+              <MaterialsPanel
+                designId={order.designId}
+                productionOrderId={order.id}
+                orderQuantity={order.orderQuantity}
+                onContinue={() => setTab("bulk")}
+              />
             )}
             {tab === "bulk" && (
               <BulkProductionPanel
@@ -295,89 +306,458 @@ function FactoryStatusFact() {
   );
 }
 
-/* ---------- Materials tab ---------- */
+/* ---------- Materials tab: Bulk Requirement (per-piece × order qty, merged) ---------- */
 
-function MaterialsPanel({ designId, onContinue }: { designId: string; onContinue: () => void }) {
+type BulkRequirement = {
+  materialId: string;
+  name: string;
+  code: string;
+  unit: string;
+  availableStock: number;
+  perPiece: number;
+  required: number;
+  reserved: number;
+  remaining: number;
+  parts: { part: string; qty: number }[];
+};
+
+function MaterialsPanel({
+  designId,
+  productionOrderId,
+  orderQuantity,
+  onContinue,
+}: {
+  designId: string;
+  productionOrderId: string;
+  orderQuantity: number;
+  onContinue: () => void;
+}) {
   const { data: selected = [], isLoading } = useDesignMaterials(designId);
-  const total = selected.reduce((s, r) => s + r.amount, 0);
+  const { data: reservations = [] } = useProductionReservations(productionOrderId);
+  const [reserveFor, setReserveFor] = useState<BulkRequirement | null>(null);
+  const [showSample, setShowSample] = useState(false);
 
-  const grouped = useMemo(() => {
-    const byGroup = new Map<string, DesignMaterial[]>();
+  const requirements = useMemo<BulkRequirement[]>(() => {
+    const byMat = new Map<string, BulkRequirement>();
     for (const row of selected) {
-      const key = row.groupName.split("::")[0] || "Other";
-      byGroup.set(key, [...(byGroup.get(key) ?? []), row]);
+      if (!row.material) continue;
+      const partLabel = row.groupName.split("::")[0] || "Other";
+      const existing = byMat.get(row.materialId);
+      if (existing) {
+        existing.perPiece += row.quantity;
+        existing.required = existing.perPiece * orderQuantity;
+        existing.parts.push({ part: partLabel, qty: row.quantity });
+      } else {
+        byMat.set(row.materialId, {
+          materialId: row.materialId,
+          name: row.material.name,
+          code: row.material.code,
+          unit: row.material.unit,
+          availableStock: row.material.availableStock,
+          perPiece: row.quantity,
+          required: row.quantity * orderQuantity,
+          reserved: 0,
+          remaining: 0,
+          parts: [{ part: partLabel, qty: row.quantity }],
+        });
+      }
     }
-    return Array.from(byGroup.entries());
-  }, [selected]);
+    for (const r of reservations) {
+      const rec = byMat.get(r.materialId);
+      if (rec) rec.reserved += r.quantity;
+    }
+    for (const rec of byMat.values()) {
+      rec.remaining = Math.max(0, rec.required - rec.reserved);
+    }
+    return Array.from(byMat.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [selected, reservations, orderQuantity]);
+
+  const totalRequired = requirements.reduce((s, r) => s + r.required, 0);
+  const totalReserved = requirements.reduce((s, r) => s + r.reserved, 0);
+  const totalRemaining = requirements.reduce((s, r) => s + r.remaining, 0);
+  const allReady = requirements.length > 0 && totalRemaining === 0;
 
   return (
     <div className="grid gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-gradient-to-br from-primary-soft to-background p-4">
+      {/* Readiness banner */}
+      <div className="grid gap-3 rounded-2xl border border-border bg-gradient-to-br from-primary-soft to-background p-4 sm:grid-cols-4">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Material Total (per piece)</p>
-          <p className="mt-0.5 text-2xl font-extrabold text-primary">
-            ₹{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-          </p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Production Qty</p>
+          <p className="mt-0.5 text-xl font-extrabold">{orderQuantity.toLocaleString()} pcs</p>
           <p className="text-[11px] text-muted-foreground">
-            {selected.length} item{selected.length === 1 ? "" : "s"} · locked from the approved sample
+            {requirements.length} material{requirements.length === 1 ? "" : "s"} required
           </p>
         </div>
+        <ReadinessStat label="Required" value={totalRequired} tone="default" />
+        <ReadinessStat label="Reserved" value={totalReserved} tone="primary" />
+        <ReadinessStat label="Remaining" value={totalRemaining} tone={allReady ? "success" : "warning"} />
+      </div>
+
+      {allReady ? (
+        <div className="flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-2.5 text-sm font-semibold text-success">
+          <CheckCircle2 className="h-4 w-4" /> All materials fully reserved — ready to start production.
+        </div>
+      ) : requirements.length > 0 ? (
+        <div className="flex items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-4 py-2.5 text-sm font-semibold text-warning">
+          <Clock className="h-4 w-4" />
+          {totalRemaining.toLocaleString(undefined, { maximumFractionDigits: 2 })} unit
+          {totalRemaining === 1 ? "" : "s"} still to be reserved before production can start.
+        </div>
+      ) : null}
+
+      {/* Requirement table */}
+      {isLoading ? (
+        <div className="grid place-items-center rounded-2xl border border-border bg-card p-10">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : requirements.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+          <Layers className="mx-auto h-6 w-6 text-muted-foreground" />
+          <p className="mt-2 text-sm text-muted-foreground">
+            No materials in the approved sample BOM.
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-4 py-2.5">
+            <p className="text-sm font-bold">Bulk Material Requirement</p>
+            <p className="text-[11px] text-muted-foreground">Sample per-piece × {orderQuantity} pcs</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead className="bg-background text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2.5 text-left">Material</th>
+                  <th className="px-4 py-2.5 text-right">Per Piece</th>
+                  <th className="px-4 py-2.5 text-right">Required</th>
+                  <th className="px-4 py-2.5 text-right">Available</th>
+                  <th className="px-4 py-2.5 text-right">Reserved</th>
+                  <th className="px-4 py-2.5 text-right">Remaining</th>
+                  <th className="px-4 py-2.5 text-right"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {requirements.map((r) => {
+                  const short = r.availableStock < r.remaining;
+                  const done = r.remaining === 0;
+                  return (
+                    <tr key={r.materialId}>
+                      <td className="px-4 py-2.5">
+                        <p className="font-semibold">{r.name}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {r.code} · used in {r.parts.map((p) => p.part).join(", ")}
+                        </p>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-xs">
+                        {r.perPiece} {r.unit}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-bold">
+                        {r.required.toLocaleString(undefined, { maximumFractionDigits: 2 })} {r.unit}
+                      </td>
+                      <td
+                        className={cn(
+                          "px-4 py-2.5 text-right",
+                          short ? "text-destructive font-semibold" : "text-muted-foreground",
+                        )}
+                      >
+                        {r.availableStock.toLocaleString(undefined, { maximumFractionDigits: 2 })} {r.unit}
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-primary font-semibold">
+                        {r.reserved.toLocaleString(undefined, { maximumFractionDigits: 2 })} {r.unit}
+                      </td>
+                      <td
+                        className={cn(
+                          "px-4 py-2.5 text-right font-bold",
+                          done ? "text-success" : "text-warning",
+                        )}
+                      >
+                        {r.remaining.toLocaleString(undefined, { maximumFractionDigits: 2 })} {r.unit}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <button
+                          onClick={() => setReserveFor(r)}
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold",
+                            done
+                              ? "border-border bg-background text-muted-foreground hover:bg-accent"
+                              : "border-primary bg-primary text-primary-foreground hover:opacity-90",
+                          )}
+                        >
+                          <Layers className="h-3 w-3" /> Reserve
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Existing reservations */}
+      {reservations.length > 0 && (
+        <ReservationList
+          productionOrderId={productionOrderId}
+          reservations={reservations}
+          requirements={requirements}
+        />
+      )}
+
+      {/* Sample BOM reference (collapsed) */}
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <button
+          onClick={() => setShowSample((s) => !s)}
+          className="flex w-full items-center justify-between px-4 py-2.5 text-left"
+        >
+          <div>
+            <p className="text-sm font-bold">Sample BOM (per piece) — reference</p>
+            <p className="text-[11px] text-muted-foreground">
+              Original quantities from the approved sample, grouped by garment part.
+            </p>
+          </div>
+          <span className="text-[11px] font-semibold text-primary">{showSample ? "Hide" : "Show"}</span>
+        </button>
+        {showSample && (
+          <div className="border-t border-border/60 p-3">
+            <SampleReference selected={selected} />
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Link
           to="/inventory"
           className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold text-primary hover:bg-primary-soft/40"
         >
           <Layers className="h-3.5 w-3.5" /> Open Inventory
         </Link>
-      </div>
-
-      {isLoading ? (
-        <div className="grid place-items-center rounded-2xl border border-border bg-card p-10">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
-      ) : selected.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
-          <Layers className="mx-auto h-6 w-6 text-muted-foreground" />
-          <p className="mt-2 text-sm text-muted-foreground">No materials on this design yet.</p>
-        </div>
-      ) : (
-        <div className="grid gap-2">
-          {grouped.map(([partKey, rows]) => (
-            <div key={partKey} className="overflow-hidden rounded-2xl border border-border bg-card">
-              <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-4 py-2.5">
-                <p className="text-sm font-bold">{partKey}</p>
-                <p className="text-[11px] text-muted-foreground">{rows.length} item{rows.length === 1 ? "" : "s"}</p>
-              </div>
-              <ul className="divide-y divide-border">
-                {rows.map((r) => (
-                  <li key={r.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold">{r.material?.name ?? "—"}</p>
-                      <p className="truncate text-[11px] text-muted-foreground">
-                        {r.material?.code ?? ""} · {r.quantity} {r.material?.unit ?? ""} × ₹{r.rate}
-                      </p>
-                    </div>
-                    <p className="shrink-0 text-sm font-bold">
-                      ₹{r.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="flex justify-end">
         <button
           onClick={onContinue}
-          className="inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+          disabled={!allReady}
+          title={allReady ? undefined : "Reserve all required materials to continue"}
+          className="inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Continue to Bulk Production <ArrowRight className="h-4 w-4" />
         </button>
       </div>
+
+      {reserveFor && (
+        <ReserveDialog
+          productionOrderId={productionOrderId}
+          requirement={reserveFor}
+          onClose={() => setReserveFor(null)}
+        />
+      )}
     </div>
   );
 }
+
+function ReadinessStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "default" | "primary" | "success" | "warning";
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-background p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "mt-1 text-xl font-extrabold",
+          tone === "primary" && "text-primary",
+          tone === "success" && "text-success",
+          tone === "warning" && "text-warning",
+        )}
+      >
+        {value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+      </p>
+    </div>
+  );
+}
+
+function SampleReference({ selected }: { selected: DesignMaterial[] }) {
+  const byPart = new Map<string, DesignMaterial[]>();
+  for (const row of selected) {
+    const key = row.groupName.split("::")[0] || "Other";
+    byPart.set(key, [...(byPart.get(key) ?? []), row]);
+  }
+  if (byPart.size === 0) {
+    return <p className="text-xs text-muted-foreground">No sample materials recorded.</p>;
+  }
+  return (
+    <div className="grid gap-2">
+      {Array.from(byPart.entries()).map(([part, rows]) => (
+        <div key={part} className="rounded-xl border border-border bg-background">
+          <div className="border-b border-border/60 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            {part}
+          </div>
+          <ul className="divide-y divide-border">
+            {rows.map((r) => (
+              <li key={r.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs">
+                <span className="truncate font-semibold">{r.material?.name ?? "—"}</span>
+                <span className="shrink-0 text-muted-foreground">
+                  {r.quantity} {r.material?.unit ?? ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ReservationList({
+  productionOrderId,
+  reservations,
+  requirements,
+}: {
+  productionOrderId: string;
+  reservations: ProductionReservation[];
+  requirements: BulkRequirement[];
+}) {
+  const remove = useRemoveReservation(productionOrderId);
+  const nameOf = new Map(requirements.map((r) => [r.materialId, { name: r.name, unit: r.unit }]));
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="border-b border-border/60 bg-muted/40 px-4 py-2.5">
+        <p className="text-sm font-bold">Reserved Rolls / Lots</p>
+        <p className="text-[11px] text-muted-foreground">
+          Inventory earmarked for this production order.
+        </p>
+      </div>
+      <ul className="divide-y divide-border">
+        {reservations.map((r) => {
+          const info = nameOf.get(r.materialId);
+          return (
+            <li key={r.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold">{info?.name ?? "Material"}</p>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {r.lotCode ? `Lot / Roll: ${r.lotCode}` : "No lot code"}
+                  {r.notes ? ` · ${r.notes}` : ""}
+                </p>
+              </div>
+              <p className="shrink-0 font-bold">
+                {r.quantity} {info?.unit ?? ""}
+              </p>
+              <button
+                onClick={() => {
+                  if (window.confirm("Release this reservation?")) remove.mutate(r.id);
+                }}
+                className="rounded-lg border border-border bg-background p-1.5 text-muted-foreground hover:bg-accent"
+                aria-label="Release reservation"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function ReserveDialog({
+  productionOrderId,
+  requirement,
+  onClose,
+}: {
+  productionOrderId: string;
+  requirement: BulkRequirement;
+  onClose: () => void;
+}) {
+  const [quantity, setQuantity] = useState<number>(requirement.remaining);
+  const [lotCode, setLotCode] = useState("");
+  const [notes, setNotes] = useState("");
+  const add = useAddReservation(productionOrderId);
+  const exceedsStock = quantity > requirement.availableStock;
+
+  async function submit() {
+    if (quantity <= 0) return;
+    await add.mutateAsync({ materialId: requirement.materialId, quantity, lotCode, notes });
+    onClose();
+  }
+
+  return (
+    <DialogShell
+      title="Reserve Material"
+      subtitle={`${requirement.name} · ${requirement.remaining} ${requirement.unit} remaining`}
+      onClose={onClose}
+    >
+      <div className="grid gap-4 p-5">
+        <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted/50 p-3 text-center text-xs">
+          <div>
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">Required</p>
+            <p className="mt-0.5 font-bold">
+              {requirement.required} {requirement.unit}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">Reserved</p>
+            <p className="mt-0.5 font-bold text-primary">
+              {requirement.reserved} {requirement.unit}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">In Stock</p>
+            <p className="mt-0.5 font-bold">
+              {requirement.availableStock} {requirement.unit}
+            </p>
+          </div>
+        </div>
+        <Field label="Barcode / Roll / Lot Code">
+          <input
+            value={lotCode}
+            onChange={(e) => setLotCode(e.target.value)}
+            placeholder="e.g. ROLL-2410-08"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          />
+        </Field>
+        <Field label={`Reserve Quantity (${requirement.unit})`}>
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            value={quantity || ""}
+            onChange={(e) => setQuantity(Number(e.target.value))}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          />
+          {exceedsStock && (
+            <p className="mt-1 text-[11px] font-semibold text-destructive">
+              Exceeds available inventory ({requirement.availableStock} {requirement.unit}).
+            </p>
+          )}
+        </Field>
+        <Field label="Notes (optional)">
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="Warehouse bin, supplier, remarks…"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          />
+        </Field>
+        {add.error && <p className="text-xs text-destructive">{(add.error as Error).message}</p>}
+      </div>
+      <DialogFooter onCancel={onClose}>
+        <button
+          onClick={submit}
+          disabled={add.isPending || quantity <= 0}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-60"
+        >
+          {add.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Layers className="h-3.5 w-3.5" />}
+          Reserve Stock
+        </button>
+      </DialogFooter>
+    </DialogShell>
+  );
+}
+
 
 /* ---------- Bulk Production tab ---------- */
 
