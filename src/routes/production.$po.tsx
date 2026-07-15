@@ -145,7 +145,12 @@ function ProductionDetails() {
 
           <div className="pt-5">
             {tab === "materials" && (
-              <MaterialsPanel designId={order.designId} onContinue={() => setTab("bulk")} />
+              <MaterialsPanel
+                designId={order.designId}
+                productionOrderId={order.id}
+                orderQuantity={order.orderQuantity}
+                onContinue={() => setTab("bulk")}
+              />
             )}
             {tab === "bulk" && (
               <BulkProductionPanel
