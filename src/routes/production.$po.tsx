@@ -391,7 +391,7 @@ function MaterialsPanel({
             {requirements.length} material{requirements.length === 1 ? "" : "s"} required
           </p>
         </div>
-        <ReadinessStat label="Required" value={totalRequired} tone="default" />
+        <ReadinessStat label="Estimated" value={totalRequired} tone="default" />
         <ReadinessStat label="Reserved" value={totalReserved} tone="primary" />
         <ReadinessStat label="Remaining" value={totalRemaining} tone={allReady ? "success" : "warning"} />
       </div>
