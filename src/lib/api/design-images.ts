@@ -46,8 +46,7 @@ export function useDesignImages(designId: string | undefined) {
     queryKey: ["design-images", designId],
     enabled: !!designId,
     queryFn: async (): Promise<DesignImageRow[]> => {
-      const { data, error } = await supabase
-        .from("design_images")
+      const { data, error } = await designImagesTable()
         .select("id, design_id, path, label, sort_order")
         .eq("design_id", designId!)
         .order("sort_order", { ascending: true });
@@ -86,7 +85,7 @@ export function useAddDesignImages(designId: string) {
           created_by: user.id,
         });
       }
-      const { error } = await supabase.from("design_images").insert(rows);
+      const { error } = await designImagesTable().insert(rows);
       if (error) throw error;
     },
     onSuccess: () => invalidate(qc, designId),
@@ -107,7 +106,7 @@ export function useReplaceDesignImage(designId: string) {
       const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage.from("design-images").upload(path, v.file, { upsert: false });
       if (upErr) throw upErr;
-      const { error } = await supabase.from("design_images").update({ path }).eq("id", v.id);
+      const { error } = await designImagesTable().update({ path }).eq("id", v.id);
       if (error) throw error;
       await supabase.storage.from("design-images").remove([v.oldPath]);
     },
@@ -119,7 +118,7 @@ export function useUpdateDesignImageLabel(designId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (v: { id: string; label: string }) => {
-      const { error } = await supabase.from("design_images").update({ label: v.label }).eq("id", v.id);
+      const { error } = await designImagesTable().update({ label: v.label }).eq("id", v.id);
       if (error) throw error;
     },
     onSuccess: () => invalidate(qc, designId),
@@ -130,7 +129,7 @@ export function useDeleteDesignImage(designId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (v: { id: string; path: string }) => {
-      const { error } = await supabase.from("design_images").delete().eq("id", v.id);
+      const { error } = await designImagesTable().delete().eq("id", v.id);
       if (error) throw error;
       await supabase.storage.from("design-images").remove([v.path]);
     },
