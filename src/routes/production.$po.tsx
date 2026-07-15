@@ -615,6 +615,36 @@ function ReadinessStat({
   );
 }
 
+function Stat({
+  label,
+  value,
+  tone = "default",
+  bold = false,
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "muted" | "primary" | "success" | "warning" | "danger";
+  bold?: boolean;
+}) {
+  return (
+    <div>
+      <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "mt-0.5 font-mono text-[11px]",
+          bold && "font-bold",
+          tone === "muted" && "text-muted-foreground",
+          tone === "primary" && "text-primary",
+          tone === "success" && "text-success",
+          tone === "warning" && "text-warning",
+          tone === "danger" && "text-destructive font-semibold",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+
 function SampleReference({ selected }: { selected: DesignMaterial[] }) {
   const byPart = new Map<string, DesignMaterial[]>();
   for (const row of selected) {
