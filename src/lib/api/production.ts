@@ -93,6 +93,7 @@ function mapPO(r: DbPO): ProductionOrder {
     orderQuantity: r.order_quantity,
     startDate: r.start_date,
     supervisor: r.supervisor,
+    assignedLine: r.assigned_line ?? null,
     status: r.status,
     completedAt: r.completed_at,
     createdAt: r.created_at,
