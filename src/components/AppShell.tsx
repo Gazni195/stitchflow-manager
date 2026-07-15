@@ -11,7 +11,7 @@ const PRIMARY_NAV = [
   { to: "/sample-development", label: "Samples", icon: FlaskConical },
   { to: "/production", label: "Production", icon: PlayCircle },
   { to: "/inventory", label: "Inventory", icon: Package },
-  { to: "/stitching", label: "Line", icon: Factory },
+  { to: "/lines", label: "Lines", icon: Factory },
   { to: "/stock", label: "Stock", icon: Warehouse },
 ] as const;
 
