@@ -42,6 +42,12 @@ import {
 } from "@/lib/api/production-activities";
 import { useDesignMaterials, type DesignMaterial } from "@/lib/api/materials";
 import {
+  useProductionReservations,
+  useAddReservation,
+  useRemoveReservation,
+  type ProductionReservation,
+} from "@/lib/api/production-reservations";
+import {
   DEFAULT_FACTORY_CALENDAR,
   effectiveWorkingSeconds,
   elapsedSeconds,
