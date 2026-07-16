@@ -1905,6 +1905,72 @@ function CompleteActivityDialog({
               </div>
             </div>
           </>
+        ) : hasIssuedSizes ? (
+          <>
+            <div className="rounded-xl border-2 border-primary/30 bg-primary-soft/40 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground">Completed Quantity (by size)</span>
+                <span className="text-[11px] font-bold text-muted-foreground">Issued: {issuedTotal} pcs</span>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {(Object.keys(issuedSizes as SizeBreakdown) as SizeCode[]).map((sz) => {
+                  const max = (issuedSizes as SizeBreakdown)[sz] ?? 0;
+                  const val = completed[sz] ?? 0;
+                  return (
+                    <label key={sz} className="flex flex-col gap-1">
+                      <span className="flex items-center justify-between text-[11px] font-bold text-muted-foreground">
+                        <span>{sz}</span>
+                        <span className="text-[10px] font-semibold">/{max}</span>
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={max}
+                        value={val}
+                        onChange={(e) =>
+                          setCompleted((prev) => ({ ...prev, [sz]: Math.max(0, Number(e.target.value) || 0) }))
+                        }
+                        className={cn(
+                          "w-full rounded-lg border bg-background px-2 py-2 text-center text-sm font-semibold",
+                          val > max ? "border-destructive" : "border-border",
+                        )}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px] font-bold">
+                <div className="rounded-lg bg-background px-2 py-1.5">
+                  <div className="text-muted-foreground">Completed</div>
+                  <div className="font-mono text-sm text-foreground">{completedTotal}</div>
+                </div>
+                <div className="rounded-lg bg-background px-2 py-1.5">
+                  <div className="text-muted-foreground">Rejected</div>
+                  <div className="font-mono text-sm text-destructive">{rejectedTotal}</div>
+                </div>
+                <div className="rounded-lg bg-background px-2 py-1.5">
+                  <div className="text-muted-foreground">Balance</div>
+                  <div className="font-mono text-sm text-foreground">{issuedTotal - completedTotal - rejectedTotal}</div>
+                </div>
+              </div>
+              {overCompleted && (
+                <p className="mt-2 text-[11px] font-semibold text-destructive">
+                  Completed quantity per size cannot exceed the issued quantity.
+                </p>
+              )}
+            </div>
+            {rejectedTotal > 0 && (
+              <Field label="Reject Reason (optional)">
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. stitching defect, fabric flaw"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
+              </Field>
+            )}
+          </>
         ) : (
           <Field label="Return Quantity">
             <input
