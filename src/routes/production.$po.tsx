@@ -34,11 +34,16 @@ import { PRODUCTION_LINES, slugForLine } from "@/lib/lines";
 import {
   ACTIVITY_OPERATIONS,
   ACTIVITY_OP_NAME,
+  ADDITIONAL_OPERATIONS,
+  availableInputForOperation,
   computeSizeSets,
   currentProductionQuantity,
   currentProductionStage,
   DEFAULT_SET_TEMPLATE,
   findCuttingBundle,
+  nextSequentialOperation,
+  OPTIONAL_OPERATIONS,
+  PRODUCTION_SEQUENCE,
   SET_TEMPLATES,
   STANDARD_SIZES,
   SMALL_SIZES,
@@ -928,8 +933,10 @@ function BulkProductionPanel({
   onContinue: () => void;
 }) {
   const { data: activities = [], isLoading } = useProductionActivities(productionOrderId);
-  const [startOpen, setStartOpen] = useState(false);
+  const [startFor, setStartFor] = useState<{ operationId: ActivityOperationId; source: "sequence" | "additional" } | null>(null);
+  const [additionalOpen, setAdditionalOpen] = useState(false);
   const [completeFor, setCompleteFor] = useState<ProductionActivity | null>(null);
+  const [skipped, setSkipped] = useState<Set<ActivityOperationId>>(new Set());
   const [, tick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => tick((t) => t + 1), 1000);
@@ -940,15 +947,65 @@ function BulkProductionPanel({
   const completed = activities.filter((a) => a.status === "completed");
   const cuttingBundle = findCuttingBundle(activities);
   const currentQty = currentProductionQuantity(orderQuantity, activities);
+  const nextOp = nextSequentialOperation(activities, skipped);
+  const isNextOptional = nextOp ? OPTIONAL_OPERATIONS.has(nextOp) : false;
 
   return (
     <div className="grid gap-4">
-      <button
-        onClick={() => setStartOpen(true)}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-base font-bold text-primary-foreground shadow-sm hover:opacity-90"
-      >
-        <PlayCircle className="h-5 w-5" /> Start Production
-      </button>
+      {/* Sequential Next-Step Action */}
+      <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Next Operation</p>
+        {running.length > 0 ? (
+          <div className="mt-2 grid gap-2">
+            <p className="text-sm font-semibold text-foreground">
+              Finish the running {ACTIVITY_OP_NAME[running[0].operationId]} activity before the next one opens.
+            </p>
+          </div>
+        ) : nextOp ? (
+          <div className="mt-2 grid gap-2 sm:flex sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="truncate text-xl font-extrabold tracking-tight text-foreground">
+                {ACTIVITY_OP_NAME[nextOp]}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Step {PRODUCTION_SEQUENCE.indexOf(nextOp) + 1} of {PRODUCTION_SEQUENCE.length}
+                {isNextOptional ? " · Optional" : ""}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {isNextOptional && (
+                <button
+                  onClick={() => setSkipped((s) => new Set(s).add(nextOp))}
+                  className="rounded-xl border border-border bg-background px-3 py-2.5 text-xs font-bold hover:bg-accent"
+                >
+                  Skip {ACTIVITY_OP_NAME[nextOp]}
+                </button>
+              )}
+              <button
+                onClick={() => setStartFor({ operationId: nextOp, source: "sequence" })}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+              >
+                <PlayCircle className="h-4 w-4" /> Start {ACTIVITY_OP_NAME[nextOp]}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-success">
+            <CheckCircle2 className="h-4 w-4" /> All production operations completed.
+          </div>
+        )}
+        <div className="mt-3 flex items-center justify-between border-t border-border pt-2">
+          <p className="text-[11px] text-muted-foreground">
+            The workflow advances automatically as each operation is completed.
+          </p>
+          <button
+            onClick={() => setAdditionalOpen(true)}
+            className="text-[11px] font-bold text-primary hover:underline"
+          >
+            + Add Additional Operation
+          </button>
+        </div>
+      </div>
 
       {cuttingBundle && <CuttingSummaryCard cuttingBundle={cuttingBundle} currentQty={currentQty} />}
 
@@ -1008,12 +1065,25 @@ function BulkProductionPanel({
         </button>
       </div>
 
-      {startOpen && (
+      {startFor && (
         <StartActivityDialog
           productionOrderId={productionOrderId}
           orderQuantity={orderQuantity}
           currentQty={currentQty}
-          onClose={() => setStartOpen(false)}
+          preselectedOperation={startFor.operationId}
+          allowOperationChange={startFor.source === "additional"}
+          allowedOperations={startFor.source === "additional" ? ADDITIONAL_OPERATIONS : undefined}
+          activities={activities}
+          onClose={() => setStartFor(null)}
+        />
+      )}
+      {additionalOpen && (
+        <PickAdditionalOperationDialog
+          onPick={(op) => {
+            setAdditionalOpen(false);
+            setStartFor({ operationId: op, source: "additional" });
+          }}
+          onClose={() => setAdditionalOpen(false)}
         />
       )}
       {completeFor && (
@@ -1024,6 +1094,38 @@ function BulkProductionPanel({
         />
       )}
     </div>
+  );
+}
+
+function PickAdditionalOperationDialog({
+  onPick,
+  onClose,
+}: {
+  onPick: (op: ActivityOperationId) => void;
+  onClose: () => void;
+}) {
+  return (
+    <DialogShell title="Add Additional Operation" subtitle="For exceptional steps outside the standard flow" onClose={onClose}>
+      <div className="grid gap-2 p-5">
+        <div className="grid grid-cols-2 gap-2">
+          {ADDITIONAL_OPERATIONS.map((id) => (
+            <button
+              key={id}
+              onClick={() => onPick(id)}
+              className="rounded-lg border border-border bg-background px-3 py-3 text-sm font-bold hover:bg-accent"
+            >
+              {ACTIVITY_OP_NAME[id]}
+            </button>
+          ))}
+          {ADDITIONAL_OPERATIONS.length === 0 && (
+            <p className="text-xs text-muted-foreground">No additional operations available.</p>
+          )}
+        </div>
+      </div>
+      <DialogFooter onCancel={onClose}>
+        <span />
+      </DialogFooter>
+    </DialogShell>
   );
 }
 
@@ -1389,57 +1491,113 @@ function StartActivityDialog({
   productionOrderId,
   orderQuantity,
   currentQty,
+  preselectedOperation,
+  allowOperationChange,
+  allowedOperations,
+  activities,
   onClose,
 }: {
   productionOrderId: string;
   orderQuantity: number;
   currentQty: number;
+  preselectedOperation: ActivityOperationId;
+  allowOperationChange: boolean;
+  allowedOperations?: ActivityOperationId[];
+  activities: ProductionActivity[];
   onClose: () => void;
 }) {
-  const [operationId, setOperationId] = useState<ActivityOperationId | "">("");
+  const [operationId, setOperationId] = useState<ActivityOperationId>(preselectedOperation);
   const [assignedTo, setAssignedTo] = useState("");
-  // Pre-filled with the current master production quantity (Actual Cutting
-  // Output once Cutting is done, otherwise the Planned Qty) — the operator
-  // only needs to adjust it if this activity is a partial batch, never
-  // re-enter the master quantity by hand.
-  const [issuedQty, setIssuedQty] = useState<number>(currentQty);
   const [notes, setNotes] = useState("");
   const start = useStartActivity(productionOrderId);
 
+  // Cutting uses a single Issue Qty; every other op after Cutting is
+  // size-allocated from the Cutting bundle (bundle allocation UI).
+  const isCutting = operationId === "cutting";
+  const available = !isCutting ? availableInputForOperation(operationId, activities) : null;
+  const hasSizeAllocation = !!available;
+
+  const [issuedQty, setIssuedQty] = useState<number>(currentQty);
+  // Prefill bundle allocation to the full available bundle — operator can
+  // trim individual sizes for partial batches.
+  const [sizes, setSizes] = useState<SizeBreakdown>(() =>
+    available ? { ...available.bundle } : {},
+  );
+
+  useEffect(() => {
+    if (available) setSizes({ ...available.bundle });
+    else setIssuedQty(currentQty);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [operationId]);
+
+  const sizeTotal = sumSizeBreakdown(sizes);
+  const overAllocated = available
+    ? Object.entries(sizes).some(([sz, q]) => (q ?? 0) > (available.bundle[sz as SizeCode] ?? 0))
+    : false;
+
+  function setSize(code: SizeCode, val: number) {
+    setSizes((prev) => ({ ...prev, [code]: Number.isFinite(val) && val >= 0 ? val : 0 }));
+  }
+
+  const canSubmit =
+    !!assignedTo.trim() &&
+    (hasSizeAllocation ? sizeTotal > 0 && !overAllocated : issuedQty >= 1);
+
   async function submit() {
-    if (!operationId || !assignedTo.trim() || issuedQty < 1) return;
-    await start.mutateAsync({
-      operationId,
-      assignedTo: assignedTo.trim(),
-      issuedQty,
-      notes,
-    });
+    if (!canSubmit) return;
+    if (hasSizeAllocation) {
+      const bundle: SizeBreakdown = {};
+      for (const [k, v] of Object.entries(sizes)) if ((v ?? 0) > 0) bundle[k as SizeCode] = v as number;
+      await start.mutateAsync({
+        operationId,
+        assignedTo: assignedTo.trim(),
+        issuedQty: sizeTotal,
+        issuedSizes: bundle,
+        notes,
+      });
+    } else {
+      await start.mutateAsync({
+        operationId,
+        assignedTo: assignedTo.trim(),
+        issuedQty,
+        notes,
+      });
+    }
     onClose();
   }
 
+  const opChoices = allowedOperations ?? [];
+
   return (
-    <DialogShell title="Start Production" subtitle="Log a new bulk production activity" onClose={onClose}>
+    <DialogShell
+      title={`Start ${ACTIVITY_OP_NAME[operationId]}`}
+      subtitle={hasSizeAllocation ? "Assign worker and allocate bundle by size" : "Assign worker and issue quantity"}
+      onClose={onClose}
+    >
       <div className="grid gap-4 p-5">
-        <Field label="Select Activity">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {ACTIVITY_OPERATIONS.map((op) => (
-              <button
-                key={op.id}
-                type="button"
-                onClick={() => setOperationId(op.id)}
-                className={cn(
-                  "rounded-lg border px-2 py-2 text-xs font-bold",
-                  operationId === op.id
-                    ? "border-primary bg-primary-soft text-primary"
-                    : "border-border bg-background text-foreground hover:bg-accent",
-                )}
-              >
-                {op.name}
-              </button>
-            ))}
-          </div>
-        </Field>
-        <Field label="Assign Worker / Team / Line">
+        {allowOperationChange && opChoices.length > 0 && (
+          <Field label="Additional Operation">
+            <div className="grid grid-cols-2 gap-2">
+              {opChoices.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setOperationId(id)}
+                  className={cn(
+                    "rounded-lg border px-2 py-2 text-xs font-bold",
+                    operationId === id
+                      ? "border-primary bg-primary-soft text-primary"
+                      : "border-border bg-background text-foreground hover:bg-accent",
+                  )}
+                >
+                  {ACTIVITY_OP_NAME[id]}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        <Field label="Worker / Team / Vendor">
           <input
             value={assignedTo}
             onChange={(e) => setAssignedTo(e.target.value)}
@@ -1447,22 +1605,69 @@ function StartActivityDialog({
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
           />
         </Field>
-        <Field
-          label={
-            currentQty !== orderQuantity
-              ? `Issue Quantity (Current Prod. Qty ${currentQty} pcs · Planned ${orderQuantity} pcs)`
-              : `Issue Quantity (Planned Qty ${orderQuantity} pcs)`
-          }
-        >
-          <input
-            type="number"
-            min={1}
-            value={issuedQty || ""}
-            onChange={(e) => setIssuedQty(Number(e.target.value))}
-            placeholder="e.g. 40"
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          />
-        </Field>
+
+        {hasSizeAllocation && available ? (
+          <div className="rounded-xl border-2 border-primary/30 bg-primary-soft/40 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-bold text-foreground">Bundle Allocation</span>
+              <span className="text-[11px] font-bold text-muted-foreground">
+                Available: {available.total} pcs
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {(Object.keys(available.bundle) as SizeCode[]).map((sz) => (
+                <label key={sz} className="flex flex-col gap-1">
+                  <span className="flex items-center justify-between text-[11px] font-bold text-muted-foreground">
+                    <span>{sz}</span>
+                    <span className="text-[10px] font-semibold">/{available.bundle[sz]}</span>
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={available.bundle[sz]}
+                    value={sizes[sz] ?? 0}
+                    onChange={(e) => setSize(sz, Number(e.target.value))}
+                    className={cn(
+                      "w-full rounded-lg border bg-background px-2 py-2 text-center text-sm font-semibold",
+                      (sizes[sz] ?? 0) > (available.bundle[sz] ?? 0)
+                        ? "border-destructive"
+                        : "border-border",
+                    )}
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center justify-between text-xs font-bold">
+              <span className="text-muted-foreground">Total Bundle Qty</span>
+              <span className={cn("font-mono", overAllocated ? "text-destructive" : "text-foreground")}>
+                {sizeTotal} pcs
+              </span>
+            </div>
+            {overAllocated && (
+              <p className="mt-1 text-[11px] font-semibold text-destructive">
+                Issued quantity exceeds available Cutting Output.
+              </p>
+            )}
+          </div>
+        ) : (
+          <Field
+            label={
+              currentQty !== orderQuantity
+                ? `Issue Quantity (Current Prod. Qty ${currentQty} pcs · Planned ${orderQuantity} pcs)`
+                : `Issue Quantity (Planned Qty ${orderQuantity} pcs)`
+            }
+          >
+            <input
+              type="number"
+              min={1}
+              value={issuedQty || ""}
+              onChange={(e) => setIssuedQty(Number(e.target.value))}
+              placeholder="e.g. 40"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+            />
+          </Field>
+        )}
+
         <Field label="Notes (optional)">
           <textarea
             value={notes}
@@ -1477,11 +1682,11 @@ function StartActivityDialog({
       <DialogFooter onCancel={onClose}>
         <button
           onClick={submit}
-          disabled={start.isPending || !operationId || !assignedTo.trim() || issuedQty < 1}
+          disabled={start.isPending || !canSubmit}
           className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-60"
         >
           {start.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlayCircle className="h-3.5 w-3.5" />}
-          Start Activity
+          Start {ACTIVITY_OP_NAME[operationId]}
         </button>
       </DialogFooter>
     </DialogShell>
@@ -1498,7 +1703,13 @@ function CompleteActivityDialog({
   onClose: () => void;
 }) {
   const isCutting = activity.operationId === "cutting";
+  const issuedSizes = activity.issuedSizes ?? null;
+  const hasIssuedSizes = !isCutting && !!issuedSizes && sumSizeBreakdown(issuedSizes) > 0;
   const [returned, setReturned] = useState<number>(activity.issuedQty);
+  const [completed, setCompleted] = useState<SizeBreakdown>(() =>
+    hasIssuedSizes ? { ...(issuedSizes as SizeBreakdown) } : {},
+  );
+  const [rejectReason, setRejectReason] = useState("");
   const [sizes, setSizes] = useState<SizeBreakdown>(
     () => Object.fromEntries(STANDARD_SIZES.map((s) => [s, 0])) as SizeBreakdown,
   );
@@ -1506,6 +1717,16 @@ function CompleteActivityDialog({
   const [showPlus, setShowPlus] = useState(false);
   const [setTemplate, setSetTemplate] = useState<SetTemplateId>(DEFAULT_SET_TEMPLATE);
   const complete = useCompleteActivity(productionOrderId);
+
+  const completedTotal = sumSizeBreakdown(completed);
+  const issuedTotal = hasIssuedSizes ? sumSizeBreakdown(issuedSizes as SizeBreakdown) : activity.issuedQty;
+  const rejectedTotal = hasIssuedSizes ? Math.max(0, issuedTotal - completedTotal) : 0;
+  const overCompleted = hasIssuedSizes
+    ? Object.entries(completed).some(
+        ([sz, q]) => (q ?? 0) > ((issuedSizes as SizeBreakdown)[sz as SizeCode] ?? 0),
+      )
+    : false;
+
 
   // Actual Cutting Output is allowed to differ from (including exceed) the
   // Issued Quantity, e.g. from better marker planning or fabric
@@ -1551,11 +1772,22 @@ function CompleteActivityDialog({
         if ((v ?? 0) > 0) bundle[k as SizeCode] = v as number;
       }
       await complete.mutateAsync({ activity, returnedQty: totalEntered, sizeBreakdown: bundle, varianceReason: null });
+    } else if (hasIssuedSizes) {
+      if (overCompleted) return;
+      const done: SizeBreakdown = {};
+      for (const [k, v] of Object.entries(completed)) if ((v ?? 0) > 0) done[k as SizeCode] = v as number;
+      await complete.mutateAsync({
+        activity,
+        returnedQty: completedTotal,
+        completedSizes: done,
+        varianceReason: rejectReason.trim() || null,
+      });
     } else {
       await complete.mutateAsync({ activity, returnedQty: returned });
     }
     onClose();
   }
+
 
   return (
     <DialogShell title="Complete Activity" subtitle={ACTIVITY_OP_NAME[activity.operationId]} onClose={onClose}>
@@ -1673,6 +1905,72 @@ function CompleteActivityDialog({
               </div>
             </div>
           </>
+        ) : hasIssuedSizes ? (
+          <>
+            <div className="rounded-xl border-2 border-primary/30 bg-primary-soft/40 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground">Completed Quantity (by size)</span>
+                <span className="text-[11px] font-bold text-muted-foreground">Issued: {issuedTotal} pcs</span>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {(Object.keys(issuedSizes as SizeBreakdown) as SizeCode[]).map((sz) => {
+                  const max = (issuedSizes as SizeBreakdown)[sz] ?? 0;
+                  const val = completed[sz] ?? 0;
+                  return (
+                    <label key={sz} className="flex flex-col gap-1">
+                      <span className="flex items-center justify-between text-[11px] font-bold text-muted-foreground">
+                        <span>{sz}</span>
+                        <span className="text-[10px] font-semibold">/{max}</span>
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={max}
+                        value={val}
+                        onChange={(e) =>
+                          setCompleted((prev) => ({ ...prev, [sz]: Math.max(0, Number(e.target.value) || 0) }))
+                        }
+                        className={cn(
+                          "w-full rounded-lg border bg-background px-2 py-2 text-center text-sm font-semibold",
+                          val > max ? "border-destructive" : "border-border",
+                        )}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px] font-bold">
+                <div className="rounded-lg bg-background px-2 py-1.5">
+                  <div className="text-muted-foreground">Completed</div>
+                  <div className="font-mono text-sm text-foreground">{completedTotal}</div>
+                </div>
+                <div className="rounded-lg bg-background px-2 py-1.5">
+                  <div className="text-muted-foreground">Rejected</div>
+                  <div className="font-mono text-sm text-destructive">{rejectedTotal}</div>
+                </div>
+                <div className="rounded-lg bg-background px-2 py-1.5">
+                  <div className="text-muted-foreground">Balance</div>
+                  <div className="font-mono text-sm text-foreground">{issuedTotal - completedTotal - rejectedTotal}</div>
+                </div>
+              </div>
+              {overCompleted && (
+                <p className="mt-2 text-[11px] font-semibold text-destructive">
+                  Completed quantity per size cannot exceed the issued quantity.
+                </p>
+              )}
+            </div>
+            {rejectedTotal > 0 && (
+              <Field label="Reject Reason (optional)">
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. stitching defect, fabric flaw"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
+              </Field>
+            )}
+          </>
         ) : (
           <Field label="Return Quantity">
             <input
@@ -1690,7 +1988,7 @@ function CompleteActivityDialog({
       <DialogFooter onCancel={onClose}>
         <button
           onClick={submit}
-          disabled={complete.isPending || (isCutting && !canSubmitCutting)}
+          disabled={complete.isPending || (isCutting && !canSubmitCutting) || (hasIssuedSizes && overCompleted)}
           className="inline-flex items-center gap-1.5 rounded-lg bg-success px-4 py-2 text-xs font-bold text-success-foreground hover:opacity-90 disabled:opacity-60"
         >
           {complete.isPending ? (

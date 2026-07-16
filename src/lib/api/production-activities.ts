@@ -60,6 +60,8 @@ export type ProductionActivity = {
   elapsedSeconds: number | null;
   effectiveSeconds: number | null;
   sizeBreakdown: SizeBreakdown | null;
+  issuedSizes: SizeBreakdown | null;
+  completedSizes: SizeBreakdown | null;
   varianceReason: string | null;
 };
 
@@ -77,6 +79,8 @@ type DbRow = {
   elapsed_seconds: number | null;
   effective_seconds: number | null;
   size_breakdown: SizeBreakdown | null;
+  issued_sizes: SizeBreakdown | null;
+  completed_sizes: SizeBreakdown | null;
   variance_reason: string | null;
 };
 
@@ -95,6 +99,8 @@ function mapRow(r: DbRow): ProductionActivity {
     elapsedSeconds: r.elapsed_seconds,
     effectiveSeconds: r.effective_seconds,
     sizeBreakdown: r.size_breakdown ?? null,
+    issuedSizes: r.issued_sizes ?? null,
+    completedSizes: r.completed_sizes ?? null,
     varianceReason: r.variance_reason ?? null,
   };
 }
@@ -175,6 +181,7 @@ export function useStartActivity(productionOrderId: string) {
       operationId: ActivityOperationId;
       assignedTo: string;
       issuedQty: number;
+      issuedSizes?: SizeBreakdown | null;
       notes?: string;
     }) => {
       const { data: userRes } = await supabase.auth.getUser();
@@ -183,6 +190,7 @@ export function useStartActivity(productionOrderId: string) {
         operation_id: v.operationId,
         assigned_to: v.assignedTo,
         issued_qty: v.issuedQty,
+        issued_sizes: v.issuedSizes ?? null,
         notes: v.notes?.trim() || null,
         status: "running",
         started_at: new Date().toISOString(),
@@ -201,6 +209,7 @@ export function useCompleteActivity(productionOrderId: string) {
       activity: ProductionActivity;
       returnedQty: number;
       sizeBreakdown?: SizeBreakdown | null;
+      completedSizes?: SizeBreakdown | null;
       varianceReason?: string | null;
     }) => {
       const end = new Date();
@@ -214,6 +223,7 @@ export function useCompleteActivity(productionOrderId: string) {
         elapsed_seconds: elapsed,
         effective_seconds: effective,
         ...(v.sizeBreakdown !== undefined ? { size_breakdown: v.sizeBreakdown as SizeBreakdown | null } : {}),
+        ...(v.completedSizes !== undefined ? { completed_sizes: v.completedSizes as SizeBreakdown | null } : {}),
         ...(v.varianceReason !== undefined ? { variance_reason: v.varianceReason?.trim() || null } : {}),
       };
       const { error } = await supabase.from("production_activities").update(patch).eq("id", v.activity.id);
@@ -250,4 +260,68 @@ export function currentProductionStage(activities: ProductionActivity[] | undefi
   const seqOf = (id: ActivityOperationId) => ACTIVITY_OPERATIONS.find((o) => o.id === id)?.sequence ?? 0;
   const top = completed.reduce((best, a) => (seqOf(a.operationId) > seqOf(best.operationId) ? a : best));
   return { operationId: top.operationId, label: ACTIVITY_OP_NAME[top.operationId] };
+}
+
+/* ---------------- Sequential workflow helpers ---------------- */
+
+// Canonical factory sequence. Embroidery is optional (skippable in UI).
+export const PRODUCTION_SEQUENCE: ActivityOperationId[] = [
+  "cutting",
+  "handwork",
+  "embroidery",
+  "stitching",
+  "qc",
+  "packing",
+];
+export const OPTIONAL_OPERATIONS: Set<ActivityOperationId> = new Set(["embroidery"]);
+export const ADDITIONAL_OPERATIONS: ActivityOperationId[] = ACTIVITY_OPERATIONS
+  .map((o) => o.id)
+  .filter((id) => !PRODUCTION_SEQUENCE.includes(id));
+
+// Next operation the operator should be prompted for. null = sequence done
+// OR an activity is still running (must complete/cancel first).
+export function nextSequentialOperation(
+  activities: ProductionActivity[] | undefined,
+  skipped: Set<ActivityOperationId> = new Set(),
+): ActivityOperationId | null {
+  if (activities?.some((a) => a.status === "running")) return null;
+  const doneOps = new Set(
+    (activities ?? []).filter((a) => a.status === "completed").map((a) => a.operationId),
+  );
+  for (const op of PRODUCTION_SEQUENCE) {
+    if (doneOps.has(op)) continue;
+    if (skipped.has(op)) continue;
+    return op;
+  }
+  return null;
+}
+
+// Master input available to a downstream operation = latest Cutting bundle
+// minus every size already issued to earlier activities of the same op.
+export function availableInputForOperation(
+  operationId: ActivityOperationId,
+  activities: ProductionActivity[] | undefined,
+): { bundle: SizeBreakdown; total: number } | null {
+  const cutting = findCuttingBundle(activities);
+  if (!cutting) return null;
+  const already: SizeBreakdown = {};
+  for (const a of activities ?? []) {
+    if (a.operationId !== operationId) continue;
+    if (a.status === "cancelled") continue;
+    const src = a.issuedSizes ?? null;
+    if (!src) continue;
+    for (const [k, v] of Object.entries(src) as [SizeCode, number][]) {
+      already[k] = (already[k] ?? 0) + (v ?? 0);
+    }
+  }
+  const remaining: SizeBreakdown = {};
+  let total = 0;
+  for (const [k, v] of Object.entries(cutting.bundle) as [SizeCode, number][]) {
+    const rem = Math.max(0, (v ?? 0) - (already[k] ?? 0));
+    if (rem > 0) {
+      remaining[k] = rem;
+      total += rem;
+    }
+  }
+  return { bundle: remaining, total };
 }
