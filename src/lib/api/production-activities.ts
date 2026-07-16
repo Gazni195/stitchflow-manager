@@ -99,6 +99,8 @@ function mapRow(r: DbRow): ProductionActivity {
     elapsedSeconds: r.elapsed_seconds,
     effectiveSeconds: r.effective_seconds,
     sizeBreakdown: r.size_breakdown ?? null,
+    issuedSizes: r.issued_sizes ?? null,
+    completedSizes: r.completed_sizes ?? null,
     varianceReason: r.variance_reason ?? null,
   };
 }
