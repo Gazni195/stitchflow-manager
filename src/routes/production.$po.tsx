@@ -1440,6 +1440,8 @@ function CompleteActivityDialog({
   const [showPlus, setShowPlus] = useState(false);
   const [varianceReason, setVarianceReason] = useState("");
   const [setTemplate, setSetTemplate] = useState<SetTemplateId>(DEFAULT_SET_TEMPLATE);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
   const complete = useCompleteActivity(productionOrderId);
   const now = new Date();
   const start = new Date(activity.startedAt);
@@ -1504,115 +1506,145 @@ function CompleteActivityDialog({
 
   return (
     <DialogShell title="Complete Activity" subtitle={ACTIVITY_OP_NAME[activity.operationId]} onClose={onClose}>
-      <div className="grid gap-4 p-5">
-        <div className="rounded-xl bg-muted/50 p-3 text-xs">
-          <RowKV k="Assigned To" v={activity.assignedTo} />
-          <RowKV k="Issued Qty" v={`${activity.issuedQty} pcs`} />
-          <RowKV k="Started" v={formatClock(start)} />
-          <RowKV k="End (now)" v={formatClock(now)} />
-          <RowKV k="Elapsed" v={formatDuration(elp)} />
-          <RowKV k="Effective Working" v={formatDuration(eff)} />
+      <div className="grid gap-3 p-4">
+        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Effective Working Time
+            </span>
+            <span className="text-base font-extrabold text-primary">{formatDuration(eff)}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((v) => !v)}
+            className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"
+          >
+            <ChevronDown className={cn("h-3 w-3 transition-transform", detailsOpen && "rotate-180")} />
+            {detailsOpen ? "Hide Details" : "View Details"}
+          </button>
+          {detailsOpen && (
+            <div className="mt-2 border-t border-border pt-2 text-xs">
+              <RowKV k="Assigned To" v={activity.assignedTo} />
+              <RowKV k="Issued Qty" v={`${activity.issuedQty} pcs`} />
+              <RowKV k="Started" v={formatClock(start)} />
+              <RowKV k="End (now)" v={formatClock(now)} />
+              <RowKV k="Elapsed" v={formatDuration(elp)} />
+            </div>
+          )}
         </div>
 
         {isCutting ? (
           <>
-            <div>
+            <div className="rounded-xl border-2 border-primary/30 bg-primary-soft/40 p-3">
               <div className="mb-2 text-xs font-bold text-foreground">Cutting Output — Standard Sizes</div>
               <div className="grid grid-cols-4 gap-2">
                 {STANDARD_SIZES.map((s) => (
                   <SizeInput key={s} label={s} value={sizes[s] ?? 0} onChange={(v) => setSize(s, v)} />
                 ))}
               </div>
-            </div>
 
-            {showSmall ? (
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-bold text-foreground">Small Sizes</span>
+              {showSmall ? (
+                <div className="mt-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground">Small Sizes</span>
+                    <button
+                      type="button"
+                      onClick={removeSmallSizes}
+                      className="text-[11px] font-bold text-muted-foreground hover:text-destructive"
+                    >
+                      ✕ Remove
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {SMALL_SIZES.map((s) => (
+                      <SizeInput key={s} label={s} value={sizes[s] ?? 0} onChange={(v) => setSize(s, v)} />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {showPlus ? (
+                <div className="mt-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground">Plus Sizes</span>
+                    <button
+                      type="button"
+                      onClick={removePlusSizes}
+                      className="text-[11px] font-bold text-muted-foreground hover:text-destructive"
+                    >
+                      ✕ Remove
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {PLUS_SIZES.map((s) => (
+                      <SizeInput key={s} label={s} value={sizes[s] ?? 0} onChange={(v) => setSize(s, v)} />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {!showSmall && (
                   <button
                     type="button"
-                    onClick={removeSmallSizes}
-                    className="text-[11px] font-bold text-muted-foreground hover:text-destructive"
+                    onClick={() => setShowSmall(true)}
+                    className="rounded-lg border border-dashed border-border bg-background px-3 py-1.5 text-xs font-bold text-muted-foreground hover:bg-accent"
                   >
-                    ✕ Remove
+                    + Add Small Sizes
                   </button>
-                </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {SMALL_SIZES.map((s) => (
-                    <SizeInput key={s} label={s} value={sizes[s] ?? 0} onChange={(v) => setSize(s, v)} />
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {showPlus ? (
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-bold text-foreground">Plus Sizes</span>
+                )}
+                {!showPlus && (
                   <button
                     type="button"
-                    onClick={removePlusSizes}
-                    className="text-[11px] font-bold text-muted-foreground hover:text-destructive"
+                    onClick={() => setShowPlus(true)}
+                    className="rounded-lg border border-dashed border-border bg-background px-3 py-1.5 text-xs font-bold text-muted-foreground hover:bg-accent"
                   >
-                    ✕ Remove
+                    + Add Plus Sizes
                   </button>
-                </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {PLUS_SIZES.map((s) => (
-                    <SizeInput key={s} label={s} value={sizes[s] ?? 0} onChange={(v) => setSize(s, v)} />
-                  ))}
-                </div>
+                )}
               </div>
-            ) : null}
-
-            <div className="flex flex-wrap gap-2">
-              {!showSmall && (
-                <button
-                  type="button"
-                  onClick={() => setShowSmall(true)}
-                  className="rounded-lg border border-dashed border-border px-3 py-1.5 text-xs font-bold text-muted-foreground hover:bg-accent"
-                >
-                  + Add Small Sizes
-                </button>
-              )}
-              {!showPlus && (
-                <button
-                  type="button"
-                  onClick={() => setShowPlus(true)}
-                  className="rounded-lg border border-dashed border-border px-3 py-1.5 text-xs font-bold text-muted-foreground hover:bg-accent"
-                >
-                  + Add Plus Sizes
-                </button>
-              )}
             </div>
 
-            <div className="rounded-xl border border-border bg-background p-3 text-xs">
-              <RowKV k="Planned / Issued Quantity" v={`${activity.issuedQty} pcs`} />
-              <RowKV k="Actual Cutting Output" v={`${totalEntered} pcs`} />
-              <RowKV k="Variance" v={hasVariance ? `${variance > 0 ? "+" : ""}${variance} pcs` : "0 pcs"} />
-              {hasVariance && (
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  {variance > 0
-                    ? "Output is higher than planned — this is allowed and becomes the new production quantity."
-                    : "Output is lower than planned. You can note why below (optional)."}
-                </p>
-              )}
+            <div className="text-xs">
+              <div className="flex items-center justify-between py-0.5">
+                <span className="text-muted-foreground">Planned Qty</span>
+                <span className="font-bold tabular-nums">{activity.issuedQty} pcs</span>
+              </div>
+              <div className="flex items-center justify-between py-0.5">
+                <span className="text-muted-foreground">Actual Output</span>
+                <span className="font-bold tabular-nums">{totalEntered} pcs</span>
+              </div>
+              <div className="flex items-center justify-between py-0.5">
+                <span className="text-muted-foreground">Variance</span>
+                <span
+                  className={cn(
+                    "font-bold tabular-nums",
+                    hasVariance && (variance > 0 ? "text-success" : "text-destructive"),
+                  )}
+                >
+                  {hasVariance ? `${variance > 0 ? "+" : ""}${variance} pcs` : "0 pcs"}
+                </span>
+              </div>
             </div>
 
             {hasVariance && (
-              <Field label="Variance Reason (optional)">
+              <Field label="Variance Reason (Optional)">
                 <textarea
                   value={varianceReason}
-                  onChange={(e) => setVarianceReason(e.target.value)}
-                  rows={2}
-                  placeholder="e.g. fabric shortage, better marker planning, wastage"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  onChange={(e) => {
+                    setVarianceReason(e.target.value);
+                    e.currentTarget.style.height = "auto";
+                    e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                  }}
+                  rows={1}
+                  placeholder="Type reason…"
+                  className="w-full resize-none overflow-hidden rounded-lg border border-border bg-background px-3 py-2 text-sm"
                 />
               </Field>
             )}
 
             <div>
-              <div className="mb-2 text-xs font-bold text-foreground">Size Set Calculation</div>
+              <div className="mb-1.5 text-xs font-bold text-foreground">Size Set Calculation</div>
               <div className="flex flex-wrap gap-1.5">
                 {SET_TEMPLATES.map((t) => (
                   <button
@@ -1630,31 +1662,41 @@ function CompleteActivityDialog({
                   </button>
                 ))}
               </div>
-              <div className="mt-2 rounded-xl border border-border bg-background p-3 text-xs">
-                <RowKV k={`Complete ${setTemplateDef.label} Sets`} v={`${completeSets} Sets`} />
-                {remainingEntries.length > 0 ? (
-                  <div className="mt-1.5">
-                    <p className="text-[11px] font-semibold text-muted-foreground">Remaining pieces</p>
-                    <p className="mt-0.5 font-mono text-[11px] font-bold text-foreground">
-                      {remainingEntries.map(([sz, qty]) => `${sz}=${qty}`).join("  ")}
-                    </p>
-                  </div>
-                ) : (
-                  totalEntered > 0 && (
-                    <p className="mt-1.5 text-[11px] text-success">No leftover pieces — a clean set split.</p>
-                  )
-                )}
-              </div>
-              <p className="mt-1.5 text-[10px] text-muted-foreground">
-                For Planning, Marketing and Sales analysis only — does not affect production quantity.
-              </p>
+              <button
+                type="button"
+                onClick={() => setBreakdownOpen((v) => !v)}
+                className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"
+              >
+                <ChevronDown className={cn("h-3 w-3 transition-transform", breakdownOpen && "rotate-180")} />
+                {breakdownOpen ? "Hide Breakdown" : "View Breakdown"}
+              </button>
+              {breakdownOpen && (
+                <div className="mt-1.5 rounded-lg border border-border bg-background p-2.5 text-xs">
+                  <RowKV k={`Complete ${setTemplateDef.label} Sets`} v={`${completeSets} Sets`} />
+                  {remainingEntries.length > 0 ? (
+                    <div className="mt-1.5">
+                      <p className="text-[11px] font-semibold text-muted-foreground">Remaining pieces</p>
+                      <p className="mt-0.5 font-mono text-[11px] font-bold text-foreground">
+                        {remainingEntries.map(([sz, qty]) => `${sz}=${qty}`).join("  ")}
+                      </p>
+                    </div>
+                  ) : (
+                    totalEntered > 0 && (
+                      <p className="mt-1.5 text-[11px] text-success">No leftover pieces — a clean set split.</p>
+                    )
+                  )}
+                  <p className="mt-1.5 text-[10px] text-muted-foreground">
+                    For Planning, Marketing and Sales analysis only — does not affect production quantity.
+                  </p>
+                </div>
+              )}
             </div>
 
             {totalEntered > 0 && (
-              <div className="rounded-xl border border-primary/30 bg-primary-soft/30 p-3 text-xs">
-                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-primary">Completion Summary</p>
+              <div className="rounded-lg border border-primary/30 bg-primary-soft/30 p-2.5 text-xs">
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-primary">Completion Summary</p>
                 <RowKV k="Planned Qty" v={`${activity.issuedQty} pcs`} />
-                <RowKV k="Actual Cutting Output" v={`${totalEntered} pcs`} />
+                <RowKV k="Actual Output" v={`${totalEntered} pcs`} />
                 <RowKV k="Variance" v={hasVariance ? `${variance > 0 ? "+" : ""}${variance} pcs` : "0 pcs"} />
                 <RowKV k="Complete Sets" v={`${completeSets}`} />
                 <RowKV
