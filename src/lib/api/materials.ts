@@ -163,10 +163,46 @@ export function useDesignMaterials(designId: string | undefined) {
   });
 }
 
+// Fetch current stock for a material. Throws if the row is missing.
+async function getStock(materialId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from("materials")
+    .select("available_stock")
+    .eq("id", materialId)
+    .single();
+  if (error) throw error;
+  return Number((data as { available_stock: number | null }).available_stock ?? 0);
+}
+
+// Apply a signed delta to inventory stock. Negative delta = deduction,
+// positive delta = restoration. Guards against negative stock.
+async function adjustStock(materialId: string, delta: number): Promise<void> {
+  if (delta === 0) return;
+  const current = await getStock(materialId);
+  const next = current + delta;
+  if (next < 0) {
+    throw new Error(
+      `Not enough stock: requested ${Math.abs(delta)} but only ${current} available.`,
+    );
+  }
+  const { error } = await supabase
+    .from("materials")
+    .update({ available_stock: next })
+    .eq("id", materialId);
+  if (error) throw error;
+}
+
 export function useAddDesignMaterial(designId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { materialId: string; groupName: string; quantity: number; rate: number }) => {
+      // Validate before insert so we never persist a selection we can't fulfil.
+      const stock = await getStock(input.materialId);
+      if (input.quantity > stock) {
+        throw new Error(
+          `Not enough stock: requested ${input.quantity} but only ${stock} available.`,
+        );
+      }
       const { error } = await supabase.from("design_materials").insert({
         design_id: designId,
         material_id: input.materialId,
@@ -175,9 +211,12 @@ export function useAddDesignMaterial(designId: string) {
         rate: input.rate,
       });
       if (error) throw error;
+      // Deduct only after the selection saved successfully.
+      await adjustStock(input.materialId, -input.quantity);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["design-materials", designId] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
     },
   });
 }
@@ -186,14 +225,56 @@ export function useUpdateDesignMaterial(designId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { id: string; quantity: number; rate?: number; materialId?: string }) => {
-      const patch: { quantity: number; rate?: number; material_id?: string } = { quantity: input.quantity };
+      // Load the previous row so we know what to restore / re-deduct.
+      const { data: prev, error: prevErr } = await supabase
+        .from("design_materials")
+        .select("material_id, quantity")
+        .eq("id", input.id)
+        .single();
+      if (prevErr) throw prevErr;
+      const prevMaterialId = (prev as { material_id: string }).material_id;
+      const prevQty = Number((prev as { quantity: number | null }).quantity ?? 0);
+      const nextMaterialId = input.materialId ?? prevMaterialId;
+      const nextQty = input.quantity;
+
+      // Validate the effective deduction against live stock before writing.
+      if (nextMaterialId === prevMaterialId) {
+        const delta = nextQty - prevQty; // positive = extra deduction needed
+        if (delta > 0) {
+          const stock = await getStock(nextMaterialId);
+          if (delta > stock) {
+            throw new Error(
+              `Not enough stock: need ${delta} more but only ${stock} available.`,
+            );
+          }
+        }
+      } else {
+        // Switching materials: full restoration on old, full deduction on new.
+        const stock = await getStock(nextMaterialId);
+        if (nextQty > stock) {
+          throw new Error(
+            `Not enough stock: requested ${nextQty} but only ${stock} available.`,
+          );
+        }
+      }
+
+      const patch: { quantity: number; rate?: number; material_id?: string } = { quantity: nextQty };
       if (typeof input.rate === "number") patch.rate = input.rate;
       if (input.materialId) patch.material_id = input.materialId;
       const { error } = await supabase.from("design_materials").update(patch).eq("id", input.id);
       if (error) throw error;
+
+      // Apply inventory adjustments after the row is saved.
+      if (nextMaterialId === prevMaterialId) {
+        await adjustStock(nextMaterialId, prevQty - nextQty); // net delta
+      } else {
+        await adjustStock(prevMaterialId, prevQty); // restore old
+        await adjustStock(nextMaterialId, -nextQty); // deduct new
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["design-materials", designId] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
     },
   });
 }
@@ -202,11 +283,25 @@ export function useRemoveDesignMaterial(designId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      // Read the row first so we know how much to restore.
+      const { data: prev, error: prevErr } = await supabase
+        .from("design_materials")
+        .select("material_id, quantity")
+        .eq("id", id)
+        .single();
+      if (prevErr) throw prevErr;
+      const materialId = (prev as { material_id: string }).material_id;
+      const qty = Number((prev as { quantity: number | null }).quantity ?? 0);
+
       const { error } = await supabase.from("design_materials").delete().eq("id", id);
       if (error) throw error;
+
+      // Return the reserved quantity to inventory.
+      await adjustStock(materialId, qty);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["design-materials", designId] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
     },
   });
 }
