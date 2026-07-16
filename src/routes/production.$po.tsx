@@ -933,6 +933,7 @@ function BulkProductionPanel({
 
   const running = activities.filter((a) => a.status === "running");
   const completed = activities.filter((a) => a.status === "completed");
+  const cuttingBundle = findCuttingBundle(activities);
 
   return (
     <div className="grid gap-4">
@@ -942,6 +943,41 @@ function BulkProductionPanel({
       >
         <PlayCircle className="h-5 w-5" /> Start Production
       </button>
+
+      {cuttingBundle && (
+        <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Cutting Bundle
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Master size breakdown — used by all downstream operations.
+              </p>
+            </div>
+            <span className="rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-bold text-success">
+              {cuttingBundle.total} pcs
+            </span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {Object.entries(cuttingBundle.bundle).map(([sz, qty]) => (
+              <div
+                key={sz}
+                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-bold"
+              >
+                <span className="text-muted-foreground">{sz}</span>{" "}
+                <span className="text-foreground">{qty}</span>
+              </div>
+            ))}
+          </div>
+          {cuttingBundle.activity.varianceReason && (
+            <p className="mt-2 text-[11px] text-warning">
+              Variance note: {cuttingBundle.activity.varianceReason}
+            </p>
+          )}
+        </div>
+      )}
+
 
       {/* Running Activities */}
       <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
