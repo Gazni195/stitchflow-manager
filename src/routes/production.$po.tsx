@@ -1703,7 +1703,13 @@ function CompleteActivityDialog({
   onClose: () => void;
 }) {
   const isCutting = activity.operationId === "cutting";
+  const issuedSizes = activity.issuedSizes ?? null;
+  const hasIssuedSizes = !isCutting && !!issuedSizes && sumSizeBreakdown(issuedSizes) > 0;
   const [returned, setReturned] = useState<number>(activity.issuedQty);
+  const [completed, setCompleted] = useState<SizeBreakdown>(() =>
+    hasIssuedSizes ? { ...(issuedSizes as SizeBreakdown) } : {},
+  );
+  const [rejectReason, setRejectReason] = useState("");
   const [sizes, setSizes] = useState<SizeBreakdown>(
     () => Object.fromEntries(STANDARD_SIZES.map((s) => [s, 0])) as SizeBreakdown,
   );
@@ -1711,6 +1717,16 @@ function CompleteActivityDialog({
   const [showPlus, setShowPlus] = useState(false);
   const [setTemplate, setSetTemplate] = useState<SetTemplateId>(DEFAULT_SET_TEMPLATE);
   const complete = useCompleteActivity(productionOrderId);
+
+  const completedTotal = sumSizeBreakdown(completed);
+  const issuedTotal = hasIssuedSizes ? sumSizeBreakdown(issuedSizes as SizeBreakdown) : activity.issuedQty;
+  const rejectedTotal = hasIssuedSizes ? Math.max(0, issuedTotal - completedTotal) : 0;
+  const overCompleted = hasIssuedSizes
+    ? Object.entries(completed).some(
+        ([sz, q]) => (q ?? 0) > ((issuedSizes as SizeBreakdown)[sz as SizeCode] ?? 0),
+      )
+    : false;
+
 
   // Actual Cutting Output is allowed to differ from (including exceed) the
   // Issued Quantity, e.g. from better marker planning or fabric
