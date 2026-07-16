@@ -181,6 +181,7 @@ export function useStartActivity(productionOrderId: string) {
       operationId: ActivityOperationId;
       assignedTo: string;
       issuedQty: number;
+      issuedSizes?: SizeBreakdown | null;
       notes?: string;
     }) => {
       const { data: userRes } = await supabase.auth.getUser();
@@ -189,6 +190,7 @@ export function useStartActivity(productionOrderId: string) {
         operation_id: v.operationId,
         assigned_to: v.assignedTo,
         issued_qty: v.issuedQty,
+        issued_sizes: v.issuedSizes ?? null,
         notes: v.notes?.trim() || null,
         status: "running",
         started_at: new Date().toISOString(),
@@ -207,6 +209,7 @@ export function useCompleteActivity(productionOrderId: string) {
       activity: ProductionActivity;
       returnedQty: number;
       sizeBreakdown?: SizeBreakdown | null;
+      completedSizes?: SizeBreakdown | null;
       varianceReason?: string | null;
     }) => {
       const end = new Date();
@@ -220,6 +223,7 @@ export function useCompleteActivity(productionOrderId: string) {
         elapsed_seconds: elapsed,
         effective_seconds: effective,
         ...(v.sizeBreakdown !== undefined ? { size_breakdown: v.sizeBreakdown as SizeBreakdown | null } : {}),
+        ...(v.completedSizes !== undefined ? { completed_sizes: v.completedSizes as SizeBreakdown | null } : {}),
         ...(v.varianceReason !== undefined ? { variance_reason: v.varianceReason?.trim() || null } : {}),
       };
       const { error } = await supabase.from("production_activities").update(patch).eq("id", v.activity.id);
