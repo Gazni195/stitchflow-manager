@@ -1491,57 +1491,113 @@ function StartActivityDialog({
   productionOrderId,
   orderQuantity,
   currentQty,
+  preselectedOperation,
+  allowOperationChange,
+  allowedOperations,
+  activities,
   onClose,
 }: {
   productionOrderId: string;
   orderQuantity: number;
   currentQty: number;
+  preselectedOperation: ActivityOperationId;
+  allowOperationChange: boolean;
+  allowedOperations?: ActivityOperationId[];
+  activities: ProductionActivity[];
   onClose: () => void;
 }) {
-  const [operationId, setOperationId] = useState<ActivityOperationId | "">("");
+  const [operationId, setOperationId] = useState<ActivityOperationId>(preselectedOperation);
   const [assignedTo, setAssignedTo] = useState("");
-  // Pre-filled with the current master production quantity (Actual Cutting
-  // Output once Cutting is done, otherwise the Planned Qty) — the operator
-  // only needs to adjust it if this activity is a partial batch, never
-  // re-enter the master quantity by hand.
-  const [issuedQty, setIssuedQty] = useState<number>(currentQty);
   const [notes, setNotes] = useState("");
   const start = useStartActivity(productionOrderId);
 
+  // Cutting uses a single Issue Qty; every other op after Cutting is
+  // size-allocated from the Cutting bundle (bundle allocation UI).
+  const isCutting = operationId === "cutting";
+  const available = !isCutting ? availableInputForOperation(operationId, activities) : null;
+  const hasSizeAllocation = !!available;
+
+  const [issuedQty, setIssuedQty] = useState<number>(currentQty);
+  // Prefill bundle allocation to the full available bundle — operator can
+  // trim individual sizes for partial batches.
+  const [sizes, setSizes] = useState<SizeBreakdown>(() =>
+    available ? { ...available.bundle } : {},
+  );
+
+  useEffect(() => {
+    if (available) setSizes({ ...available.bundle });
+    else setIssuedQty(currentQty);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [operationId]);
+
+  const sizeTotal = sumSizeBreakdown(sizes);
+  const overAllocated = available
+    ? Object.entries(sizes).some(([sz, q]) => (q ?? 0) > (available.bundle[sz as SizeCode] ?? 0))
+    : false;
+
+  function setSize(code: SizeCode, val: number) {
+    setSizes((prev) => ({ ...prev, [code]: Number.isFinite(val) && val >= 0 ? val : 0 }));
+  }
+
+  const canSubmit =
+    !!assignedTo.trim() &&
+    (hasSizeAllocation ? sizeTotal > 0 && !overAllocated : issuedQty >= 1);
+
   async function submit() {
-    if (!operationId || !assignedTo.trim() || issuedQty < 1) return;
-    await start.mutateAsync({
-      operationId,
-      assignedTo: assignedTo.trim(),
-      issuedQty,
-      notes,
-    });
+    if (!canSubmit) return;
+    if (hasSizeAllocation) {
+      const bundle: SizeBreakdown = {};
+      for (const [k, v] of Object.entries(sizes)) if ((v ?? 0) > 0) bundle[k as SizeCode] = v as number;
+      await start.mutateAsync({
+        operationId,
+        assignedTo: assignedTo.trim(),
+        issuedQty: sizeTotal,
+        issuedSizes: bundle,
+        notes,
+      });
+    } else {
+      await start.mutateAsync({
+        operationId,
+        assignedTo: assignedTo.trim(),
+        issuedQty,
+        notes,
+      });
+    }
     onClose();
   }
 
+  const opChoices = allowedOperations ?? [];
+
   return (
-    <DialogShell title="Start Production" subtitle="Log a new bulk production activity" onClose={onClose}>
+    <DialogShell
+      title={`Start ${ACTIVITY_OP_NAME[operationId]}`}
+      subtitle={hasSizeAllocation ? "Assign worker and allocate bundle by size" : "Assign worker and issue quantity"}
+      onClose={onClose}
+    >
       <div className="grid gap-4 p-5">
-        <Field label="Select Activity">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {ACTIVITY_OPERATIONS.map((op) => (
-              <button
-                key={op.id}
-                type="button"
-                onClick={() => setOperationId(op.id)}
-                className={cn(
-                  "rounded-lg border px-2 py-2 text-xs font-bold",
-                  operationId === op.id
-                    ? "border-primary bg-primary-soft text-primary"
-                    : "border-border bg-background text-foreground hover:bg-accent",
-                )}
-              >
-                {op.name}
-              </button>
-            ))}
-          </div>
-        </Field>
-        <Field label="Assign Worker / Team / Line">
+        {allowOperationChange && opChoices.length > 0 && (
+          <Field label="Additional Operation">
+            <div className="grid grid-cols-2 gap-2">
+              {opChoices.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setOperationId(id)}
+                  className={cn(
+                    "rounded-lg border px-2 py-2 text-xs font-bold",
+                    operationId === id
+                      ? "border-primary bg-primary-soft text-primary"
+                      : "border-border bg-background text-foreground hover:bg-accent",
+                  )}
+                >
+                  {ACTIVITY_OP_NAME[id]}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        <Field label="Worker / Team / Vendor">
           <input
             value={assignedTo}
             onChange={(e) => setAssignedTo(e.target.value)}
@@ -1549,22 +1605,69 @@ function StartActivityDialog({
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
           />
         </Field>
-        <Field
-          label={
-            currentQty !== orderQuantity
-              ? `Issue Quantity (Current Prod. Qty ${currentQty} pcs · Planned ${orderQuantity} pcs)`
-              : `Issue Quantity (Planned Qty ${orderQuantity} pcs)`
-          }
-        >
-          <input
-            type="number"
-            min={1}
-            value={issuedQty || ""}
-            onChange={(e) => setIssuedQty(Number(e.target.value))}
-            placeholder="e.g. 40"
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          />
-        </Field>
+
+        {hasSizeAllocation && available ? (
+          <div className="rounded-xl border-2 border-primary/30 bg-primary-soft/40 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-bold text-foreground">Bundle Allocation</span>
+              <span className="text-[11px] font-bold text-muted-foreground">
+                Available: {available.total} pcs
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {(Object.keys(available.bundle) as SizeCode[]).map((sz) => (
+                <label key={sz} className="flex flex-col gap-1">
+                  <span className="flex items-center justify-between text-[11px] font-bold text-muted-foreground">
+                    <span>{sz}</span>
+                    <span className="text-[10px] font-semibold">/{available.bundle[sz]}</span>
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={available.bundle[sz]}
+                    value={sizes[sz] ?? 0}
+                    onChange={(e) => setSize(sz, Number(e.target.value))}
+                    className={cn(
+                      "w-full rounded-lg border bg-background px-2 py-2 text-center text-sm font-semibold",
+                      (sizes[sz] ?? 0) > (available.bundle[sz] ?? 0)
+                        ? "border-destructive"
+                        : "border-border",
+                    )}
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center justify-between text-xs font-bold">
+              <span className="text-muted-foreground">Total Bundle Qty</span>
+              <span className={cn("font-mono", overAllocated ? "text-destructive" : "text-foreground")}>
+                {sizeTotal} pcs
+              </span>
+            </div>
+            {overAllocated && (
+              <p className="mt-1 text-[11px] font-semibold text-destructive">
+                Issued quantity exceeds available Cutting Output.
+              </p>
+            )}
+          </div>
+        ) : (
+          <Field
+            label={
+              currentQty !== orderQuantity
+                ? `Issue Quantity (Current Prod. Qty ${currentQty} pcs · Planned ${orderQuantity} pcs)`
+                : `Issue Quantity (Planned Qty ${orderQuantity} pcs)`
+            }
+          >
+            <input
+              type="number"
+              min={1}
+              value={issuedQty || ""}
+              onChange={(e) => setIssuedQty(Number(e.target.value))}
+              placeholder="e.g. 40"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+            />
+          </Field>
+        )}
+
         <Field label="Notes (optional)">
           <textarea
             value={notes}
@@ -1579,11 +1682,11 @@ function StartActivityDialog({
       <DialogFooter onCancel={onClose}>
         <button
           onClick={submit}
-          disabled={start.isPending || !operationId || !assignedTo.trim() || issuedQty < 1}
+          disabled={start.isPending || !canSubmit}
           className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-60"
         >
           {start.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlayCircle className="h-3.5 w-3.5" />}
-          Start Activity
+          Start {ACTIVITY_OP_NAME[operationId]}
         </button>
       </DialogFooter>
     </DialogShell>
