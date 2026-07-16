@@ -2192,12 +2192,14 @@ function SampleHeader({ design, stageIndex }: { design: Design; stageIndex: numb
   const currentIdx = Math.min(Math.max(stageIndex, 0), total - 1);
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
-      <div className="relative aspect-[16/10] w-full bg-primary-soft">
-        <DesignImage path={design.imagePath} alt={design.name} />
+    <section className="overflow-hidden rounded-3xl border border-border bg-card p-3 shadow-sm sm:p-4">
+      <div className="flex justify-center">
+        <div className="relative aspect-[4/3] w-full max-w-[280px] overflow-hidden rounded-2xl border border-border bg-primary-soft sm:max-w-[320px]">
+          <DesignImage path={design.imagePath} alt={design.name} />
+        </div>
       </div>
 
-      <div className="grid gap-4 p-3 sm:p-5">
+      <div className="mt-3 grid gap-3">
         <div className="min-w-0">
           <p className="truncate text-[11px] font-bold tracking-widest text-muted-foreground">{design.code}</p>
           <h2 className="truncate text-xl font-extrabold tracking-tight sm:text-2xl">{design.name}</h2>
