@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      design_images: {
+        Row: {
+          created_at: string
+          created_by: string
+          design_id: string
+          id: string
+          label: string
+          path: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          design_id: string
+          id?: string
+          label?: string
+          path: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          design_id?: string
+          id?: string
+          label?: string
+          path?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_images_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       design_materials: {
         Row: {
           created_at: string
