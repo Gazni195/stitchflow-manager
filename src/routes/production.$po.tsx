@@ -36,12 +36,19 @@ import {
   ACTIVITY_OPERATIONS,
   ACTIVITY_OP_NAME,
   currentProductionStage,
+  findCuttingBundle,
+  STANDARD_SIZES,
+  SMALL_SIZES,
+  PLUS_SIZES,
+  sumSizeBreakdown,
   useCancelActivity,
   useCompleteActivity,
   useProductionActivities,
   useStartActivity,
   type ActivityOperationId,
   type ProductionActivity,
+  type SizeBreakdown,
+  type SizeCode,
 } from "@/lib/api/production-activities";
 import { useDesignMaterials, type DesignMaterial } from "@/lib/api/materials";
 import {
@@ -926,6 +933,7 @@ function BulkProductionPanel({
 
   const running = activities.filter((a) => a.status === "running");
   const completed = activities.filter((a) => a.status === "completed");
+  const cuttingBundle = findCuttingBundle(activities);
 
   return (
     <div className="grid gap-4">
@@ -935,6 +943,41 @@ function BulkProductionPanel({
       >
         <PlayCircle className="h-5 w-5" /> Start Production
       </button>
+
+      {cuttingBundle && (
+        <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Cutting Bundle
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Master size breakdown — used by all downstream operations.
+              </p>
+            </div>
+            <span className="rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-bold text-success">
+              {cuttingBundle.total} pcs
+            </span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {Object.entries(cuttingBundle.bundle).map(([sz, qty]) => (
+              <div
+                key={sz}
+                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-bold"
+              >
+                <span className="text-muted-foreground">{sz}</span>{" "}
+                <span className="text-foreground">{qty}</span>
+              </div>
+            ))}
+          </div>
+          {cuttingBundle.activity.varianceReason && (
+            <p className="mt-2 text-[11px] text-warning">
+              Variance note: {cuttingBundle.activity.varianceReason}
+            </p>
+          )}
+        </div>
+      )}
+
 
       {/* Running Activities */}
       <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
@@ -1360,15 +1403,47 @@ function CompleteActivityDialog({
   productionOrderId: string;
   onClose: () => void;
 }) {
+  const isCutting = activity.operationId === "cutting";
   const [returned, setReturned] = useState<number>(activity.issuedQty);
+  const [sizes, setSizes] = useState<SizeBreakdown>(() =>
+    Object.fromEntries(STANDARD_SIZES.map((s) => [s, 0])) as SizeBreakdown,
+  );
+  const [showSmall, setShowSmall] = useState(false);
+  const [showPlus, setShowPlus] = useState(false);
+  const [varianceReason, setVarianceReason] = useState("");
   const complete = useCompleteActivity(productionOrderId);
   const now = new Date();
   const start = new Date(activity.startedAt);
   const eff = effectiveWorkingSeconds(start, now);
   const elp = elapsedSeconds(start, now);
 
+  const totalEntered = isCutting ? sumSizeBreakdown(sizes) : 0;
+  const variance = isCutting ? totalEntered - activity.issuedQty : 0;
+  const hasVariance = isCutting && variance !== 0;
+  const canSubmitCutting =
+    isCutting && totalEntered > 0 && (!hasVariance || varianceReason.trim().length > 0);
+
+  function setSize(code: SizeCode, val: number) {
+    setSizes((prev) => ({ ...prev, [code]: Number.isFinite(val) && val >= 0 ? val : 0 }));
+  }
+
   async function submit() {
-    await complete.mutateAsync({ activity, returnedQty: returned });
+    if (isCutting) {
+      if (!canSubmitCutting) return;
+      // Strip zero entries for a clean bundle.
+      const bundle: SizeBreakdown = {};
+      for (const [k, v] of Object.entries(sizes)) {
+        if ((v ?? 0) > 0) bundle[k as SizeCode] = v as number;
+      }
+      await complete.mutateAsync({
+        activity,
+        returnedQty: totalEntered,
+        sizeBreakdown: bundle,
+        varianceReason: hasVariance ? varianceReason : null,
+      });
+    } else {
+      await complete.mutateAsync({ activity, returnedQty: returned });
+    }
     onClose();
   }
 
@@ -1383,15 +1458,95 @@ function CompleteActivityDialog({
           <RowKV k="Elapsed" v={formatDuration(elp)} />
           <RowKV k="Effective Working" v={formatDuration(eff)} />
         </div>
-        <Field label="Return Quantity">
-          <input
-            type="number"
-            min={0}
-            value={returned}
-            onChange={(e) => setReturned(Number(e.target.value))}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          />
-        </Field>
+
+        {isCutting ? (
+          <>
+            <div>
+              <div className="mb-2 text-xs font-bold text-foreground">Cutting Output — Standard Sizes</div>
+              <div className="grid grid-cols-4 gap-2">
+                {STANDARD_SIZES.map((s) => (
+                  <SizeInput key={s} label={s} value={sizes[s] ?? 0} onChange={(v) => setSize(s, v)} />
+                ))}
+              </div>
+            </div>
+
+            {showSmall ? (
+              <div>
+                <div className="mb-2 text-xs font-bold text-foreground">Small Sizes</div>
+                <div className="grid grid-cols-4 gap-2">
+                  {SMALL_SIZES.map((s) => (
+                    <SizeInput key={s} label={s} value={sizes[s] ?? 0} onChange={(v) => setSize(s, v)} />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {showPlus ? (
+              <div>
+                <div className="mb-2 text-xs font-bold text-foreground">Plus Sizes</div>
+                <div className="grid grid-cols-4 gap-2">
+                  {PLUS_SIZES.map((s) => (
+                    <SizeInput key={s} label={s} value={sizes[s] ?? 0} onChange={(v) => setSize(s, v)} />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap gap-2">
+              {!showSmall && (
+                <button
+                  type="button"
+                  onClick={() => setShowSmall(true)}
+                  className="rounded-lg border border-dashed border-border px-3 py-1.5 text-xs font-bold text-muted-foreground hover:bg-accent"
+                >
+                  + Add Small
+                </button>
+              )}
+              {!showPlus && (
+                <button
+                  type="button"
+                  onClick={() => setShowPlus(true)}
+                  className="rounded-lg border border-dashed border-border px-3 py-1.5 text-xs font-bold text-muted-foreground hover:bg-accent"
+                >
+                  + Add Plus Sizes
+                </button>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-border bg-background p-3 text-xs">
+              <RowKV k="Issued Quantity" v={`${activity.issuedQty} pcs`} />
+              <RowKV k="Total Entered" v={`${totalEntered} pcs`} />
+              {hasVariance && (
+                <div className="mt-2 rounded-lg bg-warning/10 p-2 text-[11px] font-semibold text-warning">
+                  Variance: {variance > 0 ? `+${variance}` : variance} pcs — please enter a reason below.
+                </div>
+              )}
+            </div>
+
+            {hasVariance && (
+              <Field label="Variance Reason">
+                <textarea
+                  value={varianceReason}
+                  onChange={(e) => setVarianceReason(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. fabric shortage, wastage, mismatch"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
+              </Field>
+            )}
+          </>
+        ) : (
+          <Field label="Return Quantity">
+            <input
+              type="number"
+              min={0}
+              value={returned}
+              onChange={(e) => setReturned(Number(e.target.value))}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+            />
+          </Field>
+        )}
+
         <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
           <Coffee className="h-3 w-3" /> Break windows and non-working hours are excluded automatically.
         </p>
@@ -1400,7 +1555,7 @@ function CompleteActivityDialog({
       <DialogFooter onCancel={onClose}>
         <button
           onClick={submit}
-          disabled={complete.isPending}
+          disabled={complete.isPending || (isCutting && !canSubmitCutting)}
           className="inline-flex items-center gap-1.5 rounded-lg bg-success px-4 py-2 text-xs font-bold text-success-foreground hover:opacity-90 disabled:opacity-60"
         >
           {complete.isPending ? (
@@ -1412,6 +1567,30 @@ function CompleteActivityDialog({
         </button>
       </DialogFooter>
     </DialogShell>
+  );
+}
+
+function SizeInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[11px] font-bold text-muted-foreground">{label}</span>
+      <input
+        type="number"
+        min={0}
+        value={value || ""}
+        onChange={(e) => onChange(Number(e.target.value))}
+        placeholder="0"
+        className="w-full rounded-lg border border-border bg-background px-2 py-2 text-center text-sm font-semibold"
+      />
+    </label>
   );
 }
 

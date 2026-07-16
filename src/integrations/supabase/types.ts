@@ -234,9 +234,11 @@ export type Database = {
           operation_id: string
           production_order_id: string
           returned_qty: number | null
+          size_breakdown: Json | null
           started_at: string
           status: string
           updated_at: string
+          variance_reason: string | null
         }
         Insert: {
           assigned_to: string
@@ -251,9 +253,11 @@ export type Database = {
           operation_id: string
           production_order_id: string
           returned_qty?: number | null
+          size_breakdown?: Json | null
           started_at?: string
           status?: string
           updated_at?: string
+          variance_reason?: string | null
         }
         Update: {
           assigned_to?: string
@@ -268,9 +272,11 @@ export type Database = {
           operation_id?: string
           production_order_id?: string
           returned_qty?: number | null
+          size_breakdown?: Json | null
           started_at?: string
           status?: string
           updated_at?: string
+          variance_reason?: string | null
         }
         Relationships: [
           {

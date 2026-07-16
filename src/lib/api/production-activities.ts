@@ -38,6 +38,18 @@ export const ACTIVITY_OP_NAME: Record<ActivityOperationId, string> = Object.from
 
 export type ActivityStatus = "running" | "completed" | "cancelled";
 
+export type SizeCode = "S" | "M" | "L" | "XL" | "XXL" | "XXXL" | "4XL" | "5XL";
+export const STANDARD_SIZES: SizeCode[] = ["M", "L", "XL", "XXL"];
+export const SMALL_SIZES: SizeCode[] = ["S"];
+export const PLUS_SIZES: SizeCode[] = ["XXXL", "4XL", "5XL"];
+export const ALL_SIZES: SizeCode[] = ["S", "M", "L", "XL", "XXL", "XXXL", "4XL", "5XL"];
+export type SizeBreakdown = Partial<Record<SizeCode, number>>;
+
+export function sumSizeBreakdown(b: SizeBreakdown | null | undefined): number {
+  if (!b) return 0;
+  return Object.values(b).reduce((s, v) => s + (Number(v) || 0), 0);
+}
+
 export type ProductionActivity = {
   id: string;
   productionOrderId: string;
@@ -51,6 +63,8 @@ export type ProductionActivity = {
   completedAt: string | null;
   elapsedSeconds: number | null;
   effectiveSeconds: number | null;
+  sizeBreakdown: SizeBreakdown | null;
+  varianceReason: string | null;
 };
 
 type DbRow = {
@@ -66,6 +80,8 @@ type DbRow = {
   completed_at: string | null;
   elapsed_seconds: number | null;
   effective_seconds: number | null;
+  size_breakdown: SizeBreakdown | null;
+  variance_reason: string | null;
 };
 
 function mapRow(r: DbRow): ProductionActivity {
@@ -82,7 +98,24 @@ function mapRow(r: DbRow): ProductionActivity {
     completedAt: r.completed_at,
     elapsedSeconds: r.elapsed_seconds,
     effectiveSeconds: r.effective_seconds,
+    sizeBreakdown: r.size_breakdown ?? null,
+    varianceReason: r.variance_reason ?? null,
   };
+}
+
+// Latest completed Cutting activity for a PO = master size bundle.
+export function findCuttingBundle(activities: ProductionActivity[] | undefined): {
+  activity: ProductionActivity;
+  bundle: SizeBreakdown;
+  total: number;
+} | null {
+  if (!activities?.length) return null;
+  const completed = activities
+    .filter((a) => a.operationId === "cutting" && a.status === "completed" && a.sizeBreakdown)
+    .sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
+  const top = completed[0];
+  if (!top || !top.sizeBreakdown) return null;
+  return { activity: top, bundle: top.sizeBreakdown, total: sumSizeBreakdown(top.sizeBreakdown) };
 }
 
 export function useProductionActivities(productionOrderId: string | undefined) {
@@ -130,20 +163,28 @@ export function useStartActivity(productionOrderId: string) {
 export function useCompleteActivity(productionOrderId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (v: { activity: ProductionActivity; returnedQty: number }) => {
+    mutationFn: async (v: {
+      activity: ProductionActivity;
+      returnedQty: number;
+      sizeBreakdown?: SizeBreakdown | null;
+      varianceReason?: string | null;
+    }) => {
       const end = new Date();
       const start = new Date(v.activity.startedAt);
       const elapsed = elapsedSeconds(start, end);
       const effective = effectiveWorkingSeconds(start, end, DEFAULT_FACTORY_CALENDAR);
+      const patch = {
+        status: "completed" as const,
+        completed_at: end.toISOString(),
+        returned_qty: v.returnedQty,
+        elapsed_seconds: elapsed,
+        effective_seconds: effective,
+        ...(v.sizeBreakdown !== undefined ? { size_breakdown: v.sizeBreakdown as SizeBreakdown | null } : {}),
+        ...(v.varianceReason !== undefined ? { variance_reason: v.varianceReason?.trim() || null } : {}),
+      };
       const { error } = await supabase
         .from("production_activities")
-        .update({
-          status: "completed",
-          completed_at: end.toISOString(),
-          returned_qty: v.returnedQty,
-          elapsed_seconds: elapsed,
-          effective_seconds: effective,
-        })
+        .update(patch)
         .eq("id", v.activity.id);
       if (error) throw error;
     },
