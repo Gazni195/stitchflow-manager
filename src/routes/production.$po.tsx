@@ -36,12 +36,19 @@ import {
   ACTIVITY_OPERATIONS,
   ACTIVITY_OP_NAME,
   currentProductionStage,
+  findCuttingBundle,
+  STANDARD_SIZES,
+  SMALL_SIZES,
+  PLUS_SIZES,
+  sumSizeBreakdown,
   useCancelActivity,
   useCompleteActivity,
   useProductionActivities,
   useStartActivity,
   type ActivityOperationId,
   type ProductionActivity,
+  type SizeBreakdown,
+  type SizeCode,
 } from "@/lib/api/production-activities";
 import { useDesignMaterials, type DesignMaterial } from "@/lib/api/materials";
 import {
