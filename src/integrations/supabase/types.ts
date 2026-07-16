@@ -265,12 +265,14 @@ export type Database = {
         Row: {
           assigned_to: string
           completed_at: string | null
+          completed_sizes: Json | null
           created_at: string
           created_by: string | null
           effective_seconds: number | null
           elapsed_seconds: number | null
           id: string
           issued_qty: number
+          issued_sizes: Json | null
           notes: string | null
           operation_id: string
           production_order_id: string
@@ -284,12 +286,14 @@ export type Database = {
         Insert: {
           assigned_to: string
           completed_at?: string | null
+          completed_sizes?: Json | null
           created_at?: string
           created_by?: string | null
           effective_seconds?: number | null
           elapsed_seconds?: number | null
           id?: string
           issued_qty: number
+          issued_sizes?: Json | null
           notes?: string | null
           operation_id: string
           production_order_id: string
@@ -303,12 +307,14 @@ export type Database = {
         Update: {
           assigned_to?: string
           completed_at?: string | null
+          completed_sizes?: Json | null
           created_at?: string
           created_by?: string | null
           effective_seconds?: number | null
           elapsed_seconds?: number | null
           id?: string
           issued_qty?: number
+          issued_sizes?: Json | null
           notes?: string | null
           operation_id?: string
           production_order_id?: string
