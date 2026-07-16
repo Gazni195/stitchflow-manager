@@ -60,6 +60,8 @@ export type ProductionActivity = {
   elapsedSeconds: number | null;
   effectiveSeconds: number | null;
   sizeBreakdown: SizeBreakdown | null;
+  issuedSizes: SizeBreakdown | null;
+  completedSizes: SizeBreakdown | null;
   varianceReason: string | null;
 };
 
@@ -77,6 +79,8 @@ type DbRow = {
   elapsed_seconds: number | null;
   effective_seconds: number | null;
   size_breakdown: SizeBreakdown | null;
+  issued_sizes: SizeBreakdown | null;
+  completed_sizes: SizeBreakdown | null;
   variance_reason: string | null;
 };
 
