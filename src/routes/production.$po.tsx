@@ -35,8 +35,12 @@ import { PRODUCTION_LINES, slugForLine } from "@/lib/lines";
 import {
   ACTIVITY_OPERATIONS,
   ACTIVITY_OP_NAME,
+  computeSizeSets,
+  currentProductionQuantity,
   currentProductionStage,
+  DEFAULT_SET_TEMPLATE,
   findCuttingBundle,
+  SET_TEMPLATES,
   STANDARD_SIZES,
   SMALL_SIZES,
   PLUS_SIZES,
@@ -49,6 +53,7 @@ import {
   type ProductionActivity,
   type SizeBreakdown,
   type SizeCode,
+  type SetTemplateId,
 } from "@/lib/api/production-activities";
 import { useDesignMaterials, type DesignMaterial } from "@/lib/api/materials";
 import {
@@ -193,6 +198,8 @@ function ProductionHeader({
   const { data: activities = [] } = useProductionActivities(order.id);
   const stage = currentProductionStage(activities);
   const pct = computeProgress(order.processes);
+  const cuttingBundle = findCuttingBundle(activities);
+  const currentQty = currentProductionQuantity(order.orderQuantity, activities);
 
   return (
     <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
@@ -210,15 +217,15 @@ function ProductionHeader({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Fact label="Order Qty" value={`${order.orderQuantity.toLocaleString()} Pcs`} />
+        <div className={cn("grid grid-cols-2 gap-2", cuttingBundle ? "sm:grid-cols-5" : "sm:grid-cols-4")}>
+          <Fact label="Planned Qty" value={`${order.orderQuantity.toLocaleString()} Pcs`} />
+          {cuttingBundle && <Fact label="Current Prod. Qty" value={`${currentQty.toLocaleString()} Pcs`} />}
           <Fact label="Current Stage" value={stage.label} />
           <Fact label="Progress" value={`${pct}%`} />
           <FactoryStatusFact />
         </div>
 
         <AssignedLineRow order={order} />
-
 
         <div className="min-w-0 rounded-2xl border border-border bg-background p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2">
@@ -319,11 +326,7 @@ function FactoryStatusFact() {
 
 /* ---------- Assigned Line row (view + change) ---------- */
 
-function AssignedLineRow({
-  order,
-}: {
-  order: NonNullable<ReturnType<typeof useProductionOrder>["data"]>;
-}) {
+function AssignedLineRow({ order }: { order: NonNullable<ReturnType<typeof useProductionOrder>["data"]> }) {
   const [editing, setEditing] = useState(false);
   const [line, setLine] = useState<string>(order.assignedLine ?? "");
   const assign = useAssignLine();
@@ -374,7 +377,9 @@ function AssignedLineRow({
             >
               <option value="">Select…</option>
               {PRODUCTION_LINES.map((l) => (
-                <option key={l.slug} value={l.name}>{l.name}</option>
+                <option key={l.slug} value={l.name}>
+                  {l.name}
+                </option>
               ))}
             </select>
             <button
@@ -385,7 +390,10 @@ function AssignedLineRow({
               {assign.isPending ? "Saving…" : "Save"}
             </button>
             <button
-              onClick={() => { setEditing(false); setLine(order.assignedLine ?? ""); }}
+              onClick={() => {
+                setEditing(false);
+                setLine(order.assignedLine ?? "");
+              }}
               className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-bold hover:bg-accent"
             >
               Cancel
@@ -396,7 +404,6 @@ function AssignedLineRow({
     </div>
   );
 }
-
 
 /* ---------- Materials tab: Bulk Requirement (per-piece × order qty, merged) ---------- */
 
@@ -934,6 +941,7 @@ function BulkProductionPanel({
   const running = activities.filter((a) => a.status === "running");
   const completed = activities.filter((a) => a.status === "completed");
   const cuttingBundle = findCuttingBundle(activities);
+  const currentQty = currentProductionQuantity(orderQuantity, activities);
 
   return (
     <div className="grid gap-4">
@@ -949,10 +957,10 @@ function BulkProductionPanel({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Cutting Bundle
+                Cutting Bundle · Master Production Qty
               </p>
               <p className="text-[11px] text-muted-foreground">
-                Master size breakdown — used by all downstream operations.
+                Actual Cutting Output — every remaining operation now uses this quantity automatically.
               </p>
             </div>
             <span className="rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-bold text-success">
@@ -961,23 +969,25 @@ function BulkProductionPanel({
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {Object.entries(cuttingBundle.bundle).map(([sz, qty]) => (
-              <div
-                key={sz}
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-bold"
-              >
-                <span className="text-muted-foreground">{sz}</span>{" "}
-                <span className="text-foreground">{qty}</span>
+              <div key={sz} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-bold">
+                <span className="text-muted-foreground">{sz}</span> <span className="text-foreground">{qty}</span>
               </div>
             ))}
           </div>
-          {cuttingBundle.activity.varianceReason && (
-            <p className="mt-2 text-[11px] text-warning">
-              Variance note: {cuttingBundle.activity.varianceReason}
+          {cuttingBundle.total !== orderQuantity && (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Planned Qty was {orderQuantity} pcs · Variance{" "}
+              <span className={cn("font-bold", cuttingBundle.total > orderQuantity ? "text-success" : "text-warning")}>
+                {cuttingBundle.total > orderQuantity ? "+" : ""}
+                {cuttingBundle.total - orderQuantity} pcs
+              </span>
             </p>
+          )}
+          {cuttingBundle.activity.varianceReason && (
+            <p className="mt-2 text-[11px] text-warning">Variance note: {cuttingBundle.activity.varianceReason}</p>
           )}
         </div>
       )}
-
 
       {/* Running Activities */}
       <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
@@ -1039,6 +1049,7 @@ function BulkProductionPanel({
         <StartActivityDialog
           productionOrderId={productionOrderId}
           orderQuantity={orderQuantity}
+          currentQty={currentQty}
           onClose={() => setStartOpen(false)}
         />
       )}
@@ -1174,6 +1185,8 @@ function CompletedActivityRow({ activity }: { activity: ProductionActivity }) {
 function SummaryPanel({ productionOrderId, orderQuantity }: { productionOrderId: string; orderQuantity: number }) {
   const { data: activities = [], isLoading } = useProductionActivities(productionOrderId);
   const completed = activities.filter((a) => a.status === "completed");
+  const cuttingBundle = findCuttingBundle(activities);
+  const currentQty = currentProductionQuantity(orderQuantity, activities);
 
   const totalIssued = activities.reduce((s, a) => s + a.issuedQty, 0);
   const totalReturned = completed.reduce((s, a) => s + (a.returnedQty ?? 0), 0);
@@ -1199,8 +1212,11 @@ function SummaryPanel({ productionOrderId, orderQuantity }: { productionOrderId:
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-3 sm:grid-cols-4">
-        <SummaryCard label="Order Qty" value={`${orderQuantity} pcs`} />
+      <div className={cn("grid gap-3", cuttingBundle ? "sm:grid-cols-5" : "sm:grid-cols-4")}>
+        <SummaryCard label="Planned Qty" value={`${orderQuantity} pcs`} />
+        {cuttingBundle && (
+          <SummaryCard label="Current Prod. Qty" value={`${currentQty} pcs`} subtitle="From Actual Cutting Output" />
+        )}
         <SummaryCard label="Issued" value={`${totalIssued} pcs`} />
         <SummaryCard label="Returned" value={`${totalReturned} pcs`} />
         <SummaryCard
@@ -1306,15 +1322,21 @@ function SummaryCard({ label, value, subtitle }: { label: string; value: string;
 function StartActivityDialog({
   productionOrderId,
   orderQuantity,
+  currentQty,
   onClose,
 }: {
   productionOrderId: string;
   orderQuantity: number;
+  currentQty: number;
   onClose: () => void;
 }) {
   const [operationId, setOperationId] = useState<ActivityOperationId | "">("");
   const [assignedTo, setAssignedTo] = useState("");
-  const [issuedQty, setIssuedQty] = useState<number>(0);
+  // Pre-filled with the current master production quantity (Actual Cutting
+  // Output once Cutting is done, otherwise the Planned Qty) — the operator
+  // only needs to adjust it if this activity is a partial batch, never
+  // re-enter the master quantity by hand.
+  const [issuedQty, setIssuedQty] = useState<number>(currentQty);
   const [notes, setNotes] = useState("");
   const start = useStartActivity(productionOrderId);
 
@@ -1359,7 +1381,13 @@ function StartActivityDialog({
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
           />
         </Field>
-        <Field label={`Issue Quantity (Order ${orderQuantity} pcs)`}>
+        <Field
+          label={
+            currentQty !== orderQuantity
+              ? `Issue Quantity (Current Prod. Qty ${currentQty} pcs · Planned ${orderQuantity} pcs)`
+              : `Issue Quantity (Planned Qty ${orderQuantity} pcs)`
+          }
+        >
           <input
             type="number"
             min={1}
@@ -1405,26 +1433,53 @@ function CompleteActivityDialog({
 }) {
   const isCutting = activity.operationId === "cutting";
   const [returned, setReturned] = useState<number>(activity.issuedQty);
-  const [sizes, setSizes] = useState<SizeBreakdown>(() =>
-    Object.fromEntries(STANDARD_SIZES.map((s) => [s, 0])) as SizeBreakdown,
+  const [sizes, setSizes] = useState<SizeBreakdown>(
+    () => Object.fromEntries(STANDARD_SIZES.map((s) => [s, 0])) as SizeBreakdown,
   );
   const [showSmall, setShowSmall] = useState(false);
   const [showPlus, setShowPlus] = useState(false);
   const [varianceReason, setVarianceReason] = useState("");
+  const [setTemplate, setSetTemplate] = useState<SetTemplateId>(DEFAULT_SET_TEMPLATE);
   const complete = useCompleteActivity(productionOrderId);
   const now = new Date();
   const start = new Date(activity.startedAt);
   const eff = effectiveWorkingSeconds(start, now);
   const elp = elapsedSeconds(start, now);
 
+  // Actual Cutting Output is the real production result — it is allowed to
+  // differ from (including exceed) the Planned / Issued Quantity, e.g. from
+  // better marker planning or fabric utilization. Confirming never requires
+  // the two to match; the reason field below is optional context, not a gate.
   const totalEntered = isCutting ? sumSizeBreakdown(sizes) : 0;
   const variance = isCutting ? totalEntered - activity.issuedQty : 0;
   const hasVariance = isCutting && variance !== 0;
-  const canSubmitCutting =
-    isCutting && totalEntered > 0 && (!hasVariance || varianceReason.trim().length > 0);
+  const canSubmitCutting = isCutting && totalEntered > 0;
+
+  const setTemplateDef = SET_TEMPLATES.find((t) => t.id === setTemplate) ?? SET_TEMPLATES[0];
+  const { completeSets, remaining } = computeSizeSets(sizes, setTemplateDef.sizes);
+  const remainingEntries = Object.entries(remaining) as [SizeCode, number][];
 
   function setSize(code: SizeCode, val: number) {
     setSizes((prev) => ({ ...prev, [code]: Number.isFinite(val) && val >= 0 ? val : 0 }));
+  }
+
+  // Hiding a size group also clears its values, so a collapsed group never
+  // silently keeps contributing to the total.
+  function removeSmallSizes() {
+    setShowSmall(false);
+    setSizes((prev) => {
+      const next = { ...prev };
+      for (const s of SMALL_SIZES) delete next[s];
+      return next;
+    });
+  }
+  function removePlusSizes() {
+    setShowPlus(false);
+    setSizes((prev) => {
+      const next = { ...prev };
+      for (const s of PLUS_SIZES) delete next[s];
+      return next;
+    });
   }
 
   async function submit() {
@@ -1472,7 +1527,16 @@ function CompleteActivityDialog({
 
             {showSmall ? (
               <div>
-                <div className="mb-2 text-xs font-bold text-foreground">Small Sizes</div>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground">Small Sizes</span>
+                  <button
+                    type="button"
+                    onClick={removeSmallSizes}
+                    className="text-[11px] font-bold text-muted-foreground hover:text-destructive"
+                  >
+                    ✕ Remove
+                  </button>
+                </div>
                 <div className="grid grid-cols-4 gap-2">
                   {SMALL_SIZES.map((s) => (
                     <SizeInput key={s} label={s} value={sizes[s] ?? 0} onChange={(v) => setSize(s, v)} />
@@ -1483,7 +1547,16 @@ function CompleteActivityDialog({
 
             {showPlus ? (
               <div>
-                <div className="mb-2 text-xs font-bold text-foreground">Plus Sizes</div>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground">Plus Sizes</span>
+                  <button
+                    type="button"
+                    onClick={removePlusSizes}
+                    className="text-[11px] font-bold text-muted-foreground hover:text-destructive"
+                  >
+                    ✕ Remove
+                  </button>
+                </div>
                 <div className="grid grid-cols-4 gap-2">
                   {PLUS_SIZES.map((s) => (
                     <SizeInput key={s} label={s} value={sizes[s] ?? 0} onChange={(v) => setSize(s, v)} />
@@ -1499,7 +1572,7 @@ function CompleteActivityDialog({
                   onClick={() => setShowSmall(true)}
                   className="rounded-lg border border-dashed border-border px-3 py-1.5 text-xs font-bold text-muted-foreground hover:bg-accent"
                 >
-                  + Add Small
+                  + Add Small Sizes
                 </button>
               )}
               {!showPlus && (
@@ -1514,25 +1587,85 @@ function CompleteActivityDialog({
             </div>
 
             <div className="rounded-xl border border-border bg-background p-3 text-xs">
-              <RowKV k="Issued Quantity" v={`${activity.issuedQty} pcs`} />
-              <RowKV k="Total Entered" v={`${totalEntered} pcs`} />
+              <RowKV k="Planned / Issued Quantity" v={`${activity.issuedQty} pcs`} />
+              <RowKV k="Actual Cutting Output" v={`${totalEntered} pcs`} />
+              <RowKV k="Variance" v={hasVariance ? `${variance > 0 ? "+" : ""}${variance} pcs` : "0 pcs"} />
               {hasVariance && (
-                <div className="mt-2 rounded-lg bg-warning/10 p-2 text-[11px] font-semibold text-warning">
-                  Variance: {variance > 0 ? `+${variance}` : variance} pcs — please enter a reason below.
-                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  {variance > 0
+                    ? "Output is higher than planned — this is allowed and becomes the new production quantity."
+                    : "Output is lower than planned. You can note why below (optional)."}
+                </p>
               )}
             </div>
 
             {hasVariance && (
-              <Field label="Variance Reason">
+              <Field label="Variance Reason (optional)">
                 <textarea
                   value={varianceReason}
                   onChange={(e) => setVarianceReason(e.target.value)}
                   rows={2}
-                  placeholder="e.g. fabric shortage, wastage, mismatch"
+                  placeholder="e.g. fabric shortage, better marker planning, wastage"
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
                 />
               </Field>
+            )}
+
+            <div>
+              <div className="mb-2 text-xs font-bold text-foreground">Size Set Calculation</div>
+              <div className="flex flex-wrap gap-1.5">
+                {SET_TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setSetTemplate(t.id)}
+                    className={cn(
+                      "rounded-lg border px-2.5 py-1.5 text-[11px] font-bold",
+                      setTemplate === t.id
+                        ? "border-primary bg-primary-soft text-primary"
+                        : "border-border bg-background text-muted-foreground hover:bg-accent",
+                    )}
+                  >
+                    {setTemplate === t.id ? "✓" : "☐"} {t.label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 rounded-xl border border-border bg-background p-3 text-xs">
+                <RowKV k={`Complete ${setTemplateDef.label} Sets`} v={`${completeSets} Sets`} />
+                {remainingEntries.length > 0 ? (
+                  <div className="mt-1.5">
+                    <p className="text-[11px] font-semibold text-muted-foreground">Remaining pieces</p>
+                    <p className="mt-0.5 font-mono text-[11px] font-bold text-foreground">
+                      {remainingEntries.map(([sz, qty]) => `${sz}=${qty}`).join("  ")}
+                    </p>
+                  </div>
+                ) : (
+                  totalEntered > 0 && (
+                    <p className="mt-1.5 text-[11px] text-success">No leftover pieces — a clean set split.</p>
+                  )
+                )}
+              </div>
+              <p className="mt-1.5 text-[10px] text-muted-foreground">
+                For Planning, Marketing and Sales analysis only — does not affect production quantity.
+              </p>
+            </div>
+
+            {totalEntered > 0 && (
+              <div className="rounded-xl border border-primary/30 bg-primary-soft/30 p-3 text-xs">
+                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-primary">Completion Summary</p>
+                <RowKV k="Planned Qty" v={`${activity.issuedQty} pcs`} />
+                <RowKV k="Actual Cutting Output" v={`${totalEntered} pcs`} />
+                <RowKV k="Variance" v={hasVariance ? `${variance > 0 ? "+" : ""}${variance} pcs` : "0 pcs"} />
+                <RowKV k="Complete Sets" v={`${completeSets}`} />
+                <RowKV
+                  k="Remaining Pieces"
+                  v={
+                    remainingEntries.length > 0
+                      ? remainingEntries.map(([sz, qty]) => `${sz}=${qty}`).join(", ")
+                      : "None"
+                  }
+                />
+              </div>
             )}
           </>
         ) : (
@@ -1570,15 +1703,7 @@ function CompleteActivityDialog({
   );
 }
 
-function SizeInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-}) {
+function SizeInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   return (
     <label className="flex flex-col gap-1">
       <span className="text-[11px] font-bold text-muted-foreground">{label}</span>
