@@ -38,6 +38,18 @@ export const ACTIVITY_OP_NAME: Record<ActivityOperationId, string> = Object.from
 
 export type ActivityStatus = "running" | "completed" | "cancelled";
 
+export type SizeCode = "S" | "M" | "L" | "XL" | "XXL" | "XXXL" | "4XL" | "5XL";
+export const STANDARD_SIZES: SizeCode[] = ["M", "L", "XL", "XXL"];
+export const SMALL_SIZES: SizeCode[] = ["S"];
+export const PLUS_SIZES: SizeCode[] = ["XXXL", "4XL", "5XL"];
+export const ALL_SIZES: SizeCode[] = ["S", "M", "L", "XL", "XXL", "XXXL", "4XL", "5XL"];
+export type SizeBreakdown = Partial<Record<SizeCode, number>>;
+
+export function sumSizeBreakdown(b: SizeBreakdown | null | undefined): number {
+  if (!b) return 0;
+  return Object.values(b).reduce((s, v) => s + (Number(v) || 0), 0);
+}
+
 export type ProductionActivity = {
   id: string;
   productionOrderId: string;
@@ -51,6 +63,8 @@ export type ProductionActivity = {
   completedAt: string | null;
   elapsedSeconds: number | null;
   effectiveSeconds: number | null;
+  sizeBreakdown: SizeBreakdown | null;
+  varianceReason: string | null;
 };
 
 type DbRow = {
@@ -66,6 +80,8 @@ type DbRow = {
   completed_at: string | null;
   elapsed_seconds: number | null;
   effective_seconds: number | null;
+  size_breakdown: SizeBreakdown | null;
+  variance_reason: string | null;
 };
 
 function mapRow(r: DbRow): ProductionActivity {
