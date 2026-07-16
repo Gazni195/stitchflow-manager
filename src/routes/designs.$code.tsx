@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   CalendarDays,
@@ -434,22 +435,51 @@ function DesignImageGallery({
   }
 
   async function handleAddFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
+    console.log("[DesignImages] onChange fired, files:", files);
+    if (!files || files.length === 0) {
+      console.warn("[DesignImages] No files selected");
+      return;
+    }
     const label = addLabel === "Other" && customLabel.trim() ? customLabel.trim() : addLabel;
-    await addImages.mutateAsync({ files: Array.from(files), label, startSortOrder: images.length });
-    setShowAdd(false);
-    setCustomLabel("");
+    const fileArr = Array.from(files);
+    console.log("[DesignImages] Uploading", fileArr.length, "file(s), label:", label, fileArr);
+    try {
+      await addImages.mutateAsync({ files: fileArr, label, startSortOrder: images.length });
+      console.log("[DesignImages] Upload complete");
+      toast.success(`Uploaded ${fileArr.length} image${fileArr.length > 1 ? "s" : ""}`);
+      setShowAdd(false);
+      setCustomLabel("");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[DesignImages] Upload failed:", err);
+      toast.error(`Upload failed: ${msg}`);
+    }
   }
 
   async function handleReplaceFile(files: FileList | null) {
+    console.log("[DesignImages] Replace onChange, files:", files);
     if (!files || files.length === 0 || !active) return;
-    await replaceImage.mutateAsync({ id: active.id, oldPath: active.path, file: files[0] });
+    try {
+      await replaceImage.mutateAsync({ id: active.id, oldPath: active.path, file: files[0] });
+      toast.success("Image replaced");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[DesignImages] Replace failed:", err);
+      toast.error(`Replace failed: ${msg}`);
+    }
   }
 
   async function handleDelete() {
     if (!active) return;
     if (!window.confirm(`Delete this image (${active.label})? This cannot be undone.`)) return;
-    await deleteImage.mutateAsync({ id: active.id, path: active.path });
+    try {
+      await deleteImage.mutateAsync({ id: active.id, path: active.path });
+      toast.success("Image deleted");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[DesignImages] Delete failed:", err);
+      toast.error(`Delete failed: ${msg}`);
+    }
   }
 
   const busy = addImages.isPending || replaceImage.isPending || deleteImage.isPending;
