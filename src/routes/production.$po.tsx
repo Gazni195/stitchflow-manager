@@ -933,8 +933,10 @@ function BulkProductionPanel({
   onContinue: () => void;
 }) {
   const { data: activities = [], isLoading } = useProductionActivities(productionOrderId);
-  const [startOpen, setStartOpen] = useState(false);
+  const [startFor, setStartFor] = useState<{ operationId: ActivityOperationId; source: "sequence" | "additional" } | null>(null);
+  const [additionalOpen, setAdditionalOpen] = useState(false);
   const [completeFor, setCompleteFor] = useState<ProductionActivity | null>(null);
+  const [skipped, setSkipped] = useState<Set<ActivityOperationId>>(new Set());
   const [, tick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => tick((t) => t + 1), 1000);
@@ -945,15 +947,65 @@ function BulkProductionPanel({
   const completed = activities.filter((a) => a.status === "completed");
   const cuttingBundle = findCuttingBundle(activities);
   const currentQty = currentProductionQuantity(orderQuantity, activities);
+  const nextOp = nextSequentialOperation(activities, skipped);
+  const isNextOptional = nextOp ? OPTIONAL_OPERATIONS.has(nextOp) : false;
 
   return (
     <div className="grid gap-4">
-      <button
-        onClick={() => setStartOpen(true)}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-base font-bold text-primary-foreground shadow-sm hover:opacity-90"
-      >
-        <PlayCircle className="h-5 w-5" /> Start Production
-      </button>
+      {/* Sequential Next-Step Action */}
+      <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Next Operation</p>
+        {running.length > 0 ? (
+          <div className="mt-2 grid gap-2">
+            <p className="text-sm font-semibold text-foreground">
+              Finish the running {ACTIVITY_OP_NAME[running[0].operationId]} activity before the next one opens.
+            </p>
+          </div>
+        ) : nextOp ? (
+          <div className="mt-2 grid gap-2 sm:flex sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="truncate text-xl font-extrabold tracking-tight text-foreground">
+                {ACTIVITY_OP_NAME[nextOp]}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Step {PRODUCTION_SEQUENCE.indexOf(nextOp) + 1} of {PRODUCTION_SEQUENCE.length}
+                {isNextOptional ? " · Optional" : ""}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {isNextOptional && (
+                <button
+                  onClick={() => setSkipped((s) => new Set(s).add(nextOp))}
+                  className="rounded-xl border border-border bg-background px-3 py-2.5 text-xs font-bold hover:bg-accent"
+                >
+                  Skip {ACTIVITY_OP_NAME[nextOp]}
+                </button>
+              )}
+              <button
+                onClick={() => setStartFor({ operationId: nextOp, source: "sequence" })}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+              >
+                <PlayCircle className="h-4 w-4" /> Start {ACTIVITY_OP_NAME[nextOp]}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-success">
+            <CheckCircle2 className="h-4 w-4" /> All production operations completed.
+          </div>
+        )}
+        <div className="mt-3 flex items-center justify-between border-t border-border pt-2">
+          <p className="text-[11px] text-muted-foreground">
+            The workflow advances automatically as each operation is completed.
+          </p>
+          <button
+            onClick={() => setAdditionalOpen(true)}
+            className="text-[11px] font-bold text-primary hover:underline"
+          >
+            + Add Additional Operation
+          </button>
+        </div>
+      </div>
 
       {cuttingBundle && <CuttingSummaryCard cuttingBundle={cuttingBundle} currentQty={currentQty} />}
 
@@ -1013,12 +1065,25 @@ function BulkProductionPanel({
         </button>
       </div>
 
-      {startOpen && (
+      {startFor && (
         <StartActivityDialog
           productionOrderId={productionOrderId}
           orderQuantity={orderQuantity}
           currentQty={currentQty}
-          onClose={() => setStartOpen(false)}
+          preselectedOperation={startFor.operationId}
+          allowOperationChange={startFor.source === "additional"}
+          allowedOperations={startFor.source === "additional" ? ADDITIONAL_OPERATIONS : undefined}
+          activities={activities}
+          onClose={() => setStartFor(null)}
+        />
+      )}
+      {additionalOpen && (
+        <PickAdditionalOperationDialog
+          onPick={(op) => {
+            setAdditionalOpen(false);
+            setStartFor({ operationId: op, source: "additional" });
+          }}
+          onClose={() => setAdditionalOpen(false)}
         />
       )}
       {completeFor && (
@@ -1029,6 +1094,38 @@ function BulkProductionPanel({
         />
       )}
     </div>
+  );
+}
+
+function PickAdditionalOperationDialog({
+  onPick,
+  onClose,
+}: {
+  onPick: (op: ActivityOperationId) => void;
+  onClose: () => void;
+}) {
+  return (
+    <DialogShell title="Add Additional Operation" subtitle="For exceptional steps outside the standard flow" onClose={onClose}>
+      <div className="grid gap-2 p-5">
+        <div className="grid grid-cols-2 gap-2">
+          {ADDITIONAL_OPERATIONS.map((id) => (
+            <button
+              key={id}
+              onClick={() => onPick(id)}
+              className="rounded-lg border border-border bg-background px-3 py-3 text-sm font-bold hover:bg-accent"
+            >
+              {ACTIVITY_OP_NAME[id]}
+            </button>
+          ))}
+          {ADDITIONAL_OPERATIONS.length === 0 && (
+            <p className="text-xs text-muted-foreground">No additional operations available.</p>
+          )}
+        </div>
+      </div>
+      <DialogFooter onCancel={onClose}>
+        <span />
+      </DialogFooter>
+    </DialogShell>
   );
 }
 
