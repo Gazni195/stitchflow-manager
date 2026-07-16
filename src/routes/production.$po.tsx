@@ -1772,11 +1772,22 @@ function CompleteActivityDialog({
         if ((v ?? 0) > 0) bundle[k as SizeCode] = v as number;
       }
       await complete.mutateAsync({ activity, returnedQty: totalEntered, sizeBreakdown: bundle, varianceReason: null });
+    } else if (hasIssuedSizes) {
+      if (overCompleted) return;
+      const done: SizeBreakdown = {};
+      for (const [k, v] of Object.entries(completed)) if ((v ?? 0) > 0) done[k as SizeCode] = v as number;
+      await complete.mutateAsync({
+        activity,
+        returnedQty: completedTotal,
+        completedSizes: done,
+        varianceReason: rejectReason.trim() || null,
+      });
     } else {
       await complete.mutateAsync({ activity, returnedQty: returned });
     }
     onClose();
   }
+
 
   return (
     <DialogShell title="Complete Activity" subtitle={ACTIVITY_OP_NAME[activity.operationId]} onClose={onClose}>
