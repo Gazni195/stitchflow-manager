@@ -1988,7 +1988,7 @@ function CompleteActivityDialog({
       <DialogFooter onCancel={onClose}>
         <button
           onClick={submit}
-          disabled={complete.isPending || (isCutting && !canSubmitCutting)}
+          disabled={complete.isPending || (isCutting && !canSubmitCutting) || (hasIssuedSizes && overCompleted)}
           className="inline-flex items-center gap-1.5 rounded-lg bg-success px-4 py-2 text-xs font-bold text-success-foreground hover:opacity-90 disabled:opacity-60"
         >
           {complete.isPending ? (
