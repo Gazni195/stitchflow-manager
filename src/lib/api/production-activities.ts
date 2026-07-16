@@ -173,15 +173,15 @@ export function useCompleteActivity(productionOrderId: string) {
       const start = new Date(v.activity.startedAt);
       const elapsed = elapsedSeconds(start, end);
       const effective = effectiveWorkingSeconds(start, end, DEFAULT_FACTORY_CALENDAR);
-      const patch: Record<string, unknown> = {
-        status: "completed",
+      const patch = {
+        status: "completed" as const,
         completed_at: end.toISOString(),
         returned_qty: v.returnedQty,
         elapsed_seconds: elapsed,
         effective_seconds: effective,
+        ...(v.sizeBreakdown !== undefined ? { size_breakdown: v.sizeBreakdown as SizeBreakdown | null } : {}),
+        ...(v.varianceReason !== undefined ? { variance_reason: v.varianceReason?.trim() || null } : {}),
       };
-      if (v.sizeBreakdown !== undefined) patch.size_breakdown = v.sizeBreakdown;
-      if (v.varianceReason !== undefined) patch.variance_reason = v.varianceReason?.trim() || null;
       const { error } = await supabase
         .from("production_activities")
         .update(patch)
