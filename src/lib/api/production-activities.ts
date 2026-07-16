@@ -6,11 +6,7 @@
 // evolve independently.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  DEFAULT_FACTORY_CALENDAR,
-  effectiveWorkingSeconds,
-  elapsedSeconds,
-} from "@/lib/factory-clock";
+import { DEFAULT_FACTORY_CALENDAR, effectiveWorkingSeconds, elapsedSeconds } from "@/lib/factory-clock";
 
 export type ActivityOperationId =
   | "cutting"
@@ -118,6 +114,44 @@ export function findCuttingBundle(activities: ProductionActivity[] | undefined):
   return { activity: top, bundle: top.sizeBreakdown, total: sumSizeBreakdown(top.sizeBreakdown) };
 }
 
+// Once Cutting is completed, its actual output becomes the master
+// production quantity for every remaining operation. The Production
+// Order's original quantity never changes — it stays fixed as the
+// "Planned Qty" for reference only.
+export function currentProductionQuantity(orderQuantity: number, activities: ProductionActivity[] | undefined): number {
+  const bundle = findCuttingBundle(activities);
+  return bundle ? bundle.total : orderQuantity;
+}
+
+// Selling-set templates for Size Set Calculation — a Planning/Marketing
+// view over the Cutting size breakdown; nothing here is persisted.
+export type SetTemplateId = "m-xxl" | "s-xxl" | "m-xxxl" | "m-4xl";
+export const SET_TEMPLATES: { id: SetTemplateId; label: string; sizes: SizeCode[] }[] = [
+  { id: "m-xxl", label: "M → XXL", sizes: ["M", "L", "XL", "XXL"] },
+  { id: "s-xxl", label: "S → XXL", sizes: ["S", "M", "L", "XL", "XXL"] },
+  { id: "m-xxxl", label: "M → XXXL", sizes: ["M", "L", "XL", "XXL", "XXXL"] },
+  { id: "m-4xl", label: "M → 4XL", sizes: ["M", "L", "XL", "XXL", "XXXL", "4XL"] },
+];
+export const DEFAULT_SET_TEMPLATE: SetTemplateId = "m-xxl";
+
+// Complete sets = the smallest size count within the template (the
+// bottleneck size); remaining = whatever's left per size once that many
+// sets are pulled out.
+export function computeSizeSets(
+  breakdown: SizeBreakdown,
+  templateSizes: SizeCode[],
+): { completeSets: number; remaining: SizeBreakdown } {
+  if (templateSizes.length === 0) return { completeSets: 0, remaining: {} };
+  const counts = templateSizes.map((s) => breakdown[s] ?? 0);
+  const completeSets = Math.min(...counts);
+  const remaining: SizeBreakdown = {};
+  templateSizes.forEach((s, i) => {
+    const rem = counts[i] - completeSets;
+    if (rem > 0) remaining[s] = rem;
+  });
+  return { completeSets, remaining };
+}
+
 export function useProductionActivities(productionOrderId: string | undefined) {
   return useQuery({
     queryKey: ["production-activities", productionOrderId],
@@ -182,10 +216,7 @@ export function useCompleteActivity(productionOrderId: string) {
         ...(v.sizeBreakdown !== undefined ? { size_breakdown: v.sizeBreakdown as SizeBreakdown | null } : {}),
         ...(v.varianceReason !== undefined ? { variance_reason: v.varianceReason?.trim() || null } : {}),
       };
-      const { error } = await supabase
-        .from("production_activities")
-        .update(patch)
-        .eq("id", v.activity.id);
+      const { error } = await supabase.from("production_activities").update(patch).eq("id", v.activity.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["production-activities", productionOrderId] }),
