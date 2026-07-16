@@ -15,7 +15,6 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
-  Coffee,
   Factory,
   FileCheck2,
   Layers,
@@ -65,7 +64,6 @@ import {
 import {
   DEFAULT_FACTORY_CALENDAR,
   effectiveWorkingSeconds,
-  elapsedSeconds,
   factoryStatusAt,
   formatClock,
   formatDuration,
@@ -952,42 +950,7 @@ function BulkProductionPanel({
         <PlayCircle className="h-5 w-5" /> Start Production
       </button>
 
-      {cuttingBundle && (
-        <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Cutting Bundle · Master Production Qty
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                Actual Cutting Output — every remaining operation now uses this quantity automatically.
-              </p>
-            </div>
-            <span className="rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-bold text-success">
-              {cuttingBundle.total} pcs
-            </span>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {Object.entries(cuttingBundle.bundle).map(([sz, qty]) => (
-              <div key={sz} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-bold">
-                <span className="text-muted-foreground">{sz}</span> <span className="text-foreground">{qty}</span>
-              </div>
-            ))}
-          </div>
-          {cuttingBundle.total !== orderQuantity && (
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Planned Qty was {orderQuantity} pcs · Variance{" "}
-              <span className={cn("font-bold", cuttingBundle.total > orderQuantity ? "text-success" : "text-warning")}>
-                {cuttingBundle.total > orderQuantity ? "+" : ""}
-                {cuttingBundle.total - orderQuantity} pcs
-              </span>
-            </p>
-          )}
-          {cuttingBundle.activity.varianceReason && (
-            <p className="mt-2 text-[11px] text-warning">Variance note: {cuttingBundle.activity.varianceReason}</p>
-          )}
-        </div>
-      )}
+      {cuttingBundle && <CuttingSummaryCard cuttingBundle={cuttingBundle} currentQty={currentQty} />}
 
       {/* Running Activities */}
       <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
@@ -1060,6 +1023,109 @@ function BulkProductionPanel({
           onClose={() => setCompleteFor(null)}
         />
       )}
+    </div>
+  );
+}
+
+// All Cutting reporting/analysis lives here, on the Production page, not in
+// the Complete Activity popup — that popup is data entry only. Shown once
+// Cutting has been completed at least once; Set Calculation has its own
+// template picker so Planning/Marketing can flip templates when reviewing,
+// independent of whatever the operator had selected while entering sizes.
+function CuttingSummaryCard({
+  cuttingBundle,
+  currentQty,
+}: {
+  cuttingBundle: NonNullable<ReturnType<typeof findCuttingBundle>>;
+  currentQty: number;
+}) {
+  const [setTemplate, setSetTemplate] = useState<SetTemplateId>(DEFAULT_SET_TEMPLATE);
+  const setTemplateDef = SET_TEMPLATES.find((t) => t.id === setTemplate) ?? SET_TEMPLATES[0];
+  const { completeSets, remaining } = computeSizeSets(cuttingBundle.bundle, setTemplateDef.sizes);
+  const remainingEntries = Object.entries(remaining) as [SizeCode, number][];
+
+  const planned = cuttingBundle.activity.issuedQty;
+  const variance = cuttingBundle.total - planned;
+  const hasVariance = variance !== 0;
+
+  return (
+    <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cutting Summary</p>
+        <span className="rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-bold text-success">
+          {cuttingBundle.total} pcs
+        </span>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {Object.entries(cuttingBundle.bundle).map(([sz, qty]) => (
+          <div key={sz} className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-bold">
+            <span className="text-muted-foreground">{sz}</span> <span className="text-foreground">{qty}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 rounded-xl border border-border bg-background p-3 text-xs">
+        <RowKV k="Planned Quantity" v={`${planned} pcs`} />
+        <RowKV k="Actual Cutting Output" v={`${cuttingBundle.total} pcs`} />
+        <RowKV k="Variance" v={hasVariance ? `${variance > 0 ? "+" : ""}${variance} pcs` : "0 pcs"} />
+        <RowKV k="Current Production Quantity" v={`${currentQty} pcs`} />
+        <RowKV
+          k="Activity Duration"
+          v={
+            cuttingBundle.activity.elapsedSeconds != null ? formatDuration(cuttingBundle.activity.elapsedSeconds) : "—"
+          }
+        />
+        <RowKV
+          k="Effective Working Time"
+          v={
+            cuttingBundle.activity.effectiveSeconds != null
+              ? formatDuration(cuttingBundle.activity.effectiveSeconds)
+              : "—"
+          }
+        />
+      </div>
+
+      {cuttingBundle.activity.varianceReason && (
+        <p className="mt-2 text-[11px] text-warning">Variance note: {cuttingBundle.activity.varianceReason}</p>
+      )}
+
+      <div className="mt-3">
+        <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Set Calculation</p>
+        <div className="flex flex-wrap gap-1.5">
+          {SET_TEMPLATES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setSetTemplate(t.id)}
+              className={cn(
+                "rounded-lg border px-2.5 py-1.5 text-[11px] font-bold",
+                setTemplate === t.id
+                  ? "border-primary bg-primary-soft text-primary"
+                  : "border-border bg-background text-muted-foreground hover:bg-accent",
+              )}
+            >
+              {setTemplate === t.id ? "✓" : "☐"} {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-1.5 rounded-lg border border-border bg-background p-2.5 text-xs">
+          <RowKV k={`Complete ${setTemplateDef.label} Sets`} v={`${completeSets} Sets`} />
+          {remainingEntries.length > 0 ? (
+            <div className="mt-1.5">
+              <p className="text-[11px] font-semibold text-muted-foreground">Remaining Pieces</p>
+              <p className="mt-0.5 font-mono text-[11px] font-bold text-foreground">
+                {remainingEntries.map(([sz, qty]) => `${sz}=${qty}`).join("  ")}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-1.5 text-[11px] text-success">No leftover pieces — a clean set split.</p>
+          )}
+          <p className="mt-1.5 text-[10px] text-muted-foreground">
+            For Planning, Marketing and Sales analysis only — does not affect production quantity.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1438,23 +1504,15 @@ function CompleteActivityDialog({
   );
   const [showSmall, setShowSmall] = useState(false);
   const [showPlus, setShowPlus] = useState(false);
-  const [varianceReason, setVarianceReason] = useState("");
   const [setTemplate, setSetTemplate] = useState<SetTemplateId>(DEFAULT_SET_TEMPLATE);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [breakdownOpen, setBreakdownOpen] = useState(false);
   const complete = useCompleteActivity(productionOrderId);
-  const now = new Date();
-  const start = new Date(activity.startedAt);
-  const eff = effectiveWorkingSeconds(start, now);
-  const elp = elapsedSeconds(start, now);
 
-  // Actual Cutting Output is the real production result — it is allowed to
-  // differ from (including exceed) the Planned / Issued Quantity, e.g. from
-  // better marker planning or fabric utilization. Confirming never requires
-  // the two to match; the reason field below is optional context, not a gate.
+  // Actual Cutting Output is allowed to differ from (including exceed) the
+  // Issued Quantity, e.g. from better marker planning or fabric
+  // utilization — confirming never requires the two to match. This popup
+  // is data entry only: variance, duration, and all other reporting live
+  // in the Cutting Summary card on the Production page once this closes.
   const totalEntered = isCutting ? sumSizeBreakdown(sizes) : 0;
-  const variance = isCutting ? totalEntered - activity.issuedQty : 0;
-  const hasVariance = isCutting && variance !== 0;
   const canSubmitCutting = isCutting && totalEntered > 0;
 
   const setTemplateDef = SET_TEMPLATES.find((t) => t.id === setTemplate) ?? SET_TEMPLATES[0];
@@ -1492,12 +1550,7 @@ function CompleteActivityDialog({
       for (const [k, v] of Object.entries(sizes)) {
         if ((v ?? 0) > 0) bundle[k as SizeCode] = v as number;
       }
-      await complete.mutateAsync({
-        activity,
-        returnedQty: totalEntered,
-        sizeBreakdown: bundle,
-        varianceReason: hasVariance ? varianceReason : null,
-      });
+      await complete.mutateAsync({ activity, returnedQty: totalEntered, sizeBreakdown: bundle, varianceReason: null });
     } else {
       await complete.mutateAsync({ activity, returnedQty: returned });
     }
@@ -1507,30 +1560,9 @@ function CompleteActivityDialog({
   return (
     <DialogShell title="Complete Activity" subtitle={ACTIVITY_OP_NAME[activity.operationId]} onClose={onClose}>
       <div className="grid gap-3 p-4">
-        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              Effective Working Time
-            </span>
-            <span className="text-base font-extrabold text-primary">{formatDuration(eff)}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setDetailsOpen((v) => !v)}
-            className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"
-          >
-            <ChevronDown className={cn("h-3 w-3 transition-transform", detailsOpen && "rotate-180")} />
-            {detailsOpen ? "Hide Details" : "View Details"}
-          </button>
-          {detailsOpen && (
-            <div className="mt-2 border-t border-border pt-2 text-xs">
-              <RowKV k="Assigned To" v={activity.assignedTo} />
-              <RowKV k="Issued Qty" v={`${activity.issuedQty} pcs`} />
-              <RowKV k="Started" v={formatClock(start)} />
-              <RowKV k="End (now)" v={formatClock(now)} />
-              <RowKV k="Elapsed" v={formatDuration(elp)} />
-            </div>
-          )}
+        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-xs">
+          <RowKV k="Assigned To" v={activity.assignedTo} />
+          <RowKV k="Issued Quantity" v={`${activity.issuedQty} pcs`} />
         </div>
 
         {isCutting ? (
@@ -1605,46 +1637,8 @@ function CompleteActivityDialog({
               </div>
             </div>
 
-            <div className="text-xs">
-              <div className="flex items-center justify-between py-0.5">
-                <span className="text-muted-foreground">Planned Qty</span>
-                <span className="font-bold tabular-nums">{activity.issuedQty} pcs</span>
-              </div>
-              <div className="flex items-center justify-between py-0.5">
-                <span className="text-muted-foreground">Actual Output</span>
-                <span className="font-bold tabular-nums">{totalEntered} pcs</span>
-              </div>
-              <div className="flex items-center justify-between py-0.5">
-                <span className="text-muted-foreground">Variance</span>
-                <span
-                  className={cn(
-                    "font-bold tabular-nums",
-                    hasVariance && (variance > 0 ? "text-success" : "text-destructive"),
-                  )}
-                >
-                  {hasVariance ? `${variance > 0 ? "+" : ""}${variance} pcs` : "0 pcs"}
-                </span>
-              </div>
-            </div>
-
-            {hasVariance && (
-              <Field label="Variance Reason (Optional)">
-                <textarea
-                  value={varianceReason}
-                  onChange={(e) => {
-                    setVarianceReason(e.target.value);
-                    e.currentTarget.style.height = "auto";
-                    e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
-                  }}
-                  rows={1}
-                  placeholder="Type reason…"
-                  className="w-full resize-none overflow-hidden rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                />
-              </Field>
-            )}
-
             <div>
-              <div className="mb-1.5 text-xs font-bold text-foreground">Size Set Calculation</div>
+              <div className="mb-1.5 text-xs font-bold text-foreground">Set Calculation</div>
               <div className="flex flex-wrap gap-1.5">
                 {SET_TEMPLATES.map((t) => (
                   <button
@@ -1662,53 +1656,22 @@ function CompleteActivityDialog({
                   </button>
                 ))}
               </div>
-              <button
-                type="button"
-                onClick={() => setBreakdownOpen((v) => !v)}
-                className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"
-              >
-                <ChevronDown className={cn("h-3 w-3 transition-transform", breakdownOpen && "rotate-180")} />
-                {breakdownOpen ? "Hide Breakdown" : "View Breakdown"}
-              </button>
-              {breakdownOpen && (
-                <div className="mt-1.5 rounded-lg border border-border bg-background p-2.5 text-xs">
-                  <RowKV k={`Complete ${setTemplateDef.label} Sets`} v={`${completeSets} Sets`} />
-                  {remainingEntries.length > 0 ? (
-                    <div className="mt-1.5">
-                      <p className="text-[11px] font-semibold text-muted-foreground">Remaining pieces</p>
-                      <p className="mt-0.5 font-mono text-[11px] font-bold text-foreground">
-                        {remainingEntries.map(([sz, qty]) => `${sz}=${qty}`).join("  ")}
-                      </p>
-                    </div>
-                  ) : (
-                    totalEntered > 0 && (
-                      <p className="mt-1.5 text-[11px] text-success">No leftover pieces — a clean set split.</p>
-                    )
-                  )}
-                  <p className="mt-1.5 text-[10px] text-muted-foreground">
-                    For Planning, Marketing and Sales analysis only — does not affect production quantity.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {totalEntered > 0 && (
-              <div className="rounded-lg border border-primary/30 bg-primary-soft/30 p-2.5 text-xs">
-                <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-primary">Completion Summary</p>
-                <RowKV k="Planned Qty" v={`${activity.issuedQty} pcs`} />
-                <RowKV k="Actual Output" v={`${totalEntered} pcs`} />
-                <RowKV k="Variance" v={hasVariance ? `${variance > 0 ? "+" : ""}${variance} pcs` : "0 pcs"} />
-                <RowKV k="Complete Sets" v={`${completeSets}`} />
-                <RowKV
-                  k="Remaining Pieces"
-                  v={
-                    remainingEntries.length > 0
-                      ? remainingEntries.map(([sz, qty]) => `${sz}=${qty}`).join(", ")
-                      : "None"
-                  }
-                />
+              <div className="mt-1.5 rounded-lg border border-border bg-background p-2.5 text-xs">
+                <RowKV k={`Complete ${setTemplateDef.label} Sets`} v={`${completeSets} Sets`} />
+                {remainingEntries.length > 0 ? (
+                  <div className="mt-1.5">
+                    <p className="text-[11px] font-semibold text-muted-foreground">Remaining Pieces</p>
+                    <p className="mt-0.5 font-mono text-[11px] font-bold text-foreground">
+                      {remainingEntries.map(([sz, qty]) => `${sz}=${qty}`).join("  ")}
+                    </p>
+                  </div>
+                ) : (
+                  totalEntered > 0 && (
+                    <p className="mt-1.5 text-[11px] text-success">No leftover pieces — a clean set split.</p>
+                  )
+                )}
               </div>
-            )}
+            </div>
           </>
         ) : (
           <Field label="Return Quantity">
@@ -1722,9 +1685,6 @@ function CompleteActivityDialog({
           </Field>
         )}
 
-        <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Coffee className="h-3 w-3" /> Break windows and non-working hours are excluded automatically.
-        </p>
         {complete.error && <p className="text-xs text-destructive">{(complete.error as Error).message}</p>}
       </div>
       <DialogFooter onCancel={onClose}>
