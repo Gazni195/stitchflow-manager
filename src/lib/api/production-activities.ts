@@ -98,7 +98,24 @@ function mapRow(r: DbRow): ProductionActivity {
     completedAt: r.completed_at,
     elapsedSeconds: r.elapsed_seconds,
     effectiveSeconds: r.effective_seconds,
+    sizeBreakdown: r.size_breakdown ?? null,
+    varianceReason: r.variance_reason ?? null,
   };
+}
+
+// Latest completed Cutting activity for a PO = master size bundle.
+export function findCuttingBundle(activities: ProductionActivity[] | undefined): {
+  activity: ProductionActivity;
+  bundle: SizeBreakdown;
+  total: number;
+} | null {
+  if (!activities?.length) return null;
+  const completed = activities
+    .filter((a) => a.operationId === "cutting" && a.status === "completed" && a.sizeBreakdown)
+    .sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
+  const top = completed[0];
+  if (!top || !top.sizeBreakdown) return null;
+  return { activity: top, bundle: top.sizeBreakdown, total: sumSizeBreakdown(top.sizeBreakdown) };
 }
 
 export function useProductionActivities(productionOrderId: string | undefined) {
