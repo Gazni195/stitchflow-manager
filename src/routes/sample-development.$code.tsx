@@ -1137,18 +1137,24 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     <div className="grid gap-4">
       {/* The one way to add work: Select Operation -> Garment Part ->
           Area (Top only) -> Worker -> Start Operation. Goes straight into
-          Running — there is no Pending Operations step in between. */}
-      <button
-        onClick={() => setPickerOpen(true)}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-base font-bold text-primary-foreground shadow-sm hover:opacity-90"
-      >
-        ▶ Start Process
-      </button>
-
+          Running — there is no Pending Operations step in between. When
+          nothing is running yet, the whole Running Operations card becomes
+          a big clickable empty state instead of a separate full-width
+          button, so there is exactly one call to action before the first
+          operation starts. */}
       <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
         <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Running Operations</p>
         {running.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">No operations running right now.</p>
+          <button
+            onClick={() => setPickerOpen(true)}
+            className="mt-2 flex w-full flex-col items-center gap-1.5 rounded-2xl py-10 text-center transition hover:bg-primary-soft/20"
+          >
+            <span className="grid h-28 w-28 place-items-center rounded-full bg-gradient-to-br from-primary to-primary-glow shadow-lg shadow-primary/30 transition-transform duration-200 hover:scale-105 hover:shadow-xl hover:shadow-primary/40">
+              <Plus className="h-12 w-12 text-primary-foreground" strokeWidth={2.5} />
+            </span>
+            <span className="mt-2 text-base font-bold text-foreground">Start Process</span>
+            <span className="text-xs text-muted-foreground">Click to start the Sample Making process</span>
+          </button>
         ) : (
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {running.map((step) => {
