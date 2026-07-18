@@ -982,6 +982,19 @@ function StartOperationCard({ design }: { design: Design }) {
   // Set once Worker Selection is confirmed — its presence is what switches
   // the flow from the Worker Selection popup to the Garment Part popup.
   const [selectedWorkers, setSelectedWorkers] = useState<string[] | null>(null);
+  // For the very first sample operation, the Garment Part popup does NOT
+  // immediately start the operation. Instead the Material Confirmation
+  // popup opens so the user can review / edit the materials they saved in
+  // Material Selection before any timer starts. After confirmation the
+  // operation starts exactly the same way as any subsequent one. This
+  // popup never opens again for this sample — later operations skip
+  // straight from Garment Part -> start — unless materials are edited
+  // manually from the Materials tab.
+  const [pendingStart, setPendingStart] = useState<
+    { operationId: string | null; payload: WorkAreaPayload } | null
+  >(null);
+  const isFirstSampleOperation = !ordered.some((s) => s.startedAt);
+
 
   const { data: eligibleWorkers = [] } = useEligibleWorkers(newProcess?.operationId ?? null);
 
@@ -999,7 +1012,9 @@ function StartOperationCard({ design }: { design: Design }) {
   function cancelStart() {
     setNewProcess(null);
     setSelectedWorkers(null);
+    setPendingStart(null);
   }
+
 
   // Creates the workflow step and starts it in one go, only once Start
   // Operation is confirmed. For the "Other" flow (operationId null), the
@@ -1082,19 +1097,193 @@ function StartOperationCard({ design }: { design: Design }) {
         />
       )}
 
-      {newProcess && selectedWorkers !== null && (
+      {newProcess && selectedWorkers !== null && !pendingStart && (
         <WorkAreaDialog
           operationId={newProcess.operationId}
           operationName={newProcess.name}
           workers={selectedWorkers}
           busy={busy}
           onCancel={cancelStart}
-          onConfirm={(payload) => createAndStart(newProcess.operationId, payload)}
+          onConfirm={(payload) => {
+            if (isFirstSampleOperation) {
+              setPendingStart({ operationId: newProcess.operationId, payload });
+            } else {
+              createAndStart(newProcess.operationId, payload);
+            }
+          }}
+        />
+      )}
+
+      {pendingStart && (
+        <MaterialConfirmDialog
+          design={design}
+          busy={busy}
+          onCancel={cancelStart}
+          onConfirm={async () => {
+            await createAndStart(pendingStart.operationId, pendingStart.payload);
+            setPendingStart(null);
+          }}
         />
       )}
     </>
   );
 }
+
+/* ---------- Material Confirmation (first sample operation only) ---------- */
+//
+// Mandatory checkpoint that runs once per sample, right before the very
+// first operation actually starts. Reuses the same design_materials rows
+// and the same MaterialPickerDialog as the Materials tab, so edits made
+// here are immediately visible on the Materials tab and vice versa —
+// there is no separate storage. Pricing is intentionally hidden: the
+// purpose is production allocation, not costing. After Confirm the
+// operation is started by the caller; on Cancel nothing is started.
+function MaterialConfirmDialog({
+  design,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  design: Design;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { data: inventory = [] } = useMaterials();
+  const { data: selected = [] } = useDesignMaterials(design.id);
+  const addLine = useAddDesignMaterial(design.id);
+  const removeLine = useRemoveDesignMaterial(design.id);
+  const updateLine = useUpdateDesignMaterial(design.id);
+  const [picker, setPicker] = useState<PickerState | null>(null);
+
+  const activeInventory = inventory.filter((m) => m.status === "active");
+  const pickerBusy = addLine.isPending || updateLine.isPending || removeLine.isPending;
+
+  const byPart = GARMENT_PARTS.map((p) => ({
+    part: p,
+    rows: selected.filter((r) => parseGroupKey(r.groupName).part === p.key),
+  }));
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-end sm:place-items-center bg-foreground/40 p-0 sm:p-4">
+      <div className="flex max-h-[92vh] w-full max-w-lg flex-col rounded-t-3xl sm:rounded-3xl border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between px-5 pt-5">
+          <div>
+            <h2 className="text-lg font-bold">Confirm materials</h2>
+            <p className="text-xs text-muted-foreground">
+              Review the materials for this sample before the first operation starts.
+            </p>
+          </div>
+          <button
+            onClick={onCancel}
+            aria-label="Close"
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto px-5 py-4">
+          {byPart.map(({ part, rows }) => (
+            <div key={part.key} className="rounded-2xl border border-border bg-background p-3">
+              <div className="flex items-center gap-2">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary-soft text-lg" aria-hidden>
+                  {part.emoji}
+                </span>
+                <p className="text-sm font-bold">{part.label}</p>
+              </div>
+              {rows.length === 0 ? (
+                <p className="mt-2 text-xs text-muted-foreground">No materials selected.</p>
+              ) : (
+                <ul className="mt-2 grid gap-1.5">
+                  {rows.map((r) => {
+                    const { category } = parseGroupKey(r.groupName);
+                    return (
+                      <li key={r.id}>
+                        <button
+                          onClick={() => setPicker({ mode: "edit", row: r })}
+                          className="flex w-full items-center justify-between gap-3 rounded-xl bg-muted/30 px-3 py-2 text-left hover:bg-muted/50"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold">
+                              {r.material?.name ?? "Deleted material"}
+                            </p>
+                            <p className="truncate text-[11px] text-muted-foreground">
+                              {category} · {r.quantity} {r.material?.unit ?? ""}
+                            </p>
+                          </div>
+                          <Pencil className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <button
+                onClick={() => setPicker({ mode: "add", part: part.key })}
+                className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2 text-xs font-semibold text-primary hover:bg-primary-soft/40"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add Material (Optional)
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2 border-t border-border px-5 py-4">
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-muted-foreground hover:bg-accent disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            className="ml-auto inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-60"
+          >
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+            Confirm & Start Operation
+          </button>
+        </div>
+      </div>
+
+      {picker && (
+        <MaterialPickerDialog
+          picker={picker}
+          inventory={activeInventory}
+          busy={pickerBusy}
+          onClose={() => setPicker(null)}
+          onSaveNew={async (part, category, material, quantity) => {
+            await addLine.mutateAsync({
+              materialId: material.id,
+              groupName: buildGroupKey(part, category),
+              quantity,
+              rate: material.costPerUnit,
+            });
+            setPicker(null);
+          }}
+          onSaveEdit={async (row, material, quantity) => {
+            await updateLine.mutateAsync({
+              id: row.id,
+              quantity,
+              materialId: material.id,
+              rate: material.costPerUnit,
+            });
+            setPicker(null);
+          }}
+          onDelete={async (row) => {
+            await removeLine.mutateAsync(row.id);
+            setPicker(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+
+
 
 function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue: () => void }) {
   const { data: workflows, isLoading } = useWorkflows(design.id);
