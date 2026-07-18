@@ -259,6 +259,27 @@ export function useApproveDesign() {
   });
 }
 
+// Rejecting is the reverse of Design Approval, not a separate workflow: it
+// just moves status back out of the approved range into "design_rejected",
+// which blocks Sample Development (gated on status !== draft/rejected — see
+// designs.$code.tsx) until useApproveDesign is called again.
+export function useRejectDesign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (design: Pick<Design, "id" | "code">): Promise<void> => {
+      const { error } = await supabase
+        .from("designs")
+        .update({ status: "design_rejected" as DesignStatus })
+        .eq("id", design.id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, design) => {
+      qc.invalidateQueries({ queryKey: ["designs"] });
+      qc.invalidateQueries({ queryKey: ["design", "by-code", design.code] });
+    },
+  });
+}
+
 export function useDeleteDesign() {
   const qc = useQueryClient();
   return useMutation({
