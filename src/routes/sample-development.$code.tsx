@@ -22,6 +22,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
+import { MaterialUsageDialog } from "@/components/MaterialUsageDialog";
 import {
   WorkAreaDialog,
   WorkerSelectionDialog,
