@@ -22,6 +22,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
+import { MaterialUsageDialog } from "@/components/MaterialUsageDialog";
 import {
   WorkAreaDialog,
   WorkerSelectionDialog,
@@ -1108,6 +1109,13 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   const [sessions, setSessions] = useState<Record<string, OperationSession>>({});
   const [, forceTick] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // The Material Usage popup opens automatically the first time any sample
+  // operation is completed (typically Sample Cutting). We persist a
+  // per-design flag so it never reappears on later completions — the
+  // rule is "once per design, immediately after the first completion".
+  // Users can still edit Material Selection manually afterwards.
+  const usageFlagKey = `sample-material-usage-shown:${design.id}`;
+  const [usageOpen, setUsageOpen] = useState(false);
 
   // Re-render every second so elapsed-time counters keep ticking.
   useEffect(() => {
@@ -1186,6 +1194,12 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       0,
       Math.round((now.getTime() - new Date(startedAtIso).getTime() - session.pausedMs) / 1000),
     );
+    // Check BEFORE mutating: if nothing was completed yet, this is the
+    // first sample operation to finish, so surface the Material Usage
+    // popup once the mutation kicks off.
+    const isFirstCompletion =
+      ordered.filter((s) => s.status === "completed").length === 0 &&
+      (typeof window === "undefined" || !window.localStorage.getItem(usageFlagKey));
     patchSession(step.id, { completedAt: now, pausedAt: null });
     updateStep.mutate({
       stepId: step.id,
@@ -1197,6 +1211,10 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
         durationSeconds,
       },
     });
+    if (isFirstCompletion) {
+      if (typeof window !== "undefined") window.localStorage.setItem(usageFlagKey, "1");
+      setUsageOpen(true);
+    }
   }
 
   // Reopening a completed operation puts it straight back into Running with
@@ -1322,6 +1340,14 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
           }}
           onSoftDelete={() => softDeleteStep(editingStep)}
           onClose={() => setEditingId(null)}
+        />
+      )}
+
+      {usageOpen && (
+        <MaterialUsageDialog
+          design={design}
+          onClose={() => setUsageOpen(false)}
+          onSaved={() => setUsageOpen(false)}
         />
       )}
     </div>
