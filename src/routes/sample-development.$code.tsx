@@ -946,8 +946,11 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   const [editingId, setEditingId] = useState<string | null>(null);
   // Newly picked process, waiting on the Start Operation popup — nothing is
   // saved as a workflow step until Start Operation is confirmed here, so
-  // Cancel simply forgets this and nothing is created.
-  const [newProcess, setNewProcess] = useState<{ operationId: string; name: string } | null>(null);
+  // Cancel simply forgets this and nothing is created. operationId is null
+  // for the "Other" custom-operation card: the same Start Operation dialog
+  // opens, just with an editable name field, and the operations_catalog row
+  // is only created once Start Operation is actually confirmed.
+  const [newProcess, setNewProcess] = useState<{ operationId: string | null; name: string } | null>(null);
 
   // Re-render every second so elapsed-time counters keep ticking.
   useEffect(() => {
@@ -1081,20 +1084,31 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     setPickerOpen(false);
   }
 
-  async function commitCustom(input: { name: string; iconFile?: File | null; logoFile?: File | null }) {
-    const operationId = await addOperation.mutateAsync(input);
-    setNewProcess({ operationId, name: input.name });
+  // "Other": opens the exact same Start Operation popup with operationId
+  // null, which makes WorkAreaDialog show an editable name field instead of
+  // a fixed title. No operations_catalog row exists yet at this point.
+  function commitPickCustom() {
+    setNewProcess({ operationId: null, name: "" });
     setPickerOpen(false);
   }
 
   // Creates the workflow step and starts it in one go, only once Start
   // Operation is confirmed. If the popup is cancelled instead, this never
-  // runs, so nothing is ever created — it goes straight into Running.
-  async function createAndStart(operationId: string, payload: WorkAreaPayload) {
+  // runs, so nothing is ever created — it goes straight into Running. For
+  // the "Other" flow (operationId null), the operations_catalog row for the
+  // typed name is created here first, right before the step itself, so a
+  // cancelled dialog never leaves behind an unused catalog entry.
+  async function createAndStart(operationId: string | null, payload: WorkAreaPayload) {
     if (!sample || payload.workers.length === 0) return;
+    let opId = operationId;
+    if (!opId) {
+      const customName = payload.operationName?.trim();
+      if (!customName) return;
+      opId = await addOperation.mutateAsync({ name: customName });
+    }
     const nextSeq = ordered.length ? Math.max(...ordered.map((s) => s.sequence)) + 1 : 1;
     const now = new Date();
-    const stepId = await addStep.mutateAsync({ workflowId: sample.id, operationId, sequence: nextSeq });
+    const stepId = await addStep.mutateAsync({ workflowId: sample.id, operationId: opId, sequence: nextSeq });
     patchSession(stepId, { workers: payload.workers, startedAt: now, pausedAt: null, pausedMs: 0, completedAt: null });
     updateStep.mutate({
       stepId,
@@ -1206,7 +1220,7 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
           catalog={catalog}
           busy={busy}
           onPick={commitPick}
-          onCreateCustom={commitCustom}
+          onPickCustom={commitPickCustom}
           onClose={() => setPickerOpen(false)}
         />
       )}
@@ -1214,6 +1228,7 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       {newProcess && (
         <WorkAreaDialog
           operationName={newProcess.name}
+          operationNameEditable={newProcess.operationId === null}
           workerOptions={activeWorkerNames}
           busy={busy}
           onCancel={() => setNewProcess(null)}
@@ -1586,129 +1601,35 @@ function OperationPickerModal({
   catalog,
   busy,
   onPick,
-  onCreateCustom,
+  onPickCustom,
   onClose,
 }: {
   title: string;
   catalog: CatalogOperation[];
   busy: boolean;
   onPick: (operationId: string) => void;
-  onCreateCustom: (input: { name: string; iconFile?: File | null; logoFile?: File | null }) => void;
+  // "Other" behaves exactly like picking any other card: it just has no
+  // catalog operation behind it yet, so there's no id to pass. The very
+  // same Start Operation dialog (WorkAreaDialog) opens either way — see
+  // commitPickCustom / newProcess in SampleMakingPanel.
+  onPickCustom: () => void;
   onClose: () => void;
 }) {
-  const [customOpen, setCustomOpen] = useState(false);
   const visibleCatalog = catalog.filter((op) => !OPERATION_PICKER_HIDDEN_IDS.has(op.id));
 
   return (
-    <>
-      <div
-        className="fixed inset-0 z-50 grid place-items-end bg-foreground/40 p-0 sm:place-items-center sm:p-4"
-        onClick={onClose}
-      >
-        <div
-          className="max-h-[85vh] w-full overflow-y-auto rounded-t-3xl border border-border bg-card p-4 shadow-2xl sm:max-w-md sm:rounded-3xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold">{title}</h3>
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            {visibleCatalog.map((op) => {
-              const Icon = op.icon;
-              return (
-                <button
-                  key={op.id}
-                  onClick={() => onPick(op.id)}
-                  disabled={busy}
-                  className="flex flex-col items-center gap-2 rounded-3xl border border-border bg-background p-5 text-center hover:border-primary/40 hover:bg-primary-soft/30 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <span className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
-                    {op.iconUrl ? (
-                      <img src={op.iconUrl} alt="" className="h-16 w-16 rounded-full object-cover" />
-                    ) : (
-                      <Icon className="h-7 w-7" />
-                    )}
-                    {op.logoUrl && (
-                      <img
-                        src={op.logoUrl}
-                        alt=""
-                        className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full border-2 border-background bg-background object-cover"
-                      />
-                    )}
-                  </span>
-                  <span className="text-sm font-bold leading-tight">{op.name}</span>
-                </button>
-              );
-            })}
-
-            <button
-              onClick={() => setCustomOpen(true)}
-              disabled={busy}
-              className="flex flex-col items-center gap-2 rounded-3xl border border-dashed border-border bg-background p-5 text-center hover:border-primary/40 hover:bg-primary-soft/30 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
-                <Plus className="h-7 w-7" />
-              </span>
-              <span className="text-sm font-bold leading-tight">Other</span>
-              <span className="text-[11px] text-muted-foreground">Add Custom Operation</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {customOpen && (
-        <CustomOperationDialog
-          busy={busy}
-          onCancel={() => setCustomOpen(false)}
-          onSave={(input) => {
-            onCreateCustom(input);
-            setCustomOpen(false);
-          }}
-        />
-      )}
-    </>
-  );
-}
-
-function CustomOperationDialog({
-  busy,
-  onCancel,
-  onSave,
-}: {
-  busy: boolean;
-  onCancel: () => void;
-  onSave: (input: { name: string; iconFile: File | null; logoFile: File | null }) => void;
-}) {
-  const [name, setName] = useState("");
-  const [iconFile, setIconFile] = useState<File | null>(null);
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-
-  function submit() {
-    if (!name.trim()) return;
-    onSave({ name: name.trim(), iconFile, logoFile });
-  }
-
-  return (
     <div
-      className="fixed inset-0 z-[60] grid place-items-end bg-foreground/40 p-0 sm:place-items-center sm:p-4"
-      onClick={onCancel}
+      className="fixed inset-0 z-50 grid place-items-end bg-foreground/40 p-0 sm:place-items-center sm:p-4"
+      onClick={onClose}
     >
       <div
-        className="w-full rounded-t-3xl border border-border bg-card p-5 shadow-2xl sm:max-w-sm sm:rounded-3xl"
+        className="max-h-[85vh] w-full overflow-y-auto rounded-t-3xl border border-border bg-card p-4 shadow-2xl sm:max-w-md sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold">Add Custom Operation</h3>
+          <h3 className="text-base font-bold">{title}</h3>
           <button
-            onClick={onCancel}
+            onClick={onClose}
             aria-label="Close"
             className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent"
           >
@@ -1716,59 +1637,46 @@ function CustomOperationDialog({
           </button>
         </div>
 
-        <div className="mt-3 grid gap-3">
-          <label className="block">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-              Operation Name
-            </span>
-            <input
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Beading, Tagging"
-              className="mt-1.5 w-full rounded-2xl border border-border bg-background px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-primary"
-            />
-          </label>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          {visibleCatalog.map((op) => {
+            const Icon = op.icon;
+            return (
+              <button
+                key={op.id}
+                onClick={() => onPick(op.id)}
+                disabled={busy}
+                className="flex flex-col items-center gap-2 rounded-3xl border border-border bg-background p-5 text-center hover:border-primary/40 hover:bg-primary-soft/30 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
+                  {op.iconUrl ? (
+                    <img src={op.iconUrl} alt="" className="h-16 w-16 rounded-full object-cover" />
+                  ) : (
+                    <Icon className="h-7 w-7" />
+                  )}
+                  {op.logoUrl && (
+                    <img
+                      src={op.logoUrl}
+                      alt=""
+                      className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full border-2 border-background bg-background object-cover"
+                    />
+                  )}
+                </span>
+                <span className="text-sm font-bold leading-tight">{op.name}</span>
+              </button>
+            );
+          })}
 
-          <label className="block">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-              Icon (optional)
+          <button
+            onClick={onPickCustom}
+            disabled={busy}
+            className="flex flex-col items-center gap-2 rounded-3xl border border-dashed border-border bg-background p-5 text-center hover:border-primary/40 hover:bg-primary-soft/30 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+              <Plus className="h-7 w-7" />
             </span>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setIconFile(e.target.files?.[0] ?? null)}
-              className="mt-1.5 w-full text-xs text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary-soft file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary"
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-              Logo (optional)
-            </span>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
-              className="mt-1.5 w-full text-xs text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary-soft file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary"
-            />
-          </label>
-
-          <div className="mt-1 flex gap-2">
-            <button
-              onClick={onCancel}
-              className="flex-1 rounded-2xl border border-border px-4 py-2.5 text-sm font-bold text-muted-foreground hover:bg-accent"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={submit}
-              disabled={!name.trim() || busy}
-              className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Save
-            </button>
-          </div>
+            <span className="text-sm font-bold leading-tight">Other</span>
+            <span className="text-[11px] text-muted-foreground">Add Custom Operation</span>
+          </button>
         </div>
       </div>
     </div>
