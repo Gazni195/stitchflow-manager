@@ -1012,7 +1012,9 @@ function StartOperationCard({ design }: { design: Design }) {
   function cancelStart() {
     setNewProcess(null);
     setSelectedWorkers(null);
+    setPendingStart(null);
   }
+
 
   // Creates the workflow step and starts it in one go, only once Start
   // Operation is confirmed. For the "Other" flow (operationId null), the
