@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  AlertTriangle,
-  ImagePlus,
-  Loader2,
-  MoreVertical,
-  Pencil,
-  Trash2,
-  X,
-} from "lucide-react";
+import { AlertTriangle, ImagePlus, Loader2, MoreVertical, Pencil, Trash2, X } from "lucide-react";
 import type { Design, DesignPart } from "@/lib/designs";
 import { STATUS_LABEL } from "@/lib/designs";
 import { useDeleteDesign, useDesignImageUrl, useUpdateDesign } from "@/lib/api/designs";
@@ -53,14 +45,20 @@ export function DesignActionsMenu({ design }: { design: Design }) {
           {open && (
             <div className="absolute right-0 top-12 z-40 w-60 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
               <button
-                onClick={() => { setOpen(false); setEdit(true); }}
+                onClick={() => {
+                  setOpen(false);
+                  setEdit(true);
+                }}
                 className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-semibold hover:bg-accent"
               >
                 <Pencil className="h-4 w-4 text-primary" /> Edit design
               </button>
               <button
                 disabled={!canDelete}
-                onClick={() => { setOpen(false); setConfirm(true); }}
+                onClick={() => {
+                  setOpen(false);
+                  setConfirm(true);
+                }}
                 className="flex w-full items-center gap-2.5 border-t border-border px-4 py-3 text-left text-sm font-semibold text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent"
               >
                 <Trash2 className="h-4 w-4" /> Delete design
@@ -81,7 +79,10 @@ export function DesignActionsMenu({ design }: { design: Design }) {
   );
 }
 
-function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => void }) {
+// Exported so other approval/status-scoped menus (e.g. the Design Approval
+// card on the Design Details page) can trigger the exact same edit flow
+// instead of building a second one.
+export function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => void }) {
   const update = useUpdateDesign();
   const { data: currentImageUrl } = useDesignImageUrl(design.imagePath);
   const [error, setError] = useState<string | null>(null);
@@ -100,7 +101,9 @@ function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => 
   });
 
   useEffect(() => {
-    return () => { if (preview) URL.revokeObjectURL(preview); };
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
   }, [preview]);
 
   function pickImage(f: File | null) {
@@ -118,9 +121,7 @@ function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => 
     setD({ ...d, parts: d.parts.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
   }
 
-  const partsValid = d.parts.every(
-    (p) => p.name.trim() && p.fabric.trim() && p.color.trim(),
-  );
+  const partsValid = d.parts.every((p) => p.name.trim() && p.fabric.trim() && p.color.trim());
   const valid =
     d.code.trim() &&
     d.name.trim() &&
@@ -158,7 +159,7 @@ function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => 
     }
   }
 
-  const shownImage = preview ?? (imageAction === "clear" ? null : currentImageUrl ?? null);
+  const shownImage = preview ?? (imageAction === "clear" ? null : (currentImageUrl ?? null));
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/40 p-0 sm:items-center sm:p-4">
