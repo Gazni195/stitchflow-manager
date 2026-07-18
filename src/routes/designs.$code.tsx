@@ -26,9 +26,8 @@ import { AppShell } from "@/components/AppShell";
 import { DesignActionsMenu } from "@/components/DesignActionsMenu";
 import { useRequireAuth } from "@/hooks/use-auth";
 import { STATUS_LABEL, STATUS_TONE, type Design } from "@/lib/designs";
-import { useDesignByCode } from "@/lib/api/designs";
+import { useApproveDesign, useDesignByCode } from "@/lib/api/designs";
 import {
-  useApproveSample,
   useStartBulkProduction,
   useWorkflows,
   stepLabel,
@@ -93,7 +92,7 @@ function DesignDetails({ design }: { design: Design }) {
   const { data: catalog = [] } = useOperationCatalog();
   const sample = workflows.find((w) => w.kind === "sample");
   const bulk = workflows.find((w) => w.kind === "bulk");
-  const approve = useApproveSample(design.id);
+  const approveDesign = useApproveDesign();
   const startBulk = useStartBulkProduction(design.id);
 
   const active = bulk ?? sample;
@@ -101,10 +100,7 @@ function DesignDetails({ design }: { design: Design }) {
   const done = active?.steps.filter((s) => s.status === "completed").length ?? 0;
   const progress = total ? Math.round((done / total) * 100) : 0;
 
-  const sampleComplete =
-    !!sample &&
-    sample.steps.length > 0 &&
-    sample.steps.every((s) => s.status === "completed" || s.status === "skipped");
+  const designApproved = design.status !== "draft";
 
   return (
     <AppShell
@@ -196,22 +192,20 @@ function DesignDetails({ design }: { design: Design }) {
         <section className="grid gap-3 rounded-3xl border border-border bg-card p-5 shadow-sm sm:grid-cols-2">
           <div className="rounded-2xl border border-border bg-background p-4">
             <div className="flex items-center gap-2 text-sm font-bold">
-              <ShieldCheck className="h-4 w-4 text-primary" /> Sample lifecycle
+              <ShieldCheck className="h-4 w-4 text-primary" /> Design approval
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {sample?.locked
-                ? "Sample workflow is locked (approved)."
-                : sampleComplete
-                  ? "Approve to copy this workflow into a bulk workflow you can edit."
-                  : "Complete all sample steps first, then approve."}
+              {designApproved
+                ? "Design approved — visible in Sample Development."
+                : "Approve this design to move it into sample development."}
             </p>
             <button
-              disabled={!sampleComplete || approve.isPending || !!bulk}
-              onClick={() => approve.mutate()}
+              disabled={designApproved || approveDesign.isPending}
+              onClick={() => approveDesign.mutate({ id: design.id, code: design.code })}
               className="mt-3 inline-flex items-center gap-2 rounded-xl bg-success px-4 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
             >
-              {approve.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              {bulk ? "Sample approved" : "Approve Sample"}
+              {approveDesign.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {designApproved ? "Design approved" : "Approve Design"}
             </button>
           </div>
 
