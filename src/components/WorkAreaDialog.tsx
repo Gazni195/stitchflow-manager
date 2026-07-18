@@ -25,6 +25,14 @@ export const AREA_TRACKED_OPERATION_IDS = new Set<string>([
 const GARMENT_PARTS = ["Top", "Pant", "Dupatta", "Full Garment"] as const;
 const TOP_AREAS = ["Full Body", "Front Body", "Back Body", "Sleeve", "Yoke", "Other"] as const;
 
+// Sample Cutting gets its own Garment Part / Area lists — every other
+// operation (Sample Hand Work, Sample Stitching, Machine Embroidery, any
+// custom operation) keeps the two lists above unchanged. Each operation is
+// expected to eventually get its own operation-specific workflow; this is
+// just the first one.
+const CUTTING_GARMENT_PARTS = ["Full Garment", "Top", "Pant", "Short", "Dupatta", "Other"] as const;
+const CUTTING_TOP_AREAS = ["Full Body", "Front Body", "Back Body", "Sleeve", "Yoke"] as const;
+
 export function formatWorkArea(
   garmentPart: string | null,
   workArea: string | null,
@@ -36,6 +44,7 @@ export function formatWorkArea(
 }
 
 export function WorkAreaDialog({
+  operationId,
   operationName,
   operationNameEditable,
   workerOptions,
@@ -44,6 +53,10 @@ export function WorkAreaDialog({
   onCancel,
   onConfirm,
 }: {
+  // Selects which Garment Part / Area lists to show — Sample Cutting only
+  // for now (see CUTTING_GARMENT_PARTS/CUTTING_TOP_AREAS above). null for
+  // the "Other" custom-operation flow, which always uses the default lists.
+  operationId: string | null;
   operationName: string;
   // When true, the header shows a text input instead of a static title, and
   // Start Operation sends the typed value back as `operationName` on the
@@ -56,6 +69,10 @@ export function WorkAreaDialog({
   onCancel: () => void;
   onConfirm: (payload: WorkAreaPayload) => void;
 }) {
+  const isSampleCutting = operationId === "sample-cutting";
+  const garmentParts = isSampleCutting ? CUTTING_GARMENT_PARTS : GARMENT_PARTS;
+  const topAreas = isSampleCutting ? CUTTING_TOP_AREAS : TOP_AREAS;
+
   const [garmentPart, setGarmentPart] = useState<string>("");
   const [workArea, setWorkArea] = useState<string>("");
   const [customArea, setCustomArea] = useState<string>("");
@@ -110,7 +127,7 @@ export function WorkAreaDialog({
         <div className="mt-4">
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Garment Part</p>
           <div className="mt-2 grid grid-cols-2 gap-2">
-            {GARMENT_PARTS.map((p) => (
+            {garmentParts.map((p) => (
               <button
                 key={p}
                 onClick={() => setGarmentPart(p)}
@@ -132,7 +149,7 @@ export function WorkAreaDialog({
           <div className="mt-4">
             <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Area</p>
             <div className="mt-2 grid grid-cols-2 gap-2">
-              {TOP_AREAS.map((a) => (
+              {topAreas.map((a) => (
                 <button
                   key={a}
                   onClick={() => setWorkArea(a)}
