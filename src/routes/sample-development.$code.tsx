@@ -1342,6 +1342,14 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
           onClose={() => setEditingId(null)}
         />
       )}
+
+      {usageOpen && (
+        <MaterialUsageDialog
+          design={design}
+          onClose={() => setUsageOpen(false)}
+          onSaved={() => setUsageOpen(false)}
+        />
+      )}
     </div>
   );
 }
