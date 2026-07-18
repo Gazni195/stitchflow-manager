@@ -69,7 +69,7 @@ type TabId = "materials" | "making" | "costing" | "approval";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "making", label: "Sample Making", icon: Scissors },
-  { id: "materials", label: "Raw Materials", icon: Layers },
+  { id: "materials", label: "Material Selection", icon: Layers },
   { id: "costing", label: "Costing", icon: Coins },
   { id: "approval", label: "Approval", icon: FileCheck2 },
 ];
@@ -1201,7 +1201,8 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     const opLabel = `${step.operationId ?? ""} ${operationName(step, catalog)}`.toLowerCase();
     const isCuttingOp = opLabel.includes("cutting");
     const isFirstCompletion =
-      isCuttingOp && (typeof window === "undefined" || !window.localStorage.getItem(usageFlagKey));
+      isCuttingOp &&
+      (typeof window === "undefined" || !window.localStorage.getItem(usageFlagKey));
     patchSession(step.id, { completedAt: now, pausedAt: null });
     updateStep.mutate({
       stepId: step.id,
@@ -1346,7 +1347,11 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       )}
 
       {usageOpen && (
-        <MaterialUsageDialog design={design} onClose={() => setUsageOpen(false)} onSaved={() => setUsageOpen(false)} />
+        <MaterialUsageDialog
+          design={design}
+          onClose={() => setUsageOpen(false)}
+          onSaved={() => setUsageOpen(false)}
+        />
       )}
     </div>
   );
