@@ -1,9 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
   CalendarDays,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Factory,
@@ -11,29 +12,24 @@ import {
   Image as ImageIcon,
   Layers,
   Loader2,
+  MoreVertical,
   Palette,
   Pencil,
-  Play,
   Plus,
   Settings2,
   ShieldCheck,
   Trash2,
   Users,
   X,
+  XCircle,
   ZoomIn,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { DesignActionsMenu } from "@/components/DesignActionsMenu";
+import { DesignActionsMenu, EditDesignDialog } from "@/components/DesignActionsMenu";
 import { useRequireAuth } from "@/hooks/use-auth";
 import { STATUS_LABEL, STATUS_TONE, type Design } from "@/lib/designs";
-import { useApproveDesign, useDesignByCode } from "@/lib/api/designs";
-import {
-  useStartBulkProduction,
-  useWorkflows,
-  stepLabel,
-  type DesignWorkflow,
-  type StepStatus,
-} from "@/lib/api/workflows";
+import { useApproveDesign, useDesignByCode, useRejectDesign } from "@/lib/api/designs";
+import { useWorkflows, stepLabel, type DesignWorkflow, type StepStatus } from "@/lib/api/workflows";
 import { useOperationCatalog } from "@/lib/api/operations";
 import {
   DESIGN_IMAGE_LABELS,
@@ -88,19 +84,24 @@ function DesignDetailsPage() {
 }
 
 function DesignDetails({ design }: { design: Design }) {
+  const navigate = useNavigate();
   const { data: workflows = [], isLoading: wfLoading } = useWorkflows(design.id);
   const { data: catalog = [] } = useOperationCatalog();
   const sample = workflows.find((w) => w.kind === "sample");
   const bulk = workflows.find((w) => w.kind === "bulk");
   const approveDesign = useApproveDesign();
-  const startBulk = useStartBulkProduction(design.id);
 
   const active = bulk ?? sample;
   const total = active?.steps.length ?? 0;
   const done = active?.steps.filter((s) => s.status === "completed").length ?? 0;
   const progress = total ? Math.round((done / total) * 100) : 0;
 
-  const designApproved = design.status !== "draft";
+  // Rejected is its own state, not just "not approved yet": Sample
+  // Development stays blocked until Design Approval runs again (same
+  // useApproveDesign action as the very first approval — no separate
+  // re-approve flow).
+  const isRejected = design.status === "design_rejected";
+  const isApproved = design.status !== "draft" && !isRejected;
 
   return (
     <AppShell
@@ -108,13 +109,6 @@ function DesignDetails({ design }: { design: Design }) {
       subtitle={`${design.code} · ${design.customer}`}
       action={
         <div className="flex items-center gap-2">
-          <Link
-            to="/sample-development/$code"
-            params={{ code: design.code }}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary to-primary-glow px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:brightness-105"
-          >
-            <FlaskConical className="h-4 w-4" /> Start Sample Development
-          </Link>
           <Link
             to="/designs/$code/workflow"
             params={{ code: design.code }}
@@ -195,38 +189,46 @@ function DesignDetails({ design }: { design: Design }) {
               <ShieldCheck className="h-4 w-4 text-primary" /> Design approval
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {designApproved
-                ? "Design approved — visible in Sample Development."
-                : "Approve this design to move it into sample development."}
+              {isRejected
+                ? "This design was rejected. Approve it again to resume sample development."
+                : isApproved
+                  ? "Design approved — visible in Sample Development."
+                  : "Approve this design to move it into sample development."}
             </p>
-            <button
-              disabled={designApproved || approveDesign.isPending}
-              onClick={() => approveDesign.mutate({ id: design.id, code: design.code })}
-              className="mt-3 inline-flex items-center gap-2 rounded-xl bg-success px-4 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
-            >
-              {approveDesign.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              {designApproved ? "Design approved" : "Approve Design"}
-            </button>
+            {isApproved ? (
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-xl bg-success/15 px-4 py-2 text-sm font-bold text-success">
+                  <CheckCircle2 className="h-4 w-4" /> Design Approved
+                </span>
+                <DesignApprovalMenu design={design} />
+              </div>
+            ) : (
+              <button
+                disabled={approveDesign.isPending}
+                onClick={() => approveDesign.mutate({ id: design.id, code: design.code })}
+                className="mt-3 inline-flex items-center gap-2 rounded-xl bg-success px-4 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
+              >
+                {approveDesign.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                Approve Design
+              </button>
+            )}
           </div>
 
           <div className="rounded-2xl border border-border bg-background p-4">
             <div className="flex items-center gap-2 text-sm font-bold">
-              <Play className="h-4 w-4 text-primary" /> Bulk production
+              <FlaskConical className="h-4 w-4 text-primary" /> Sample Development
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {bulk?.locked
-                ? "Bulk workflow is locked — production has started."
-                : bulk
-                  ? "Edit the bulk workflow, then start production to lock the plan."
-                  : "Approve the sample to generate a bulk workflow."}
+              {isApproved
+                ? "Track materials, costing and sample workflow steps."
+                : "Approve this design first to start sample development."}
             </p>
             <button
-              disabled={!bulk || bulk.locked || startBulk.isPending}
-              onClick={() => startBulk.mutate()}
-              className="mt-3 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-50"
+              disabled={!isApproved}
+              onClick={() => navigate({ to: "/sample-development/$code", params: { code: design.code } })}
+              className="mt-3 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary to-primary-glow px-4 py-2 text-sm font-bold text-primary-foreground shadow-sm hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100"
             >
-              {startBulk.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              {bulk?.locked ? "Production started" : "Start Bulk Production"}
+              <FlaskConical className="h-4 w-4" /> Start Sample Development
             </button>
           </div>
         </section>
@@ -246,6 +248,67 @@ function DesignDetails({ design }: { design: Design }) {
         )}
       </div>
     </AppShell>
+  );
+}
+
+// Beside the "Design Approved" status once approved: Edit reuses the exact
+// same dialog as the top-bar Design actions menu (no second edit flow), and
+// Reject is the only way back out of the approved state — a direct status
+// flip via useRejectDesign, mirroring useApproveDesign's directness rather
+// than adding a confirmation step the Approve action doesn't have either.
+function DesignApprovalMenu({ design }: { design: Design }) {
+  const [open, setOpen] = useState(false);
+  const [edit, setEdit] = useState(false);
+  const reject = useRejectDesign();
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  return (
+    <>
+      <div ref={wrapRef} className="relative">
+        <button
+          aria-label="Design approval actions"
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </button>
+        {open && (
+          <div className="absolute right-0 top-11 z-40 w-48 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+            <button
+              onClick={() => {
+                setOpen(false);
+                setEdit(true);
+              }}
+              className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-semibold hover:bg-accent"
+            >
+              <Pencil className="h-4 w-4 text-primary" /> Edit Design
+            </button>
+            <button
+              disabled={reject.isPending}
+              onClick={() => {
+                setOpen(false);
+                reject.mutate({ id: design.id, code: design.code });
+              }}
+              className="flex w-full items-center gap-2.5 border-t border-border px-4 py-3 text-left text-sm font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            >
+              {reject.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+              Reject Design
+            </button>
+          </div>
+        )}
+      </div>
+
+      {edit && <EditDesignDialog design={design} onClose={() => setEdit(false)} />}
+    </>
   );
 }
 
