@@ -1041,6 +1041,7 @@ function StartOperationCard({ design }: { design: Design }) {
 
       {newProcess && (
         <WorkAreaDialog
+          operationId={newProcess.operationId}
           operationName={newProcess.name}
           operationNameEditable={newProcess.operationId === null}
           workerOptions={activeWorkerNames}
