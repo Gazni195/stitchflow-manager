@@ -39,8 +39,7 @@ function normalizeParts(v: unknown): DesignPart[] {
           color: typeof obj.color === "string" ? obj.color : "",
         };
       }
-      if (typeof p === "string")
-        return { id: `p-${i}`, name: p, fabric: "", color: "" };
+      if (typeof p === "string") return { id: `p-${i}`, name: p, fabric: "", color: "" };
       return null;
     })
     .filter((x): x is DesignPart => !!x && !!x.name.trim());
@@ -70,10 +69,7 @@ export function useDesigns() {
   return useQuery({
     queryKey: ["designs"],
     queryFn: async (): Promise<Design[]> => {
-      const { data, error } = await supabase
-        .from("designs")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("designs").select("*").order("created_at", { ascending: false });
       if (error) throw error;
       return (data as DbDesign[]).map(mapDesign);
     },
@@ -84,11 +80,7 @@ export function useDesignByCode(code: string) {
   return useQuery({
     queryKey: ["design", "by-code", code],
     queryFn: async (): Promise<Design | null> => {
-      const { data, error } = await supabase
-        .from("designs")
-        .select("*")
-        .eq("code", code)
-        .maybeSingle();
+      const { data, error } = await supabase.from("designs").select("*").eq("code", code).maybeSingle();
       if (error) throw error;
       return data ? mapDesign(data as DbDesign) : null;
     },
@@ -193,9 +185,7 @@ export function useUpdateDesign() {
       if (action instanceof File) {
         const ext = action.name.split(".").pop() ?? "jpg";
         const path = `${uid}/${crypto.randomUUID()}.${ext}`;
-        const { error: upErr } = await supabase.storage
-          .from("design-images")
-          .upload(path, action, { upsert: false });
+        const { error: upErr } = await supabase.storage.from("design-images").upload(path, action, { upsert: false });
         if (upErr) throw upErr;
         image_path = path;
       } else if (action === "clear") {
@@ -243,6 +233,32 @@ export function useUpdateDesign() {
   });
 }
 
+// Design Approval is distinct from Sample Approval: it's the earlier gate
+// (a design's spec is signed off, so it's ready to enter sample
+// development) versus the existing 3-role sign-off in Sample Development's
+// Approval tab (useApproveSample in lib/api/workflows.ts), which approves
+// the physical sample and snapshots the sample workflow into a bulk one.
+// This reuses the existing `status` column instead of a new table/RPC:
+// "sampling" was already a defined DesignStatus (labelled "Sampling") that
+// nothing ever transitioned a design into — Design Approval is that
+// transition, draft -> sampling.
+export function useApproveDesign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (design: Pick<Design, "id" | "code">): Promise<void> => {
+      const { error } = await supabase
+        .from("designs")
+        .update({ status: "sampling" as DesignStatus })
+        .eq("id", design.id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, design) => {
+      qc.invalidateQueries({ queryKey: ["designs"] });
+      qc.invalidateQueries({ queryKey: ["design", "by-code", design.code] });
+    },
+  });
+}
+
 export function useDeleteDesign() {
   const qc = useQueryClient();
   return useMutation({
@@ -267,9 +283,7 @@ export function useDesignImageUrl(path: string | null | undefined) {
     staleTime: 55 * 60 * 1000,
     queryFn: async (): Promise<string | null> => {
       if (!path) return null;
-      const { data, error } = await supabase.storage
-        .from("design-images")
-        .createSignedUrl(path, 60 * 60);
+      const { data, error } = await supabase.storage.from("design-images").createSignedUrl(path, 60 * 60);
       if (error) return null;
       return data?.signedUrl ?? null;
     },
