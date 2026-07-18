@@ -1194,6 +1194,12 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       0,
       Math.round((now.getTime() - new Date(startedAtIso).getTime() - session.pausedMs) / 1000),
     );
+    // Check BEFORE mutating: if nothing was completed yet, this is the
+    // first sample operation to finish, so surface the Material Usage
+    // popup once the mutation kicks off.
+    const isFirstCompletion =
+      ordered.filter((s) => s.status === "completed").length === 0 &&
+      (typeof window === "undefined" || !window.localStorage.getItem(usageFlagKey));
     patchSession(step.id, { completedAt: now, pausedAt: null });
     updateStep.mutate({
       stepId: step.id,
@@ -1205,6 +1211,10 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
         durationSeconds,
       },
     });
+    if (isFirstCompletion) {
+      if (typeof window !== "undefined") window.localStorage.setItem(usageFlagKey, "1");
+      setUsageOpen(true);
+    }
   }
 
   // Reopening a completed operation puts it straight back into Running with
