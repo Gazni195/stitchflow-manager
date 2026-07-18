@@ -211,6 +211,12 @@ function DesignSample({ design }: { design: Design }) {
         {/* Mockup-style summary: image hero + facts + workflow progress dots */}
         <SampleHeader design={design} stageIndex={stageIndex} />
 
+        {/* Start Operation is a permanent quick action: it used to live only
+            inside the Sample Making tab (and would disappear once anything
+            was running), but a new operation should be startable from any
+            tab without switching to Sample Making first. */}
+        <StartOperationCard design={design} />
+
         {/* Tabs */}
         <section>
           <div className="flex gap-2 overflow-x-auto border-b border-border">
@@ -932,21 +938,24 @@ function useActiveErpWorkers() {
   });
 }
 
-function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue: () => void }) {
-  const { data: workflows, isLoading } = useWorkflows(design.id);
+// The one way to add work: Select Operation -> Garment Part -> Area (Top
+// only) -> Worker -> Start Operation. Goes straight into Running — there is
+// no Pending Operations step in between, and no default operations are
+// seeded. Lives at the page level (not inside SampleMakingPanel) so it's
+// always available regardless of which tab is active; SampleMakingPanel
+// still owns everything about already-created steps (pause/resume/complete/
+// cancel/reopen/edit, timers, the Timeline), it just no longer creates them.
+function StartOperationCard({ design }: { design: Design }) {
+  const { data: workflows } = useWorkflows(design.id);
   const { data: catalog = [] } = useOperationCatalog();
   const { data: activeWorkerNames = [] } = useActiveErpWorkers();
-  const updateStep = useUpdateStep(design.id);
   const addStep = useAddStep(design.id);
-  const deleteStep = useDeleteStep(design.id);
+  const updateStep = useUpdateStep(design.id);
   const addOperation = useAddOperation();
   const sample = workflows?.find((w) => w.kind === "sample");
   const ordered = sample ? [...sample.steps].sort((a, b) => a.sequence - b.sequence) : [];
 
-  const [sessions, setSessions] = useState<Record<string, OperationSession>>({});
-  const [, forceTick] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
   // Newly picked process, waiting on the Start Operation popup — nothing is
   // saved as a workflow step until Start Operation is confirmed here, so
   // Cancel simply forgets this and nothing is created. operationId is null
@@ -954,6 +963,108 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   // opens, just with an editable name field, and the operations_catalog row
   // is only created once Start Operation is actually confirmed.
   const [newProcess, setNewProcess] = useState<{ operationId: string | null; name: string } | null>(null);
+
+  function commitPick(operationId: string) {
+    const op = catalog.find((o) => o.id === operationId);
+    setNewProcess({ operationId, name: op?.name ?? operationId });
+    setPickerOpen(false);
+  }
+
+  function commitPickCustom() {
+    setNewProcess({ operationId: null, name: "" });
+    setPickerOpen(false);
+  }
+
+  // Creates the workflow step and starts it in one go, only once Start
+  // Operation is confirmed. For the "Other" flow (operationId null), the
+  // operations_catalog row for the typed name is created here first, right
+  // before the step itself, so a cancelled dialog never leaves behind an
+  // unused catalog entry. No local session/timer state to seed here —
+  // SampleMakingPanel derives a fresh one from the persisted startedAt the
+  // moment it's mounted (or already showing), so this works identically
+  // whether that tab is currently active or not.
+  async function createAndStart(operationId: string | null, payload: WorkAreaPayload) {
+    if (!sample || payload.workers.length === 0) return;
+    let opId = operationId;
+    if (!opId) {
+      const customName = payload.operationName?.trim();
+      if (!customName) return;
+      opId = await addOperation.mutateAsync({ name: customName });
+    }
+    const nextSeq = ordered.length ? Math.max(...ordered.map((s) => s.sequence)) + 1 : 1;
+    const now = new Date();
+    const stepId = await addStep.mutateAsync({ workflowId: sample.id, operationId: opId, sequence: nextSeq });
+    updateStep.mutate({
+      stepId,
+      patch: {
+        status: "in-progress",
+        assignedTo: joinWorkers(payload.workers),
+        startDate: today(),
+        startedAt: now.toISOString(),
+        completedAt: null,
+        durationSeconds: null,
+        garmentPart: payload.garmentPart,
+        workArea: payload.workArea,
+        customArea: payload.customArea,
+      },
+    });
+    setNewProcess(null);
+  }
+
+  const busy = updateStep.isPending || addStep.isPending || addOperation.isPending;
+
+  return (
+    <>
+      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <button
+          onClick={() => setPickerOpen(true)}
+          className="mt-2 flex w-full flex-col items-center gap-1.5 rounded-2xl py-10 text-center transition hover:bg-primary-soft/20"
+        >
+          <span className="grid h-28 w-28 place-items-center rounded-full bg-gradient-to-br from-primary to-primary-glow shadow-lg shadow-primary/30 transition-transform duration-200 hover:scale-105 hover:shadow-xl hover:shadow-primary/40">
+            <Plus className="h-12 w-12 text-primary-foreground" strokeWidth={2.5} />
+          </span>
+          <span className="mt-2 text-base font-bold text-foreground">Start Operation</span>
+          <span className="text-xs text-muted-foreground">Click to start a new sample operation</span>
+        </button>
+      </div>
+
+      {pickerOpen && (
+        <OperationPickerModal
+          title="Select Operation"
+          catalog={catalog}
+          busy={busy}
+          onPick={commitPick}
+          onPickCustom={commitPickCustom}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      {newProcess && (
+        <WorkAreaDialog
+          operationName={newProcess.name}
+          operationNameEditable={newProcess.operationId === null}
+          workerOptions={activeWorkerNames}
+          busy={busy}
+          onCancel={() => setNewProcess(null)}
+          onConfirm={(payload) => createAndStart(newProcess.operationId, payload)}
+        />
+      )}
+    </>
+  );
+}
+
+function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue: () => void }) {
+  const { data: workflows, isLoading } = useWorkflows(design.id);
+  const { data: catalog = [] } = useOperationCatalog();
+  const { data: activeWorkerNames = [] } = useActiveErpWorkers();
+  const updateStep = useUpdateStep(design.id);
+  const deleteStep = useDeleteStep(design.id);
+  const sample = workflows?.find((w) => w.kind === "sample");
+  const ordered = sample ? [...sample.steps].sort((a, b) => a.sequence - b.sequence) : [];
+
+  const [sessions, setSessions] = useState<Record<string, OperationSession>>({});
+  const [, forceTick] = useState(0);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Re-render every second so elapsed-time counters keep ticking.
   useEffect(() => {
@@ -1078,58 +1189,6 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     setEditingId(null);
   }
 
-  // Step 1, "Select Operation": picking a process never creates a Pending
-  // Operation. It just remembers what was picked and opens the Start
-  // Operation popup (Garment Part -> Area -> Worker) for it.
-  function commitPick(operationId: string) {
-    const op = catalog.find((o) => o.id === operationId);
-    setNewProcess({ operationId, name: op?.name ?? operationId });
-    setPickerOpen(false);
-  }
-
-  // "Other": opens the exact same Start Operation popup with operationId
-  // null, which makes WorkAreaDialog show an editable name field instead of
-  // a fixed title. No operations_catalog row exists yet at this point.
-  function commitPickCustom() {
-    setNewProcess({ operationId: null, name: "" });
-    setPickerOpen(false);
-  }
-
-  // Creates the workflow step and starts it in one go, only once Start
-  // Operation is confirmed. If the popup is cancelled instead, this never
-  // runs, so nothing is ever created — it goes straight into Running. For
-  // the "Other" flow (operationId null), the operations_catalog row for the
-  // typed name is created here first, right before the step itself, so a
-  // cancelled dialog never leaves behind an unused catalog entry.
-  async function createAndStart(operationId: string | null, payload: WorkAreaPayload) {
-    if (!sample || payload.workers.length === 0) return;
-    let opId = operationId;
-    if (!opId) {
-      const customName = payload.operationName?.trim();
-      if (!customName) return;
-      opId = await addOperation.mutateAsync({ name: customName });
-    }
-    const nextSeq = ordered.length ? Math.max(...ordered.map((s) => s.sequence)) + 1 : 1;
-    const now = new Date();
-    const stepId = await addStep.mutateAsync({ workflowId: sample.id, operationId: opId, sequence: nextSeq });
-    patchSession(stepId, { workers: payload.workers, startedAt: now, pausedAt: null, pausedMs: 0, completedAt: null });
-    updateStep.mutate({
-      stepId,
-      patch: {
-        status: "in-progress",
-        assignedTo: joinWorkers(payload.workers),
-        startDate: today(),
-        startedAt: now.toISOString(),
-        completedAt: null,
-        durationSeconds: null,
-        garmentPart: payload.garmentPart,
-        workArea: payload.workArea,
-        customArea: payload.customArea,
-      },
-    });
-    setNewProcess(null);
-  }
-
   if (isLoading) {
     return (
       <div className="grid place-items-center py-16 text-muted-foreground">
@@ -1138,7 +1197,6 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     );
   }
 
-  const busy = updateStep.isPending || addStep.isPending || addOperation.isPending;
   const now = new Date();
 
   const running = ordered
@@ -1152,30 +1210,15 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
 
   return (
     <div className="grid gap-4">
-      {/* The one way to add work: Select Operation -> Garment Part ->
-          Area (Top only) -> Worker -> Start Operation. Goes straight into
-          Running — there is no Pending Operations step in between. When
-          nothing is running yet, the whole Running Operations card becomes
-          a big clickable empty state instead of a separate full-width
-          button, so there is exactly one call to action before the first
-          operation starts. Once something is running, that same picker is
-          still reachable via the "Add Operation" tile in the grid — several
-          operations can run at once (each keeps its own workers/timer/
-          status independently; nothing here limits it to one), so starting
-          another must not require finishing the first. */}
+      {/* Starting new work now happens from the always-visible Start
+          Operation card above the tabs (StartOperationCard) — this section
+          only ever manages steps that already exist: several can run at
+          once, each with its own workers/timer/status, and completing one
+          never touches the others. */}
       <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
         <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Running Operations</p>
         {running.length === 0 ? (
-          <button
-            onClick={() => setPickerOpen(true)}
-            className="mt-2 flex w-full flex-col items-center gap-1.5 rounded-2xl py-10 text-center transition hover:bg-primary-soft/20"
-          >
-            <span className="grid h-28 w-28 place-items-center rounded-full bg-gradient-to-br from-primary to-primary-glow shadow-lg shadow-primary/30 transition-transform duration-200 hover:scale-105 hover:shadow-xl hover:shadow-primary/40">
-              <Plus className="h-12 w-12 text-primary-foreground" strokeWidth={2.5} />
-            </span>
-            <span className="mt-2 text-base font-bold text-foreground">Start Process</span>
-            <span className="text-xs text-muted-foreground">Click to start the Sample Making process</span>
-          </button>
+          <p className="mt-2 text-sm text-muted-foreground">No operations running right now.</p>
         ) : (
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {running.map((step) => {
@@ -1200,16 +1243,6 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
                 />
               );
             })}
-            <button
-              onClick={() => setPickerOpen(true)}
-              className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-border bg-background p-4 text-center transition hover:border-primary/40 hover:bg-primary-soft/20"
-            >
-              <span className="grid h-10 w-10 place-items-center rounded-full bg-primary-soft text-primary">
-                <Plus className="h-5 w-5" />
-              </span>
-              <span className="mt-1 text-sm font-bold text-foreground">Add Operation</span>
-              <span className="text-[11px] text-muted-foreground">Start another sample operation</span>
-            </button>
           </div>
         )}
       </div>
@@ -1234,28 +1267,6 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
         onEdit={setEditingId}
         onReopen={reopen}
       />
-
-      {pickerOpen && (
-        <OperationPickerModal
-          title="Select Operation"
-          catalog={catalog}
-          busy={busy}
-          onPick={commitPick}
-          onPickCustom={commitPickCustom}
-          onClose={() => setPickerOpen(false)}
-        />
-      )}
-
-      {newProcess && (
-        <WorkAreaDialog
-          operationName={newProcess.name}
-          operationNameEditable={newProcess.operationId === null}
-          workerOptions={activeWorkerNames}
-          busy={busy}
-          onCancel={() => setNewProcess(null)}
-          onConfirm={(payload) => createAndStart(newProcess.operationId, payload)}
-        />
-      )}
 
       {editingStep && (
         <TimelineEditModal
