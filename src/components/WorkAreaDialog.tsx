@@ -212,6 +212,7 @@ export function WorkAreaDialog({
   const [garmentPart, setGarmentPart] = useState<string>("");
   const [workArea, setWorkArea] = useState<string>("");
   const [customArea, setCustomArea] = useState<string>("");
+  const [autoStarted, setAutoStarted] = useState(false);
 
   useEffect(() => {
     // Reset area when garment part changes away from Top
@@ -224,6 +225,16 @@ export function WorkAreaDialog({
   const requiresArea = garmentPart === "Top";
   const areaOk = !requiresArea || (workArea && (workArea !== "Other" || customArea.trim().length > 0));
   const canStart = Boolean(garmentPart) && areaOk && !busy;
+
+  // "Full Garment" needs no Area — start immediately on selection instead
+  // of asking for a second confirming tap on the Start button.
+  useEffect(() => {
+    if (garmentPart === "Full Garment" && !autoStarted && !busy) {
+      setAutoStarted(true);
+      onConfirm({ garmentPart, workArea: null, customArea: null, workers });
+    }
+  }, [garmentPart, autoStarted, busy, onConfirm, workers]);
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
