@@ -237,7 +237,9 @@ export type Database = {
       operations_catalog: {
         Row: {
           category: string
+          icon_url: string | null
           id: string
+          logo_url: string | null
           name: string
           repeatable: boolean
           short: string
@@ -245,7 +247,9 @@ export type Database = {
         }
         Insert: {
           category: string
+          icon_url?: string | null
           id: string
+          logo_url?: string | null
           name: string
           repeatable?: boolean
           short: string
@@ -253,7 +257,9 @@ export type Database = {
         }
         Update: {
           category?: string
+          icon_url?: string | null
           id?: string
+          logo_url?: string | null
           name?: string
           repeatable?: boolean
           short?: string
