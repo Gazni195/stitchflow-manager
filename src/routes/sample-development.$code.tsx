@@ -1097,19 +1097,38 @@ function StartOperationCard({ design }: { design: Design }) {
         />
       )}
 
-      {newProcess && selectedWorkers !== null && (
+      {newProcess && selectedWorkers !== null && !pendingStart && (
         <WorkAreaDialog
           operationId={newProcess.operationId}
           operationName={newProcess.name}
           workers={selectedWorkers}
           busy={busy}
           onCancel={cancelStart}
-          onConfirm={(payload) => createAndStart(newProcess.operationId, payload)}
+          onConfirm={(payload) => {
+            if (isFirstSampleOperation) {
+              setPendingStart({ operationId: newProcess.operationId, payload });
+            } else {
+              createAndStart(newProcess.operationId, payload);
+            }
+          }}
+        />
+      )}
+
+      {pendingStart && (
+        <MaterialConfirmDialog
+          design={design}
+          busy={busy}
+          onCancel={cancelStart}
+          onConfirm={async () => {
+            await createAndStart(pendingStart.operationId, pendingStart.payload);
+            setPendingStart(null);
+          }}
         />
       )}
     </>
   );
 }
+
 
 function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue: () => void }) {
   const { data: workflows, isLoading } = useWorkflows(design.id);
