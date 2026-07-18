@@ -6,6 +6,9 @@ export type WorkAreaPayload = {
   workArea: string | null;
   customArea: string | null;
   workers: string[];
+  // Only present when the dialog was opened in editable-name mode (the
+  // "Other" custom operation card in Select Operation).
+  operationName?: string;
 };
 
 export const AREA_TRACKED_OPERATION_IDS = new Set<string>([
@@ -20,7 +23,7 @@ export const AREA_TRACKED_OPERATION_IDS = new Set<string>([
 ]);
 
 const GARMENT_PARTS = ["Top", "Pant", "Dupatta", "Full Garment"] as const;
-const TOP_AREAS = ["Front Body", "Back Body", "Sleeve", "Other"] as const;
+const TOP_AREAS = ["Full Body", "Front Body", "Back Body", "Sleeve", "Yoke", "Other"] as const;
 
 export function formatWorkArea(
   garmentPart: string | null,
@@ -34,6 +37,7 @@ export function formatWorkArea(
 
 export function WorkAreaDialog({
   operationName,
+  operationNameEditable,
   workerOptions,
   initialWorkers,
   busy,
@@ -41,6 +45,11 @@ export function WorkAreaDialog({
   onConfirm,
 }: {
   operationName: string;
+  // When true, the header shows a text input instead of a static title, and
+  // Start Operation sends the typed value back as `operationName` on the
+  // payload. Everything else about this dialog — Garment Part, Area,
+  // Assigned Workers, Start Operation — behaves identically either way.
+  operationNameEditable?: boolean;
   workerOptions: string[];
   initialWorkers?: string[];
   busy?: boolean;
@@ -51,6 +60,7 @@ export function WorkAreaDialog({
   const [workArea, setWorkArea] = useState<string>("");
   const [customArea, setCustomArea] = useState<string>("");
   const [workers, setWorkers] = useState<string[]>(initialWorkers ?? []);
+  const [customOperationName, setCustomOperationName] = useState(operationName);
 
   useEffect(() => {
     // Reset area when garment part changes away from Top
@@ -62,7 +72,8 @@ export function WorkAreaDialog({
 
   const requiresArea = garmentPart === "Top";
   const areaOk = !requiresArea || (workArea && (workArea !== "Other" || customArea.trim().length > 0));
-  const canStart = Boolean(garmentPart) && areaOk && workers.length > 0 && !busy;
+  const nameOk = !operationNameEditable || customOperationName.trim().length > 0;
+  const canStart = Boolean(garmentPart) && areaOk && nameOk && workers.length > 0 && !busy;
 
   function toggleWorker(w: string) {
     setWorkers((prev) => (prev.includes(w) ? prev.filter((x) => x !== w) : [...prev, w]));
@@ -72,9 +83,19 @@ export function WorkAreaDialog({
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
       <div className="w-full max-w-md rounded-t-3xl bg-card p-5 shadow-xl sm:rounded-3xl">
         <div className="flex items-start justify-between gap-2">
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Start Operation</p>
-            <h3 className="text-base font-bold">{operationName}</h3>
+            {operationNameEditable ? (
+              <input
+                autoFocus
+                value={customOperationName}
+                onChange={(e) => setCustomOperationName(e.target.value)}
+                placeholder="Operation Name"
+                className="mt-1 w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-base font-bold outline-none focus:border-primary"
+              />
+            ) : (
+              <h3 className="text-base font-bold">{operationName}</h3>
+            )}
           </div>
           <button
             onClick={onCancel}
@@ -179,6 +200,7 @@ export function WorkAreaDialog({
                 workArea: requiresArea ? workArea : null,
                 customArea: requiresArea && workArea === "Other" ? customArea.trim() : null,
                 workers,
+                ...(operationNameEditable ? { operationName: customOperationName.trim() } : {}),
               })
             }
             disabled={!canStart}
