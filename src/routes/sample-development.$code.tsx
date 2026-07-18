@@ -22,7 +22,12 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
-import { WorkAreaDialog, formatWorkArea, type WorkAreaPayload } from "@/components/WorkAreaDialog";
+import {
+  WorkAreaDialog,
+  WorkerSelectionDialog,
+  formatWorkArea,
+  type WorkAreaPayload,
+} from "@/components/WorkAreaDialog";
 import { Switch } from "@/components/ui/switch";
 import { useRequireAuth, useSession } from "@/hooks/use-auth";
 import { useDesignByCode } from "@/lib/api/designs";
@@ -938,6 +943,17 @@ function useActiveErpWorkers() {
   });
 }
 
+// Extension point for operation-specific eligibility: every Active ERPNext
+// employee counts as "eligible" for every operation today, because ERPNext
+// doesn't yet expose a department/skill mapping per operation. Once it
+// does, filter activeWorkerNames by operationId here — the Worker
+// Selection popup itself only ever renders whatever list this returns, so
+// no UI change is needed when real filtering lands.
+function useEligibleWorkers(operationId: string | null) {
+  const { data: activeWorkerNames = [], isLoading } = useActiveErpWorkers();
+  return { data: activeWorkerNames, isLoading };
+}
+
 // The one way to add work: Select Operation -> Garment Part -> Area (Top
 // only) -> Worker -> Start Operation. Goes straight into Running — there is
 // no Pending Operations step in between, and no default operations are
@@ -948,7 +964,6 @@ function useActiveErpWorkers() {
 function StartOperationCard({ design }: { design: Design }) {
   const { data: workflows } = useWorkflows(design.id);
   const { data: catalog = [] } = useOperationCatalog();
-  const { data: activeWorkerNames = [] } = useActiveErpWorkers();
   const addStep = useAddStep(design.id);
   const updateStep = useUpdateStep(design.id);
   const addOperation = useAddOperation();
@@ -956,13 +971,19 @@ function StartOperationCard({ design }: { design: Design }) {
   const ordered = sample ? [...sample.steps].sort((a, b) => a.sequence - b.sequence) : [];
 
   const [pickerOpen, setPickerOpen] = useState(false);
-  // Newly picked process, waiting on the Start Operation popup — nothing is
-  // saved as a workflow step until Start Operation is confirmed here, so
-  // Cancel simply forgets this and nothing is created. operationId is null
-  // for the "Other" custom-operation card: the same Start Operation dialog
-  // opens, just with an editable name field, and the operations_catalog row
-  // is only created once Start Operation is actually confirmed.
+  // Newly picked process, waiting on the Worker Selection / Garment Part
+  // popups — nothing is saved as a workflow step until Start Operation is
+  // confirmed at the end, so Cancel at any point simply forgets this and
+  // nothing is created. operationId is null for the "Other" custom-operation
+  // card: the same two popups open, just with an editable name field in the
+  // first one, and the operations_catalog row is only created once Start
+  // Operation is actually confirmed.
   const [newProcess, setNewProcess] = useState<{ operationId: string | null; name: string } | null>(null);
+  // Set once Worker Selection is confirmed — its presence is what switches
+  // the flow from the Worker Selection popup to the Garment Part popup.
+  const [selectedWorkers, setSelectedWorkers] = useState<string[] | null>(null);
+
+  const { data: eligibleWorkers = [] } = useEligibleWorkers(newProcess?.operationId ?? null);
 
   function commitPick(operationId: string) {
     const op = catalog.find((o) => o.id === operationId);
@@ -973,6 +994,11 @@ function StartOperationCard({ design }: { design: Design }) {
   function commitPickCustom() {
     setNewProcess({ operationId: null, name: "" });
     setPickerOpen(false);
+  }
+
+  function cancelStart() {
+    setNewProcess(null);
+    setSelectedWorkers(null);
   }
 
   // Creates the workflow step and starts it in one go, only once Start
@@ -1009,6 +1035,7 @@ function StartOperationCard({ design }: { design: Design }) {
       },
     });
     setNewProcess(null);
+    setSelectedWorkers(null);
   }
 
   const busy = updateStep.isPending || addStep.isPending || addOperation.isPending;
@@ -1039,14 +1066,29 @@ function StartOperationCard({ design }: { design: Design }) {
         />
       )}
 
-      {newProcess && (
+      {newProcess && selectedWorkers === null && (
+        <WorkerSelectionDialog
+          operationName={newProcess.name}
+          operationNameEditable={newProcess.operationId === null}
+          workerOptions={eligibleWorkers}
+          busy={busy}
+          onCancel={cancelStart}
+          onConfirm={({ workers, operationName }) => {
+            if (operationName !== undefined) {
+              setNewProcess((p) => (p ? { ...p, name: operationName } : p));
+            }
+            setSelectedWorkers(workers);
+          }}
+        />
+      )}
+
+      {newProcess && selectedWorkers !== null && (
         <WorkAreaDialog
           operationId={newProcess.operationId}
           operationName={newProcess.name}
-          operationNameEditable={newProcess.operationId === null}
-          workerOptions={activeWorkerNames}
+          workers={selectedWorkers}
           busy={busy}
-          onCancel={() => setNewProcess(null)}
+          onCancel={cancelStart}
           onConfirm={(payload) => createAndStart(newProcess.operationId, payload)}
         />
       )}
