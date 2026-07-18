@@ -982,6 +982,19 @@ function StartOperationCard({ design }: { design: Design }) {
   // Set once Worker Selection is confirmed — its presence is what switches
   // the flow from the Worker Selection popup to the Garment Part popup.
   const [selectedWorkers, setSelectedWorkers] = useState<string[] | null>(null);
+  // For the very first sample operation, the Garment Part popup does NOT
+  // immediately start the operation. Instead the Material Confirmation
+  // popup opens so the user can review / edit the materials they saved in
+  // Material Selection before any timer starts. After confirmation the
+  // operation starts exactly the same way as any subsequent one. This
+  // popup never opens again for this sample — later operations skip
+  // straight from Garment Part -> start — unless materials are edited
+  // manually from the Materials tab.
+  const [pendingStart, setPendingStart] = useState<
+    { operationId: string | null; payload: WorkAreaPayload } | null
+  >(null);
+  const isFirstSampleOperation = !ordered.some((s) => s.startedAt);
+
 
   const { data: eligibleWorkers = [] } = useEligibleWorkers(newProcess?.operationId ?? null);
 
