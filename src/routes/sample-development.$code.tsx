@@ -1109,6 +1109,13 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   const [sessions, setSessions] = useState<Record<string, OperationSession>>({});
   const [, forceTick] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // The Material Usage popup opens automatically the first time any sample
+  // operation is completed (typically Sample Cutting). We persist a
+  // per-design flag so it never reappears on later completions — the
+  // rule is "once per design, immediately after the first completion".
+  // Users can still edit Material Selection manually afterwards.
+  const usageFlagKey = `sample-material-usage-shown:${design.id}`;
+  const [usageOpen, setUsageOpen] = useState(false);
 
   // Re-render every second so elapsed-time counters keep ticking.
   useEffect(() => {
