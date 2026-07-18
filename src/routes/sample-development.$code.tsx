@@ -1194,11 +1194,14 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       0,
       Math.round((now.getTime() - new Date(startedAtIso).getTime() - session.pausedMs) / 1000),
     );
-    // Check BEFORE mutating: if nothing was completed yet, this is the
-    // first sample operation to finish, so surface the Material Usage
-    // popup once the mutation kicks off.
+    // Material Usage popup is tied specifically to Sample Cutting — the
+    // only operation where actual fabric consumption is measured. Other
+    // operations (hand work, stitching, embroidery, QC) must complete
+    // directly without prompting.
+    const opLabel = `${step.operationId ?? ""} ${operationName(step, catalog)}`.toLowerCase();
+    const isCuttingOp = opLabel.includes("cutting");
     const isFirstCompletion =
-      ordered.filter((s) => s.status === "completed").length === 0 &&
+      isCuttingOp &&
       (typeof window === "undefined" || !window.localStorage.getItem(usageFlagKey));
     patchSession(step.id, { completedAt: now, pausedAt: null });
     updateStep.mutate({
