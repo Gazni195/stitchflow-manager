@@ -62,8 +62,8 @@ export const Route = createFileRoute("/sample-development/$code")({
 type TabId = "materials" | "making" | "costing" | "approval";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
-  { id: "materials", label: "Material Selection", icon: Layers },
   { id: "making", label: "Sample Making", icon: Scissors },
+  { id: "materials", label: "Material Selection", icon: Layers },
   { id: "costing", label: "Costing", icon: Coins },
   { id: "approval", label: "Approval", icon: FileCheck2 },
 ];
@@ -73,8 +73,8 @@ type ApprovalRoleName = (typeof MANDATORY_APPROVAL_ROLES)[number];
 
 const SAMPLE_STAGES: { id: string; label: string }[] = [
   { id: "sample-created", label: "Sample Created" },
-  { id: "material-selection", label: "Material Selection" },
   { id: "sample-making", label: "Sample Making" },
+  { id: "material-selection", label: "Material Selection" },
   { id: "costing", label: "Costing" },
   { id: "approval", label: "Approval" },
   { id: "ready-for-production", label: "Ready for Production" },
@@ -102,10 +102,13 @@ function computeStageIndex(design: Design, sample: DesignWorkflow | undefined, a
   const allMakingDone =
     makingSteps.length > 0 && makingSteps.every((s) => s.status === "completed" || s.status === "skipped");
 
+  // Same trigger conditions as before reordering SAMPLE_STAGES — only the
+  // indices changed, to match Sample Making (now slot 1) and Material
+  // Selection (now slot 2) swapping places.
   if (allMakingDone) return 3;
-  if (anyMakingActive) return 2;
-  if (materialDone) return 2;
-  if (materialStep || steps.length > 0) return 1;
+  if (anyMakingActive) return 1;
+  if (materialDone) return 1;
+  if (materialStep || steps.length > 0) return 2;
 
   return 0;
 }
@@ -150,7 +153,7 @@ function DesignSamplePage() {
 }
 
 function DesignSample({ design }: { design: Design }) {
-  const [tab, setTab] = useState<TabId>("materials");
+  const [tab, setTab] = useState<TabId>("making");
   const { data: workflows, isLoading: wfLoading } = useWorkflows(design.id);
   const sample = workflows?.find((w) => w.kind === "sample");
   const bulk = workflows?.find((w) => w.kind === "bulk");
@@ -1155,7 +1158,11 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
           nothing is running yet, the whole Running Operations card becomes
           a big clickable empty state instead of a separate full-width
           button, so there is exactly one call to action before the first
-          operation starts. */}
+          operation starts. Once something is running, that same picker is
+          still reachable via the "Add Operation" tile in the grid — several
+          operations can run at once (each keeps its own workers/timer/
+          status independently; nothing here limits it to one), so starting
+          another must not require finishing the first. */}
       <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
         <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Running Operations</p>
         {running.length === 0 ? (
@@ -1193,17 +1200,31 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
                 />
               );
             })}
+            <button
+              onClick={() => setPickerOpen(true)}
+              className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-border bg-background p-4 text-center transition hover:border-primary/40 hover:bg-primary-soft/20"
+            >
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-primary-soft text-primary">
+                <Plus className="h-5 w-5" />
+              </span>
+              <span className="mt-1 text-sm font-bold text-foreground">Add Operation</span>
+              <span className="text-[11px] text-muted-foreground">Start another sample operation</span>
+            </button>
           </div>
         )}
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end gap-1">
         <button
           onClick={onContinue}
-          className="inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+          disabled={running.length > 0}
+          className="inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Continue to Costing <ArrowRight className="h-4 w-4" />
         </button>
+        {running.length > 0 && (
+          <p className="text-[11px] text-muted-foreground">Complete all running operations to continue.</p>
+        )}
       </div>
 
       <WorkflowTimeline
