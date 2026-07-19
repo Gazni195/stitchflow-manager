@@ -166,6 +166,7 @@ function SidebarContent({
   onNavigate: () => void;
   hideBrand?: boolean;
 }) {
+  const adminCan = useCan(["users.view", "roles.view"]);
   return (
     <div className="flex h-full flex-col overflow-y-auto">
       {!hideBrand && (
@@ -201,6 +202,23 @@ function SidebarContent({
               </li>
             );
           })}
+          {adminCan.allowed && (
+            <li>
+              <Link
+                to={ADMIN_NAV.to}
+                onClick={onNavigate}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+                  pathname.startsWith(ADMIN_NAV.to)
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent",
+                )}
+              >
+                <ADMIN_NAV.icon className="h-5 w-5" />
+                {ADMIN_NAV.label}
+              </Link>
+            </li>
+          )}
         </ul>
       </div>
 
