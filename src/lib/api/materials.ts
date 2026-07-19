@@ -28,8 +28,10 @@ export type DesignMaterial = {
   quantity: number;
   rate: number; // snapshot of material.cost_per_unit at time of selection
   amount: number; // quantity * rate
+  createdAt: string;
   material: Material | null;
 };
+
 
 type DbMaterial = {
   id: string;
