@@ -111,7 +111,16 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <RbacBootstrap />
       <Outlet />
     </QueryClientProvider>
   );
+}
+
+function RbacBootstrap() {
+  // Promotes the configured super admin email once auth is present, then noop.
+  // Also warms the current-user permissions cache used by <Can /> everywhere.
+  useEnsureSuperAdminSeed();
+  useMyPermissions();
+  return null;
 }
