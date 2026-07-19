@@ -1,13 +1,14 @@
-// Material Usage popup — opens automatically each time a Sample Cutting
-// operation completes. Records the ACTUAL material consumption per garment
-// part for THIS cutting run and APPENDS the entries to the design's
-// material history — previously saved usage rows are never overwritten so
-// re-cuts and correction cuts build a full traceable history.
+// Material Usage popup — opens automatically once the first sample
+// operation (typically Sample Cutting) is completed. Records the ACTUAL
+// material consumption per garment part, then becomes the master record
+// that Material Selection reflects. Prices/costing are intentionally
+// hidden here — this popup is only about what was really used.
 //
-// Each row is saved with a group_name of
-//   "<Garment Part>::<Category>::<Source>"
-// so the Materials tab can group and label entries by their source
-// operation (Cutting #1, Cutting #2, Re-cutting, …).
+// On save the popup replaces the design's material selection: existing
+// rows are removed (restoring their stock reservations) and new rows are
+// inserted (deducting stock as per Material Selection rules). That way
+// there is one, and only one, source of truth — the Material Selection
+// tab shows exactly what was confirmed at cutting time.
 
 import { useMemo, useState } from "react";
 import { Loader2, Plus, Trash2, X } from "lucide-react";
@@ -16,9 +17,9 @@ import {
   useAddDesignMaterial,
   useDesignMaterials,
   useMaterials,
+  useRemoveDesignMaterial,
   type Material,
 } from "@/lib/api/materials";
-
 
 // Same categories as Material Selection — kept in sync manually because
 // this popup is intentionally a leaner surface (no picker modal, no
@@ -86,19 +87,17 @@ function buildInitialState(parts: DesignPart[], inventory: Material[]): PartUsag
 
 export function MaterialUsageDialog({
   design,
-  sourceLabel,
   onClose,
   onSaved,
 }: {
   design: Design;
-  sourceLabel: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { data: inventory = [], isLoading: invLoading } = useMaterials();
-  const { isLoading: exLoading } = useDesignMaterials(design.id);
+  const { data: existing = [], isLoading: exLoading } = useDesignMaterials(design.id);
   const addLine = useAddDesignMaterial(design.id);
-
+  const removeLine = useRemoveDesignMaterial(design.id);
 
   const activeInventory = useMemo(() => inventory.filter((m) => m.status === "active"), [inventory]);
 
@@ -148,10 +147,13 @@ export function MaterialUsageDialog({
     setError(null);
     setSaving(true);
     try {
-      // Append new usage rows for THIS cutting run — previous rows are
-      // preserved so the material history stays complete and traceable.
-      // Skip anything with no material or a zero quantity — those are
-      // intentionally empty.
+      // 1. Restore stock + drop every existing row so the confirmed
+      //    usage becomes the sole record for this design.
+      for (const row of existing) {
+        await removeLine.mutateAsync(row.id);
+      }
+      // 2. Insert the confirmed usage rows. Skip anything with no
+      //    material or a zero quantity — those are intentionally empty.
       for (const part of state) {
         const rows: UsageRow[] = [part.primary, ...part.extras];
         for (const r of rows) {
@@ -160,14 +162,13 @@ export function MaterialUsageDialog({
           if (!mat) continue;
           await addLine.mutateAsync({
             materialId: r.materialId,
-            groupName: `${part.partName}::${r.category}::${sourceLabel}`,
+            groupName: `${part.partName}::${r.category}`,
             quantity: r.quantity,
             rate: mat.costPerUnit,
           });
         }
       }
       onSaved();
-
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save material usage.");
     } finally {

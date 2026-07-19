@@ -314,30 +314,28 @@ const LEGACY_CATEGORY_MAP: Record<string, MaterialCategory> = {
   "Other Materials": "Other",
 };
 
-function parseGroupKey(groupName: string): { part: GarmentPartKey; category: MaterialCategory; source: string | null } {
-  const segments = groupName.split(GROUP_KEY_SEP);
-  if (segments.length >= 2) {
-    const part = segments[0];
-    const category = segments[1];
-    const source = segments.length >= 3 ? segments.slice(2).join(GROUP_KEY_SEP) : null;
+function parseGroupKey(groupName: string): { part: GarmentPartKey; category: MaterialCategory } {
+  const idx = groupName.indexOf(GROUP_KEY_SEP);
+  if (idx >= 0) {
+    const part = groupName.slice(0, idx);
+    const category = groupName.slice(idx + GROUP_KEY_SEP.length);
     if (GARMENT_PARTS.some((p) => p.key === part) && (MATERIAL_CATEGORIES as readonly string[]).includes(category)) {
-      return { part: part as GarmentPartKey, category: category as MaterialCategory, source };
+      return { part: part as GarmentPartKey, category: category as MaterialCategory };
     }
     if (GARMENT_PARTS.some((p) => p.key === part) && LEGACY_CATEGORY_MAP[category]) {
-      return { part: part as GarmentPartKey, category: LEGACY_CATEGORY_MAP[category], source };
+      return { part: part as GarmentPartKey, category: LEGACY_CATEGORY_MAP[category] };
     }
   }
   // Legacy row from before this redesign — best-effort mapping so nothing
   // saved earlier silently disappears from the screen.
   if (LEGACY_PART_MAP[groupName]) {
-    return { part: LEGACY_PART_MAP[groupName], category: "Primary Fabric", source: null };
+    return { part: LEGACY_PART_MAP[groupName], category: "Primary Fabric" };
   }
   if (LEGACY_CATEGORY_MAP[groupName]) {
-    return { part: "Top", category: LEGACY_CATEGORY_MAP[groupName], source: null };
+    return { part: "Top", category: LEGACY_CATEGORY_MAP[groupName] };
   }
-  return { part: "Top", category: "Other", source: null };
+  return { part: "Top", category: "Other" };
 }
-
 
 export function computeMaterialTotal(items: DesignMaterial[]): number {
   return items.reduce((s, i) => s + i.amount, 0);
@@ -419,9 +417,6 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
           <Layers className="h-3.5 w-3.5" /> Open Inventory
         </Link>
       </div>
-
-      <UsageHistorySummary rows={selected} />
-
 
       {isLoading ? (
         <div className="grid place-items-center rounded-2xl border border-border bg-card p-10">
@@ -566,118 +561,6 @@ function SelectedMaterialRow({ row, onClick }: { row: DesignMaterial; onClick: (
     </li>
   );
 }
-
-// Raw Materials summary — every design_materials row is a real material
-// usage event (either a manual selection or an entry saved from a Sample
-// Cutting completion). We group them by material to show the running
-// total consumption, and expand into a per-entry history so the source
-// operation (Cutting #1, Cutting #2, …), garment part, quantity and
-// timestamp are all traceable.
-function UsageHistorySummary({ rows }: { rows: DesignMaterial[] }) {
-  const [openId, setOpenId] = useState<string | null>(null);
-
-  if (rows.length === 0) return null;
-
-  type Group = {
-    materialId: string;
-    name: string;
-    unit: string;
-    total: number;
-    entries: DesignMaterial[];
-  };
-
-  const groups = new Map<string, Group>();
-  for (const r of rows) {
-    const key = r.materialId;
-    const g = groups.get(key) ?? {
-      materialId: key,
-      name: r.material?.name ?? "Deleted material",
-      unit: r.material?.unit ?? "",
-      total: 0,
-      entries: [],
-    };
-    g.total += r.quantity;
-    g.entries.push(r);
-    groups.set(key, g);
-  }
-  const list = Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name));
-
-  return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="border-b border-border px-4 py-3">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-          Raw Materials — Usage History
-        </p>
-        <p className="text-[11px] text-muted-foreground">
-          Total consumption per material across all cutting operations.
-        </p>
-      </div>
-      <ul className="divide-y divide-border">
-        {list.map((g) => {
-          const open = openId === g.materialId;
-          return (
-            <li key={g.materialId}>
-              <button
-                onClick={() => setOpenId((cur) => (cur === g.materialId ? null : g.materialId))}
-                aria-expanded={open}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold">{g.name}</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Total used: {g.total.toLocaleString(undefined, { maximumFractionDigits: 2 })} {g.unit} ·{" "}
-                    {g.entries.length} entr{g.entries.length === 1 ? "y" : "ies"}
-                  </p>
-                </div>
-                <ChevronDown
-                  className={"h-4 w-4 shrink-0 text-muted-foreground transition-transform " + (open ? "rotate-180" : "")}
-                />
-              </button>
-              {open && (
-                <ul className="grid gap-1 border-t border-border bg-muted/20 px-4 py-3">
-                  {g.entries
-                    .slice()
-                    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-                    .map((e) => {
-                      const { part, source } = parseGroupKey(e.groupName);
-                      const when = new Date(e.createdAt);
-                      const whenStr = isNaN(when.getTime())
-                        ? ""
-                        : when.toLocaleString(undefined, {
-                            day: "2-digit",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          });
-                      return (
-                        <li
-                          key={e.id}
-                          className="flex items-center justify-between gap-3 rounded-lg bg-card px-3 py-2 text-[12px]"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold">
-                              {source ?? "Manual selection"} · {part}
-                            </p>
-                            {whenStr && (
-                              <p className="text-[11px] text-muted-foreground">{whenStr}</p>
-                            )}
-                          </div>
-                          <span className="shrink-0 text-sm font-bold tabular-nums text-primary">
-                            {e.quantity} {g.unit}
-                          </span>
-                        </li>
-                      );
-                    })}
-                </ul>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
 
 // One popup for both adding and editing.
 // Add:  Step 1 — pick a Category  ->  Step 2 — search + pick a Material,
@@ -1230,8 +1113,6 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   // is completed — first cutting, re-cutting, correction cutting, etc.
   // Other operations complete directly without prompting.
   const [usageOpen, setUsageOpen] = useState(false);
-  const [usageSource, setUsageSource] = useState<string>("Cutting #1");
-
 
 
   // Re-render every second so elapsed-time counters keep ticking.
@@ -1330,17 +1211,8 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       },
     });
     if (isCuttingOp) {
-      // Number this cutting run: count cutting operations already
-      // completed for this design (excluding this one) + 1.
-      const cuttingCompletedBefore = ordered.filter((s) => {
-        if (s.id === step.id) return false;
-        const label = `${s.operationId ?? ""} ${operationName(s, catalog)}`.toLowerCase();
-        return label.includes("cutting") && s.status === "completed";
-      }).length;
-      setUsageSource(`Cutting #${cuttingCompletedBefore + 1}`);
       setUsageOpen(true);
     }
-
 
   }
 
@@ -1471,14 +1343,8 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       )}
 
       {usageOpen && (
-        <MaterialUsageDialog
-          design={design}
-          sourceLabel={usageSource}
-          onClose={() => setUsageOpen(false)}
-          onSaved={() => setUsageOpen(false)}
-        />
+        <MaterialUsageDialog design={design} onClose={() => setUsageOpen(false)} onSaved={() => setUsageOpen(false)} />
       )}
-
     </div>
   );
 }
