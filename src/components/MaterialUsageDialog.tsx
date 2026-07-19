@@ -86,17 +86,19 @@ function buildInitialState(parts: DesignPart[], inventory: Material[]): PartUsag
 
 export function MaterialUsageDialog({
   design,
+  sourceLabel,
   onClose,
   onSaved,
 }: {
   design: Design;
+  sourceLabel: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { data: inventory = [], isLoading: invLoading } = useMaterials();
-  const { data: existing = [], isLoading: exLoading } = useDesignMaterials(design.id);
+  const { isLoading: exLoading } = useDesignMaterials(design.id);
   const addLine = useAddDesignMaterial(design.id);
-  const removeLine = useRemoveDesignMaterial(design.id);
+
 
   const activeInventory = useMemo(() => inventory.filter((m) => m.status === "active"), [inventory]);
 
