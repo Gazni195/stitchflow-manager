@@ -420,6 +420,9 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
         </Link>
       </div>
 
+      <UsageHistorySummary rows={selected} />
+
+
       {isLoading ? (
         <div className="grid place-items-center rounded-2xl border border-border bg-card p-10">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
