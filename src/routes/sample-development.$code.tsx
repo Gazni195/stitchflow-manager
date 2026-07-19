@@ -1213,8 +1213,17 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       },
     });
     if (isCuttingOp) {
+      // Number this cutting run: count cutting operations already
+      // completed for this design (excluding this one) + 1.
+      const cuttingCompletedBefore = ordered.filter((s) => {
+        if (s.id === step.id) return false;
+        const label = `${s.operationId ?? ""} ${operationName(s, catalog)}`.toLowerCase();
+        return label.includes("cutting") && s.status === "completed";
+      }).length;
+      setUsageSource(`Cutting #${cuttingCompletedBefore + 1}`);
       setUsageOpen(true);
     }
+
 
   }
 
