@@ -1,14 +1,24 @@
-// Material Usage popup — opens automatically once the first sample
-// operation (typically Sample Cutting) is completed. Records the ACTUAL
-// material consumption per garment part, then becomes the master record
-// that Material Selection reflects. Prices/costing are intentionally
-// hidden here — this popup is only about what was really used.
+// Material Usage popup — opens automatically each time a Sample Cutting
+// operation completes. Records the ACTUAL material consumption per garment
+// part for THIS cutting run and APPENDS the entries to the design's
+// material history — previously saved usage rows are never overwritten so
+// re-cuts and correction cuts build a full traceable history.
 //
-// On save the popup replaces the design's material selection: existing
-// rows are removed (restoring their stock reservations) and new rows are
-// inserted (deducting stock as per Material Selection rules). That way
-// there is one, and only one, source of truth — the Material Selection
-// tab shows exactly what was confirmed at cutting time.
+// Each row is saved with a group_name of
+//   "<Garment Part>::<Category>::<Source>"
+// so the Materials tab can group and label entries by their source
+// operation (Cutting #1, Cutting #2, Re-cutting, …).
+
+import { useMemo, useState } from "react";
+import { Loader2, Plus, Trash2, X } from "lucide-react";
+import type { Design, DesignPart } from "@/lib/designs";
+import {
+  useAddDesignMaterial,
+  useDesignMaterials,
+  useMaterials,
+  type Material,
+} from "@/lib/api/materials";
+
 
 import { useMemo, useState } from "react";
 import { Loader2, Plus, Trash2, X } from "lucide-react";
