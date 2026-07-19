@@ -1,9 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Menu, Bell, Search, LayoutDashboard, Shirt, FlaskConical, Factory, Warehouse, Package, X, PlayCircle } from "lucide-react";
+import { Menu, Bell, Search, LayoutDashboard, Shirt, FlaskConical, Factory, Warehouse, Package, X, PlayCircle, ShieldCheck } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { WORKFLOW } from "@/lib/workflow";
 import { cn } from "@/lib/utils";
 import { useRequireAuth } from "@/hooks/use-auth";
+import { useCan } from "@/lib/rbac/use-rbac";
 
 const PRIMARY_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -14,6 +15,8 @@ const PRIMARY_NAV = [
   { to: "/lines", label: "Lines", icon: Factory },
   { to: "/stock", label: "Stock", icon: Warehouse },
 ] as const;
+
+const ADMIN_NAV = { to: "/admin", label: "Admin", icon: ShieldCheck } as const;
 
 
 export function AppShell({
