@@ -1193,13 +1193,12 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       Math.round((now.getTime() - new Date(startedAtIso).getTime() - session.pausedMs) / 1000),
     );
     // Material Usage popup is tied specifically to Sample Cutting — the
-    // only operation where actual fabric consumption is measured. Other
-    // operations (hand work, stitching, embroidery, QC) must complete
+    // only operation where actual fabric consumption is measured. It opens
+    // after every cutting completion (first, re-cut, correction, etc.) so
+    // usage always reflects the latest cut. Other operations complete
     // directly without prompting.
     const opLabel = `${step.operationId ?? ""} ${operationName(step, catalog)}`.toLowerCase();
     const isCuttingOp = opLabel.includes("cutting");
-    const isFirstCompletion =
-      isCuttingOp && (typeof window === "undefined" || !window.localStorage.getItem(usageFlagKey));
     patchSession(step.id, { completedAt: now, pausedAt: null });
     updateStep.mutate({
       stepId: step.id,
@@ -1211,10 +1210,10 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
         durationSeconds,
       },
     });
-    if (isFirstCompletion) {
-      if (typeof window !== "undefined") window.localStorage.setItem(usageFlagKey, "1");
+    if (isCuttingOp) {
       setUsageOpen(true);
     }
+
   }
 
   // Reopening a completed operation puts it straight back into Running with
