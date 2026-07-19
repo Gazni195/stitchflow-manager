@@ -263,7 +263,9 @@ function DesignSample({ design }: { design: Design }) {
 //
 // Material Selection ONLY selects materials from the shared Inventory Master
 // (`/inventory`). The screen is organised the way a tailor actually thinks
-// about a sample: by garment part (Top / Pant / Shawl-Dupatta). Category
+// about a sample: by garment part, using exactly the parts defined on this
+// design (Design Wizard free text — could be "Top"/"Pant"/"Shawl", could be
+// "Sleeve"/"Yoke", could be anything). Category
 // (Primary Fabric / Lining / Accessories / Lace / Other) is asked once,
 // inside the popup, when a material is added — it is never shown as a
 // permanent section on the main screen, only the materials actually
@@ -278,34 +280,28 @@ function DesignSample({ design }: { design: Design }) {
 //
 // No schema change was needed for the garment-part × category split: both
 // are packed into the existing free-text `group_name` column as
-// "<Garment Part>::<Category>" (buildGroupKey/parseGroupKey below). Rows
-// saved before this redesign (a bare "Top"/"Lace"/etc.) are still readable
-// — parseGroupKey falls back to a best-effort mapping for those instead of
-// hiding them.
-
-type GarmentPartKey = "Top" | "Pant" | "Shawl / Dupatta";
-type GarmentPartDef = { key: GarmentPartKey; label: string; emoji: string };
-
-const GARMENT_PARTS: GarmentPartDef[] = [
-  { key: "Top", label: "Top", emoji: "👚" },
-  { key: "Pant", label: "Pant", emoji: "👖" },
-  { key: "Shawl / Dupatta", label: "Shawl / Dupatta", emoji: "🧣" },
-];
-
+// "<Garment Part>::<Category>" (buildGroupKey/parseGroupKey below).
+//
+// The Garment Part half of that key is NEVER matched against a fixed list
+// (there isn't one — a design's parts are free text typed in the Design
+// Wizard, e.g. "Shawl", "Dupatta", "Sleeve", anything). parseGroupKey
+// always returns the part exactly as it was stored — it must never
+// guess/remap/default it to some other part (that was the root cause of
+// materials silently reappearing under "Top": the part half used to be
+// checked against a hardcoded 3-key list that didn't actually match real
+// design part names like "Shawl", and anything that didn't match fell
+// back to "Top"). The design's own part list is the single source of
+// truth for which parts exist; this function only ever splits the string,
+// it never validates the part against anything.
 const MATERIAL_CATEGORIES = ["Primary Fabric", "Lining", "Accessories", "Lace", "Other"] as const;
 type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number];
 
 const GROUP_KEY_SEP = "::";
 
-function buildGroupKey(part: GarmentPartKey, category: MaterialCategory): string {
+function buildGroupKey(part: string, category: MaterialCategory): string {
   return `${part}${GROUP_KEY_SEP}${category}`;
 }
 
-const LEGACY_PART_MAP: Record<string, GarmentPartKey> = {
-  Top: "Top",
-  Pant: "Pant",
-  Shawl: "Shawl / Dupatta",
-};
 const LEGACY_CATEGORY_MAP: Record<string, MaterialCategory> = {
   Lining: "Lining",
   Lace: "Lace",
@@ -314,34 +310,45 @@ const LEGACY_CATEGORY_MAP: Record<string, MaterialCategory> = {
   "Other Materials": "Other",
 };
 
-function parseGroupKey(groupName: string): { part: GarmentPartKey; category: MaterialCategory } {
+function parseGroupKey(groupName: string): { part: string; category: MaterialCategory } {
   const idx = groupName.indexOf(GROUP_KEY_SEP);
   if (idx >= 0) {
     const part = groupName.slice(0, idx);
     const category = groupName.slice(idx + GROUP_KEY_SEP.length);
-    if (GARMENT_PARTS.some((p) => p.key === part) && (MATERIAL_CATEGORIES as readonly string[]).includes(category)) {
-      return { part: part as GarmentPartKey, category: category as MaterialCategory };
+    if ((MATERIAL_CATEGORIES as readonly string[]).includes(category)) {
+      return { part, category: category as MaterialCategory };
     }
-    if (GARMENT_PARTS.some((p) => p.key === part) && LEGACY_CATEGORY_MAP[category]) {
-      return { part: part as GarmentPartKey, category: LEGACY_CATEGORY_MAP[category] };
+    if (LEGACY_CATEGORY_MAP[category]) {
+      return { part, category: LEGACY_CATEGORY_MAP[category] };
     }
+    // Unrecognised category text — keep the part exactly as stored and
+    // fall back only on the category, which is cosmetic grouping inside
+    // a part's card, not the part identity itself.
+    return { part, category: "Other" };
   }
-  // Legacy row from before this redesign — best-effort mapping so nothing
-  // saved earlier silently disappears from the screen.
-  if (LEGACY_PART_MAP[groupName]) {
-    return { part: LEGACY_PART_MAP[groupName], category: "Primary Fabric" };
-  }
-  if (LEGACY_CATEGORY_MAP[groupName]) {
-    return { part: "Top", category: LEGACY_CATEGORY_MAP[groupName] };
-  }
-  return { part: "Top", category: "Other" };
+  // No separator at all — a bare legacy row from before the Part::Category
+  // split existed. The whole value is the only thing we actually know, so
+  // it becomes the part verbatim rather than being guessed into "Top".
+  return { part: groupName, category: "Other" };
+}
+
+// Cosmetic only — picks an icon for a part's card by loose keyword match.
+// Never used for identity/matching/bucketing, so getting a guess "wrong"
+// here can never misplace a material under a different part.
+function emojiForPart(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes("top") || n.includes("kurti") || n.includes("blouse")) return "👚";
+  if (n.includes("pant") || n.includes("bottom") || n.includes("trouser")) return "👖";
+  if (n.includes("shawl") || n.includes("dupatta") || n.includes("stole")) return "🧣";
+  if (n.includes("dress") || n.includes("gown")) return "👗";
+  return "🧵";
 }
 
 export function computeMaterialTotal(items: DesignMaterial[]): number {
   return items.reduce((s, i) => s + i.amount, 0);
 }
 
-type PickerState = { mode: "add"; part: GarmentPartKey } | { mode: "edit"; row: DesignMaterial };
+type PickerState = { mode: "add"; part: string } | { mode: "edit"; row: DesignMaterial };
 
 function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: () => void }) {
   const { data: workflows } = useWorkflows(design.id);
@@ -352,12 +359,25 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
   const removeLine = useRemoveDesignMaterial(design.id);
   const updateLine = useUpdateDesignMaterial(design.id);
 
-  const [openPart, setOpenPart] = useState<GarmentPartKey | null>("Top");
+  // The design's own parts are the single source of truth for which
+  // Garment Part cards exist — never a fixed Top/Pant/Shawl list, since a
+  // design's parts are free text (see DesignWizard). Any part name found
+  // on a saved row that ISN'T among the design's current parts (e.g. the
+  // part was renamed or removed after materials were recorded against it)
+  // still gets its own card instead of being folded into whichever part
+  // happens to be first — nothing recorded is ever silently reassigned.
+  const partNames = design.parts.map((p) => p.name).filter(Boolean);
+  const orphanPartNames = Array.from(
+    new Set(selected.map((r) => parseGroupKey(r.groupName).part).filter((name) => !partNames.includes(name))),
+  );
+  const allPartNames = [...partNames, ...orphanPartNames];
+
+  const [openPart, setOpenPart] = useState<string | null>(allPartNames[0] ?? null);
   const [picker, setPicker] = useState<PickerState | null>(null);
 
-  const byPart = GARMENT_PARTS.map((p) => ({
-    part: p,
-    rows: selected.filter((r) => parseGroupKey(r.groupName).part === p.key),
+  const byPart = allPartNames.map((name) => ({
+    part: { key: name, label: name, emoji: emojiForPart(name) },
+    rows: selected.filter((r) => parseGroupKey(r.groupName).part === name),
   }));
 
   const materialTotal = computeMaterialTotal(selected);
@@ -366,7 +386,7 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
   // Saves — always replaces the one existing row when editing, so nothing
   // is ever duplicated. Material Total recalculates immediately because
   // both the panel and Costing read the same live design_materials data.
-  async function handleSaveNew(part: GarmentPartKey, category: MaterialCategory, material: Material, quantity: number) {
+  async function handleSaveNew(part: string, category: MaterialCategory, material: Material, quantity: number) {
     await addLine.mutateAsync({
       materialId: material.id,
       groupName: buildGroupKey(part, category),
@@ -422,6 +442,10 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
         <div className="grid place-items-center rounded-2xl border border-border bg-card p-10">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
+      ) : allPartNames.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+          This design has no Garment Parts yet — add one from the Design page first.
+        </div>
       ) : (
         <div className="grid gap-2">
           {byPart.map(({ part, rows }) => (
@@ -468,10 +492,11 @@ function MaterialsPanel({ design, onCompleted }: { design: Design; onCompleted: 
   );
 }
 
-// Compact, collapsed by default (except Top): an emoji "illustration",
-// the part name, a small item/total summary, and — only once expanded —
-// the flat list of whatever's actually been selected plus one
-// "+ Add Material" button. No category headers are ever shown here.
+// Compact, collapsed by default (except the first part): an emoji
+// "illustration", the part name exactly as entered on the design, a small
+// item/total summary, and — only once expanded — the flat list of
+// whatever's actually been selected plus one "+ Add Material" button. No
+// category headers are ever shown here.
 function GarmentPartCard({
   part,
   rows,
@@ -480,7 +505,7 @@ function GarmentPartCard({
   onAddMaterial,
   onEditMaterial,
 }: {
-  part: GarmentPartDef;
+  part: { key: string; label: string; emoji: string };
   rows: DesignMaterial[];
   open: boolean;
   onToggle: () => void;
@@ -582,7 +607,7 @@ function MaterialPickerDialog({
   inventory: Material[];
   busy: boolean;
   onClose: () => void;
-  onSaveNew: (part: GarmentPartKey, category: MaterialCategory, material: Material, quantity: number) => void;
+  onSaveNew: (part: string, category: MaterialCategory, material: Material, quantity: number) => void;
   onSaveEdit: (row: DesignMaterial, material: Material, quantity: number) => void;
   onDelete: (row: DesignMaterial) => void;
 }) {
@@ -1114,7 +1139,6 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   // Other operations complete directly without prompting.
   const [usageOpen, setUsageOpen] = useState(false);
 
-
   // Re-render every second so elapsed-time counters keep ticking.
   useEffect(() => {
     const id = setInterval(() => forceTick((t) => t + 1), 1000);
@@ -1213,7 +1237,6 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
     if (isCuttingOp) {
       setUsageOpen(true);
     }
-
   }
 
   // Reopening a completed operation puts it straight back into Running with
