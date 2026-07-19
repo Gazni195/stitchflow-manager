@@ -1113,6 +1113,8 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
   // is completed — first cutting, re-cutting, correction cutting, etc.
   // Other operations complete directly without prompting.
   const [usageOpen, setUsageOpen] = useState(false);
+  const [usageSource, setUsageSource] = useState<string>("Cutting #1");
+
 
 
   // Re-render every second so elapsed-time counters keep ticking.
