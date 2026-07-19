@@ -148,13 +148,10 @@ export function MaterialUsageDialog({
     setError(null);
     setSaving(true);
     try {
-      // 1. Restore stock + drop every existing row so the confirmed
-      //    usage becomes the sole record for this design.
-      for (const row of existing) {
-        await removeLine.mutateAsync(row.id);
-      }
-      // 2. Insert the confirmed usage rows. Skip anything with no
-      //    material or a zero quantity — those are intentionally empty.
+      // Append new usage rows for THIS cutting run — previous rows are
+      // preserved so the material history stays complete and traceable.
+      // Skip anything with no material or a zero quantity — those are
+      // intentionally empty.
       for (const part of state) {
         const rows: UsageRow[] = [part.primary, ...part.extras];
         for (const r of rows) {
@@ -163,13 +160,14 @@ export function MaterialUsageDialog({
           if (!mat) continue;
           await addLine.mutateAsync({
             materialId: r.materialId,
-            groupName: `${part.partName}::${r.category}`,
+            groupName: `${part.partName}::${r.category}::${sourceLabel}`,
             quantity: r.quantity,
             rate: mat.costPerUnit,
           });
         }
       }
       onSaved();
+
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save material usage.");
     } finally {
