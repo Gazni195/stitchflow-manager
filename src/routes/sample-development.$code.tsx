@@ -567,6 +567,118 @@ function SelectedMaterialRow({ row, onClick }: { row: DesignMaterial; onClick: (
   );
 }
 
+// Raw Materials summary — every design_materials row is a real material
+// usage event (either a manual selection or an entry saved from a Sample
+// Cutting completion). We group them by material to show the running
+// total consumption, and expand into a per-entry history so the source
+// operation (Cutting #1, Cutting #2, …), garment part, quantity and
+// timestamp are all traceable.
+function UsageHistorySummary({ rows }: { rows: DesignMaterial[] }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  if (rows.length === 0) return null;
+
+  type Group = {
+    materialId: string;
+    name: string;
+    unit: string;
+    total: number;
+    entries: DesignMaterial[];
+  };
+
+  const groups = new Map<string, Group>();
+  for (const r of rows) {
+    const key = r.materialId;
+    const g = groups.get(key) ?? {
+      materialId: key,
+      name: r.material?.name ?? "Deleted material",
+      unit: r.material?.unit ?? "",
+      total: 0,
+      entries: [],
+    };
+    g.total += r.quantity;
+    g.entries.push(r);
+    groups.set(key, g);
+  }
+  const list = Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="border-b border-border px-4 py-3">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          Raw Materials — Usage History
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          Total consumption per material across all cutting operations.
+        </p>
+      </div>
+      <ul className="divide-y divide-border">
+        {list.map((g) => {
+          const open = openId === g.materialId;
+          return (
+            <li key={g.materialId}>
+              <button
+                onClick={() => setOpenId((cur) => (cur === g.materialId ? null : g.materialId))}
+                aria-expanded={open}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold">{g.name}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Total used: {g.total.toLocaleString(undefined, { maximumFractionDigits: 2 })} {g.unit} ·{" "}
+                    {g.entries.length} entr{g.entries.length === 1 ? "y" : "ies"}
+                  </p>
+                </div>
+                <ChevronDown
+                  className={"h-4 w-4 shrink-0 text-muted-foreground transition-transform " + (open ? "rotate-180" : "")}
+                />
+              </button>
+              {open && (
+                <ul className="grid gap-1 border-t border-border bg-muted/20 px-4 py-3">
+                  {g.entries
+                    .slice()
+                    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+                    .map((e) => {
+                      const { part, source } = parseGroupKey(e.groupName);
+                      const when = new Date(e.createdAt);
+                      const whenStr = isNaN(when.getTime())
+                        ? ""
+                        : when.toLocaleString(undefined, {
+                            day: "2-digit",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          });
+                      return (
+                        <li
+                          key={e.id}
+                          className="flex items-center justify-between gap-3 rounded-lg bg-card px-3 py-2 text-[12px]"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold">
+                              {source ?? "Manual selection"} · {part}
+                            </p>
+                            {whenStr && (
+                              <p className="text-[11px] text-muted-foreground">{whenStr}</p>
+                            )}
+                          </div>
+                          <span className="shrink-0 text-sm font-bold tabular-nums text-primary">
+                            {e.quantity} {g.unit}
+                          </span>
+                        </li>
+                      );
+                    })}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+
 // One popup for both adding and editing.
 // Add:  Step 1 — pick a Category  ->  Step 2 — search + pick a Material,
 //       enter Quantity, Save.
