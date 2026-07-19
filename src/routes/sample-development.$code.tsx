@@ -314,28 +314,30 @@ const LEGACY_CATEGORY_MAP: Record<string, MaterialCategory> = {
   "Other Materials": "Other",
 };
 
-function parseGroupKey(groupName: string): { part: GarmentPartKey; category: MaterialCategory } {
-  const idx = groupName.indexOf(GROUP_KEY_SEP);
-  if (idx >= 0) {
-    const part = groupName.slice(0, idx);
-    const category = groupName.slice(idx + GROUP_KEY_SEP.length);
+function parseGroupKey(groupName: string): { part: GarmentPartKey; category: MaterialCategory; source: string | null } {
+  const segments = groupName.split(GROUP_KEY_SEP);
+  if (segments.length >= 2) {
+    const part = segments[0];
+    const category = segments[1];
+    const source = segments.length >= 3 ? segments.slice(2).join(GROUP_KEY_SEP) : null;
     if (GARMENT_PARTS.some((p) => p.key === part) && (MATERIAL_CATEGORIES as readonly string[]).includes(category)) {
-      return { part: part as GarmentPartKey, category: category as MaterialCategory };
+      return { part: part as GarmentPartKey, category: category as MaterialCategory, source };
     }
     if (GARMENT_PARTS.some((p) => p.key === part) && LEGACY_CATEGORY_MAP[category]) {
-      return { part: part as GarmentPartKey, category: LEGACY_CATEGORY_MAP[category] };
+      return { part: part as GarmentPartKey, category: LEGACY_CATEGORY_MAP[category], source };
     }
   }
   // Legacy row from before this redesign — best-effort mapping so nothing
   // saved earlier silently disappears from the screen.
   if (LEGACY_PART_MAP[groupName]) {
-    return { part: LEGACY_PART_MAP[groupName], category: "Primary Fabric" };
+    return { part: LEGACY_PART_MAP[groupName], category: "Primary Fabric", source: null };
   }
   if (LEGACY_CATEGORY_MAP[groupName]) {
-    return { part: "Top", category: LEGACY_CATEGORY_MAP[groupName] };
+    return { part: "Top", category: LEGACY_CATEGORY_MAP[groupName], source: null };
   }
-  return { part: "Top", category: "Other" };
+  return { part: "Top", category: "Other", source: null };
 }
+
 
 export function computeMaterialTotal(items: DesignMaterial[]): number {
   return items.reduce((s, i) => s + i.amount, 0);
