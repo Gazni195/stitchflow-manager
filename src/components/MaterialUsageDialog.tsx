@@ -20,17 +20,6 @@ import {
 } from "@/lib/api/materials";
 
 
-import { useMemo, useState } from "react";
-import { Loader2, Plus, Trash2, X } from "lucide-react";
-import type { Design, DesignPart } from "@/lib/designs";
-import {
-  useAddDesignMaterial,
-  useDesignMaterials,
-  useMaterials,
-  useRemoveDesignMaterial,
-  type Material,
-} from "@/lib/api/materials";
-
 // Same categories as Material Selection — kept in sync manually because
 // this popup is intentionally a leaner surface (no picker modal, no
 // pricing) and shouldn't import the whole picker to avoid entangling
