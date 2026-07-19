@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, useRouterState, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { cn } from "@/lib/utils";
 import { useCan } from "@/lib/rbac/use-rbac";
