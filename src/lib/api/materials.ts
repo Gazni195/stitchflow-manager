@@ -129,6 +129,7 @@ type DbDesignMaterial = {
   group_name: string;
   quantity: number;
   rate: number;
+  created_at: string;
   materials: DbMaterial | null;
 };
 
@@ -143,6 +144,7 @@ function mapDesignMaterial(r: DbDesignMaterial): DesignMaterial {
     quantity: qty,
     rate,
     amount: qty * rate,
+    createdAt: r.created_at,
     material: r.materials ? mapMaterial(r.materials) : null,
   };
 }
@@ -155,7 +157,7 @@ export function useDesignMaterials(designId: string | undefined) {
       const { data, error } = await supabase
         .from("design_materials")
         .select(
-          "id, design_id, material_id, group_name, quantity, rate, materials:material_id(id, code, name, unit, available_stock, cost_per_unit, status, rate)",
+          "id, design_id, material_id, group_name, quantity, rate, created_at, materials:material_id(id, code, name, unit, available_stock, cost_per_unit, status, rate)",
         )
         .eq("design_id", designId!)
         .order("created_at", { ascending: true });
@@ -163,6 +165,7 @@ export function useDesignMaterials(designId: string | undefined) {
       return (data as unknown as DbDesignMaterial[]).map(mapDesignMaterial);
     },
   });
+
 }
 
 // Fetch current stock for a material. Throws if the row is missing.
