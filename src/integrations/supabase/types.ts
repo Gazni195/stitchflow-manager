@@ -267,6 +267,36 @@ export type Database = {
         }
         Relationships: []
       }
+      permissions: {
+        Row: {
+          action: string
+          created_at: string
+          description: string | null
+          id: string
+          key: string
+          label: string
+          module: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          key: string
+          label: string
+          module: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          key?: string
+          label?: string
+          module?: string
+        }
+        Relationships: []
+      }
       production_activities: {
         Row: {
           assigned_to: string
@@ -504,6 +534,32 @@ export type Database = {
           },
         ]
       }
+      role_permissions: {
+        Row: {
+          created_at: string
+          permission_id: string
+          role: Database["public"]["Enums"]["app_role"]
+        }
+        Insert: {
+          created_at?: string
+          permission_id: string
+          role: Database["public"]["Enums"]["app_role"]
+        }
+        Update: {
+          created_at?: string
+          permission_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_permission_id_fkey"
+            columns: ["permission_id"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sample_approvals: {
         Row: {
           approved_at: string
@@ -547,6 +603,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
       }
       workflow_steps: {
         Row: {
@@ -648,9 +725,27 @@ export type Database = {
         Args: { _process_id: string; _returned_qty: number }
         Returns: undefined
       }
+      current_user_permissions: {
+        Args: never
+        Returns: {
+          key: string
+        }[]
+      }
+      ensure_super_admin_seed: { Args: never; Returns: undefined }
       has_design_access: { Args: { _design_id: string }; Returns: boolean }
+      has_permission: {
+        Args: { _permission_key: string; _user_id: string }
+        Returns: boolean
+      }
       has_production_order_access: {
         Args: { _po_id: string }
+        Returns: boolean
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
         Returns: boolean
       }
       has_workflow_access: { Args: { _workflow_id: string }; Returns: boolean }
@@ -663,6 +758,14 @@ export type Database = {
           _worker_type: string
         }
         Returns: undefined
+      }
+      list_users_with_roles: {
+        Args: never
+        Returns: {
+          email: string
+          roles: Database["public"]["Enums"]["app_role"][]
+          user_id: string
+        }[]
       }
       start_bulk_production: {
         Args: { _design_id: string }
@@ -679,7 +782,16 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "super_admin"
+        | "admin"
+        | "designer"
+        | "marketing"
+        | "production_manager"
+        | "accountant"
+        | "inventory_manager"
+        | "operator"
+        | "it_developer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -806,6 +918,18 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "super_admin",
+        "admin",
+        "designer",
+        "marketing",
+        "production_manager",
+        "accountant",
+        "inventory_manager",
+        "operator",
+        "it_developer",
+      ],
+    },
   },
 } as const

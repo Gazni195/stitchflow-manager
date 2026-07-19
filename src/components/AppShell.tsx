@@ -1,9 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Menu, Bell, Search, LayoutDashboard, Shirt, FlaskConical, Factory, Warehouse, Package, X, PlayCircle } from "lucide-react";
+import { Menu, Bell, Search, LayoutDashboard, Shirt, FlaskConical, Factory, Warehouse, Package, X, PlayCircle, ShieldCheck } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { WORKFLOW } from "@/lib/workflow";
 import { cn } from "@/lib/utils";
 import { useRequireAuth } from "@/hooks/use-auth";
+import { useCan } from "@/lib/rbac/use-rbac";
 
 const PRIMARY_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -14,6 +15,8 @@ const PRIMARY_NAV = [
   { to: "/lines", label: "Lines", icon: Factory },
   { to: "/stock", label: "Stock", icon: Warehouse },
 ] as const;
+
+const ADMIN_NAV = { to: "/admin", label: "Admin", icon: ShieldCheck } as const;
 
 
 export function AppShell({
@@ -163,6 +166,7 @@ function SidebarContent({
   onNavigate: () => void;
   hideBrand?: boolean;
 }) {
+  const adminCan = useCan(["users.view", "roles.view"]);
   return (
     <div className="flex h-full flex-col overflow-y-auto">
       {!hideBrand && (
@@ -198,6 +202,23 @@ function SidebarContent({
               </li>
             );
           })}
+          {adminCan.allowed && (
+            <li>
+              <Link
+                to={ADMIN_NAV.to}
+                onClick={onNavigate}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+                  pathname.startsWith(ADMIN_NAV.to)
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent",
+                )}
+              >
+                <ADMIN_NAV.icon className="h-5 w-5" />
+                {ADMIN_NAV.label}
+              </Link>
+            </li>
+          )}
         </ul>
       </div>
 

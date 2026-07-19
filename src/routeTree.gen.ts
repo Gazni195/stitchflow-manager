@@ -23,15 +23,19 @@ import { Route as CuttingRouteImport } from './routes/cutting'
 import { Route as CostingRouteImport } from './routes/costing'
 import { Route as BarcodeRouteImport } from './routes/barcode'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SampleDevelopmentIndexRouteImport } from './routes/sample-development.index'
 import { Route as ProductionIndexRouteImport } from './routes/production.index'
 import { Route as LinesIndexRouteImport } from './routes/lines.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
 import { Route as ProductionPoRouteImport } from './routes/production.$po'
 import { Route as LinesLineRouteImport } from './routes/lines.$line'
 import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as AdminRolesRouteImport } from './routes/admin.roles'
 import { Route as DesignsCodeWorkflowRouteImport } from './routes/designs.$code.workflow'
 
 const StockRoute = StockRouteImport.update({
@@ -104,6 +108,11 @@ const ApprovalsRoute = ApprovalsRouteImport.update({
   path: '/approvals',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -129,6 +138,11 @@ const DesignsIndexRoute = DesignsIndexRouteImport.update({
   path: '/designs/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
 const SampleDevelopmentCodeRoute = SampleDevelopmentCodeRouteImport.update({
   id: '/sample-development/$code',
   path: '/sample-development/$code',
@@ -149,6 +163,16 @@ const DesignsCodeRoute = DesignsCodeRouteImport.update({
   path: '/designs/$code',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRolesRoute = AdminRolesRouteImport.update({
+  id: '/roles',
+  path: '/roles',
+  getParentRoute: () => AdminRoute,
+} as any)
 const DesignsCodeWorkflowRoute = DesignsCodeWorkflowRouteImport.update({
   id: '/workflow',
   path: '/workflow',
@@ -157,6 +181,7 @@ const DesignsCodeWorkflowRoute = DesignsCodeWorkflowRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/approvals': typeof ApprovalsRoute
   '/barcode': typeof BarcodeRoute
   '/costing': typeof CostingRoute
@@ -171,10 +196,13 @@ export interface FileRoutesByFullPath {
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
+  '/admin/roles': typeof AdminRolesRoute
+  '/admin/users': typeof AdminUsersRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
   '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
+  '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
   '/lines/': typeof LinesIndexRoute
   '/production/': typeof ProductionIndexRoute
@@ -197,10 +225,13 @@ export interface FileRoutesByTo {
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
+  '/admin/roles': typeof AdminRolesRoute
+  '/admin/users': typeof AdminUsersRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
   '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
+  '/admin': typeof AdminIndexRoute
   '/designs': typeof DesignsIndexRoute
   '/lines': typeof LinesIndexRoute
   '/production': typeof ProductionIndexRoute
@@ -210,6 +241,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/approvals': typeof ApprovalsRoute
   '/barcode': typeof BarcodeRoute
   '/costing': typeof CostingRoute
@@ -224,10 +256,13 @@ export interface FileRoutesById {
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
+  '/admin/roles': typeof AdminRolesRoute
+  '/admin/users': typeof AdminUsersRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
   '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
+  '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
   '/lines/': typeof LinesIndexRoute
   '/production/': typeof ProductionIndexRoute
@@ -238,6 +273,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/approvals'
     | '/barcode'
     | '/costing'
@@ -252,10 +288,13 @@ export interface FileRouteTypes {
     | '/samples'
     | '/stitching'
     | '/stock'
+    | '/admin/roles'
+    | '/admin/users'
     | '/designs/$code'
     | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
+    | '/admin/'
     | '/designs/'
     | '/lines/'
     | '/production/'
@@ -278,10 +317,13 @@ export interface FileRouteTypes {
     | '/samples'
     | '/stitching'
     | '/stock'
+    | '/admin/roles'
+    | '/admin/users'
     | '/designs/$code'
     | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
+    | '/admin'
     | '/designs'
     | '/lines'
     | '/production'
@@ -290,6 +332,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/approvals'
     | '/barcode'
     | '/costing'
@@ -304,10 +347,13 @@ export interface FileRouteTypes {
     | '/samples'
     | '/stitching'
     | '/stock'
+    | '/admin/roles'
+    | '/admin/users'
     | '/designs/$code'
     | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
+    | '/admin/'
     | '/designs/'
     | '/lines/'
     | '/production/'
@@ -317,6 +363,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
   ApprovalsRoute: typeof ApprovalsRoute
   BarcodeRoute: typeof BarcodeRoute
   CostingRoute: typeof CostingRoute
@@ -441,6 +488,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApprovalsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -476,6 +530,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/sample-development/$code': {
       id: '/sample-development/$code'
       path: '/sample-development/$code'
@@ -504,6 +565,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignsCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/roles': {
+      id: '/admin/roles'
+      path: '/roles'
+      fullPath: '/admin/roles'
+      preLoaderRoute: typeof AdminRolesRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/designs/$code/workflow': {
       id: '/designs/$code/workflow'
       path: '/workflow'
@@ -513,6 +588,20 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface AdminRouteChildren {
+  AdminRolesRoute: typeof AdminRolesRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminRolesRoute: AdminRolesRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface DesignsCodeRouteChildren {
   DesignsCodeWorkflowRoute: typeof DesignsCodeWorkflowRoute
@@ -528,6 +617,7 @@ const DesignsCodeRouteWithChildren = DesignsCodeRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
   ApprovalsRoute: ApprovalsRoute,
   BarcodeRoute: BarcodeRoute,
   CostingRoute: CostingRoute,
@@ -554,13 +644,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
