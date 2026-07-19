@@ -1354,8 +1354,14 @@ function SampleMakingPanel({ design, onContinue }: { design: Design; onContinue:
       )}
 
       {usageOpen && (
-        <MaterialUsageDialog design={design} onClose={() => setUsageOpen(false)} onSaved={() => setUsageOpen(false)} />
+        <MaterialUsageDialog
+          design={design}
+          sourceLabel={usageSource}
+          onClose={() => setUsageOpen(false)}
+          onSaved={() => setUsageOpen(false)}
+        />
       )}
+
     </div>
   );
 }
