@@ -1,10 +1,12 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Menu, Bell, Search, LayoutDashboard, Shirt, FlaskConical, Factory, Warehouse, Package, X, PlayCircle, ShieldCheck, Settings as SettingsIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { WORKFLOW } from "@/lib/workflow";
 import { cn } from "@/lib/utils";
-import { useRequireAuth } from "@/hooks/use-auth";
+import { useRequireAuth, useSession } from "@/hooks/use-auth";
 import { useCan } from "@/lib/rbac/use-rbac";
+import { supabase } from "@/integrations/supabase/client";
 
 const PRIMARY_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -34,6 +36,51 @@ export function AppShell({
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useRequireAuth();
+  const { session } = useSession();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+
+  const meta = (session?.user?.user_metadata ?? {}) as {
+    full_name?: string;
+    avatar_path?: string;
+    avatar_url?: string;
+  };
+  const email = session?.user?.email ?? "";
+  const displayName = meta.full_name || email || "";
+  const initials = (displayName || "U")
+    .split(/\s+|@/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]!.toUpperCase())
+    .join("");
+
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (meta.avatar_path) {
+        const { data } = await supabase.storage
+          .from("avatars")
+          .createSignedUrl(meta.avatar_path, 3600);
+        if (!cancelled) setAvatarUrl(data?.signedUrl ?? null);
+      } else if (meta.avatar_url) {
+        setAvatarUrl(meta.avatar_url);
+      } else {
+        setAvatarUrl(null);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [meta.avatar_path, meta.avatar_url]);
+
+  async function handleSignOut() {
+    await qc.cancelQueries();
+    qc.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/login", replace: true });
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -96,15 +143,21 @@ export function AppShell({
                 <Bell className="h-5 w-5" />
                 <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
               </button>
-              <div className="ml-1 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-primary-glow text-sm font-bold text-primary-foreground shadow-sm">
-                FL
-              </div>
+              <Link
+                to="/settings/profile"
+                aria-label="Account"
+                title={displayName || "Account"}
+                className="ml-1 grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-primary-glow text-sm font-bold text-primary-foreground shadow-sm"
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initials || "U"
+                )}
+              </Link>
               <button
                 aria-label="Sign out"
-                onClick={async () => {
-                  const { supabase } = await import("@/integrations/supabase/client");
-                  await supabase.auth.signOut();
-                }}
+                onClick={handleSignOut}
                 className="hidden rounded-xl px-2 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground sm:inline-flex"
               >
                 Sign out
