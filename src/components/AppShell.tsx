@@ -36,6 +36,51 @@ export function AppShell({
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useRequireAuth();
+  const { session } = useSession();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+
+  const meta = (session?.user?.user_metadata ?? {}) as {
+    full_name?: string;
+    avatar_path?: string;
+    avatar_url?: string;
+  };
+  const email = session?.user?.email ?? "";
+  const displayName = meta.full_name || email || "";
+  const initials = (displayName || "U")
+    .split(/\s+|@/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]!.toUpperCase())
+    .join("");
+
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (meta.avatar_path) {
+        const { data } = await supabase.storage
+          .from("avatars")
+          .createSignedUrl(meta.avatar_path, 3600);
+        if (!cancelled) setAvatarUrl(data?.signedUrl ?? null);
+      } else if (meta.avatar_url) {
+        setAvatarUrl(meta.avatar_url);
+      } else {
+        setAvatarUrl(null);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [meta.avatar_path, meta.avatar_url]);
+
+  async function handleSignOut() {
+    await qc.cancelQueries();
+    qc.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/login", replace: true });
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
