@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StockRouteImport } from './routes/stock'
 import { Route as StitchingRouteImport } from './routes/stitching'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SamplesRouteImport } from './routes/samples'
 import { Route as SampleMakingRouteImport } from './routes/sample-making'
 import { Route as QcRouteImport } from './routes/qc'
@@ -25,6 +26,7 @@ import { Route as BarcodeRouteImport } from './routes/barcode'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SampleDevelopmentIndexRouteImport } from './routes/sample-development.index'
 import { Route as ProductionIndexRouteImport } from './routes/production.index'
 import { Route as LinesIndexRouteImport } from './routes/lines.index'
@@ -46,6 +48,11 @@ const StockRoute = StockRouteImport.update({
 const StitchingRoute = StitchingRouteImport.update({
   id: '/stitching',
   path: '/stitching',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SamplesRoute = SamplesRouteImport.update({
@@ -117,6 +124,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRoute,
 } as any)
 const SampleDevelopmentIndexRoute = SampleDevelopmentIndexRouteImport.update({
   id: '/sample-development/',
@@ -194,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/qc': typeof QcRoute
   '/sample-making': typeof SampleMakingRoute
   '/samples': typeof SamplesRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/admin/roles': typeof AdminRolesRoute
@@ -207,6 +220,7 @@ export interface FileRoutesByFullPath {
   '/lines/': typeof LinesIndexRoute
   '/production/': typeof ProductionIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
+  '/settings/': typeof SettingsIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
 export interface FileRoutesByTo {
@@ -236,6 +250,7 @@ export interface FileRoutesByTo {
   '/lines': typeof LinesIndexRoute
   '/production': typeof ProductionIndexRoute
   '/sample-development': typeof SampleDevelopmentIndexRoute
+  '/settings': typeof SettingsIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
 export interface FileRoutesById {
@@ -254,6 +269,7 @@ export interface FileRoutesById {
   '/qc': typeof QcRoute
   '/sample-making': typeof SampleMakingRoute
   '/samples': typeof SamplesRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/admin/roles': typeof AdminRolesRoute
@@ -267,6 +283,7 @@ export interface FileRoutesById {
   '/lines/': typeof LinesIndexRoute
   '/production/': typeof ProductionIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
+  '/settings/': typeof SettingsIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
 export interface FileRouteTypes {
@@ -286,6 +303,7 @@ export interface FileRouteTypes {
     | '/qc'
     | '/sample-making'
     | '/samples'
+    | '/settings'
     | '/stitching'
     | '/stock'
     | '/admin/roles'
@@ -299,6 +317,7 @@ export interface FileRouteTypes {
     | '/lines/'
     | '/production/'
     | '/sample-development/'
+    | '/settings/'
     | '/designs/$code/workflow'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -328,6 +347,7 @@ export interface FileRouteTypes {
     | '/lines'
     | '/production'
     | '/sample-development'
+    | '/settings'
     | '/designs/$code/workflow'
   id:
     | '__root__'
@@ -345,6 +365,7 @@ export interface FileRouteTypes {
     | '/qc'
     | '/sample-making'
     | '/samples'
+    | '/settings'
     | '/stitching'
     | '/stock'
     | '/admin/roles'
@@ -358,6 +379,7 @@ export interface FileRouteTypes {
     | '/lines/'
     | '/production/'
     | '/sample-development/'
+    | '/settings/'
     | '/designs/$code/workflow'
   fileRoutesById: FileRoutesById
 }
@@ -376,6 +398,7 @@ export interface RootRouteChildren {
   QcRoute: typeof QcRoute
   SampleMakingRoute: typeof SampleMakingRoute
   SamplesRoute: typeof SamplesRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   StitchingRoute: typeof StitchingRoute
   StockRoute: typeof StockRoute
   DesignsCodeRoute: typeof DesignsCodeRouteWithChildren
@@ -402,6 +425,13 @@ declare module '@tanstack/react-router' {
       path: '/stitching'
       fullPath: '/stitching'
       preLoaderRoute: typeof StitchingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/samples': {
@@ -501,6 +531,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRoute
     }
     '/sample-development/': {
       id: '/sample-development/'
@@ -603,6 +640,18 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
+interface SettingsRouteChildren {
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
+
 interface DesignsCodeRouteChildren {
   DesignsCodeWorkflowRoute: typeof DesignsCodeWorkflowRoute
 }
@@ -630,6 +679,7 @@ const rootRouteChildren: RootRouteChildren = {
   QcRoute: QcRoute,
   SampleMakingRoute: SampleMakingRoute,
   SamplesRoute: SamplesRoute,
+  SettingsRoute: SettingsRouteWithChildren,
   StitchingRoute: StitchingRoute,
   StockRoute: StockRoute,
   DesignsCodeRoute: DesignsCodeRouteWithChildren,
@@ -644,13 +694,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
