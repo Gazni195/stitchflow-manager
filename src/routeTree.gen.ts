@@ -32,6 +32,17 @@ import { Route as ProductionIndexRouteImport } from './routes/production.index'
 import { Route as LinesIndexRouteImport } from './routes/lines.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as SettingsUsersRouteImport } from './routes/settings.users'
+import { Route as SettingsThemeRouteImport } from './routes/settings.theme'
+import { Route as SettingsSystemRouteImport } from './routes/settings.system'
+import { Route as SettingsStructureRouteImport } from './routes/settings.structure'
+import { Route as SettingsRolesRouteImport } from './routes/settings.roles'
+import { Route as SettingsProfileRouteImport } from './routes/settings.profile'
+import { Route as SettingsPhotoRouteImport } from './routes/settings.photo'
+import { Route as SettingsPasswordRouteImport } from './routes/settings.password'
+import { Route as SettingsNotificationsRouteImport } from './routes/settings.notifications'
+import { Route as SettingsIntegrationsRouteImport } from './routes/settings.integrations'
+import { Route as SettingsCompanyRouteImport } from './routes/settings.company'
 import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
 import { Route as ProductionPoRouteImport } from './routes/production.$po'
 import { Route as LinesLineRouteImport } from './routes/lines.$line'
@@ -155,6 +166,61 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const SettingsUsersRoute = SettingsUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsThemeRoute = SettingsThemeRouteImport.update({
+  id: '/theme',
+  path: '/theme',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsSystemRoute = SettingsSystemRouteImport.update({
+  id: '/system',
+  path: '/system',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsStructureRoute = SettingsStructureRouteImport.update({
+  id: '/structure',
+  path: '/structure',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsRolesRoute = SettingsRolesRouteImport.update({
+  id: '/roles',
+  path: '/roles',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsProfileRoute = SettingsProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsPhotoRoute = SettingsPhotoRouteImport.update({
+  id: '/photo',
+  path: '/photo',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsPasswordRoute = SettingsPasswordRouteImport.update({
+  id: '/password',
+  path: '/password',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsNotificationsRoute = SettingsNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsIntegrationsRoute = SettingsIntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsCompanyRoute = SettingsCompanyRouteImport.update({
+  id: '/company',
+  path: '/company',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SampleDevelopmentCodeRoute = SampleDevelopmentCodeRouteImport.update({
   id: '/sample-development/$code',
   path: '/sample-development/$code',
@@ -215,6 +281,17 @@ export interface FileRoutesByFullPath {
   '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
+  '/settings/company': typeof SettingsCompanyRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/password': typeof SettingsPasswordRoute
+  '/settings/photo': typeof SettingsPhotoRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/roles': typeof SettingsRolesRoute
+  '/settings/structure': typeof SettingsStructureRoute
+  '/settings/system': typeof SettingsSystemRoute
+  '/settings/theme': typeof SettingsThemeRoute
+  '/settings/users': typeof SettingsUsersRoute
   '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
   '/lines/': typeof LinesIndexRoute
@@ -245,6 +322,17 @@ export interface FileRoutesByTo {
   '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
+  '/settings/company': typeof SettingsCompanyRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/password': typeof SettingsPasswordRoute
+  '/settings/photo': typeof SettingsPhotoRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/roles': typeof SettingsRolesRoute
+  '/settings/structure': typeof SettingsStructureRoute
+  '/settings/system': typeof SettingsSystemRoute
+  '/settings/theme': typeof SettingsThemeRoute
+  '/settings/users': typeof SettingsUsersRoute
   '/admin': typeof AdminIndexRoute
   '/designs': typeof DesignsIndexRoute
   '/lines': typeof LinesIndexRoute
@@ -278,6 +366,17 @@ export interface FileRoutesById {
   '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
+  '/settings/company': typeof SettingsCompanyRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/password': typeof SettingsPasswordRoute
+  '/settings/photo': typeof SettingsPhotoRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/roles': typeof SettingsRolesRoute
+  '/settings/structure': typeof SettingsStructureRoute
+  '/settings/system': typeof SettingsSystemRoute
+  '/settings/theme': typeof SettingsThemeRoute
+  '/settings/users': typeof SettingsUsersRoute
   '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
   '/lines/': typeof LinesIndexRoute
@@ -312,6 +411,17 @@ export interface FileRouteTypes {
     | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
+    | '/settings/company'
+    | '/settings/integrations'
+    | '/settings/notifications'
+    | '/settings/password'
+    | '/settings/photo'
+    | '/settings/profile'
+    | '/settings/roles'
+    | '/settings/structure'
+    | '/settings/system'
+    | '/settings/theme'
+    | '/settings/users'
     | '/admin/'
     | '/designs/'
     | '/lines/'
@@ -342,6 +452,17 @@ export interface FileRouteTypes {
     | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
+    | '/settings/company'
+    | '/settings/integrations'
+    | '/settings/notifications'
+    | '/settings/password'
+    | '/settings/photo'
+    | '/settings/profile'
+    | '/settings/roles'
+    | '/settings/structure'
+    | '/settings/system'
+    | '/settings/theme'
+    | '/settings/users'
     | '/admin'
     | '/designs'
     | '/lines'
@@ -374,6 +495,17 @@ export interface FileRouteTypes {
     | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
+    | '/settings/company'
+    | '/settings/integrations'
+    | '/settings/notifications'
+    | '/settings/password'
+    | '/settings/photo'
+    | '/settings/profile'
+    | '/settings/roles'
+    | '/settings/structure'
+    | '/settings/system'
+    | '/settings/theme'
+    | '/settings/users'
     | '/admin/'
     | '/designs/'
     | '/lines/'
@@ -574,6 +706,83 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/settings/users': {
+      id: '/settings/users'
+      path: '/users'
+      fullPath: '/settings/users'
+      preLoaderRoute: typeof SettingsUsersRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/theme': {
+      id: '/settings/theme'
+      path: '/theme'
+      fullPath: '/settings/theme'
+      preLoaderRoute: typeof SettingsThemeRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/system': {
+      id: '/settings/system'
+      path: '/system'
+      fullPath: '/settings/system'
+      preLoaderRoute: typeof SettingsSystemRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/structure': {
+      id: '/settings/structure'
+      path: '/structure'
+      fullPath: '/settings/structure'
+      preLoaderRoute: typeof SettingsStructureRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/roles': {
+      id: '/settings/roles'
+      path: '/roles'
+      fullPath: '/settings/roles'
+      preLoaderRoute: typeof SettingsRolesRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/profile': {
+      id: '/settings/profile'
+      path: '/profile'
+      fullPath: '/settings/profile'
+      preLoaderRoute: typeof SettingsProfileRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/photo': {
+      id: '/settings/photo'
+      path: '/photo'
+      fullPath: '/settings/photo'
+      preLoaderRoute: typeof SettingsPhotoRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/password': {
+      id: '/settings/password'
+      path: '/password'
+      fullPath: '/settings/password'
+      preLoaderRoute: typeof SettingsPasswordRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/notifications': {
+      id: '/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof SettingsNotificationsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/integrations': {
+      id: '/settings/integrations'
+      path: '/integrations'
+      fullPath: '/settings/integrations'
+      preLoaderRoute: typeof SettingsIntegrationsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/company': {
+      id: '/settings/company'
+      path: '/company'
+      fullPath: '/settings/company'
+      preLoaderRoute: typeof SettingsCompanyRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/sample-development/$code': {
       id: '/sample-development/$code'
       path: '/sample-development/$code'
@@ -641,10 +850,32 @@ const AdminRouteChildren: AdminRouteChildren = {
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface SettingsRouteChildren {
+  SettingsCompanyRoute: typeof SettingsCompanyRoute
+  SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute
+  SettingsNotificationsRoute: typeof SettingsNotificationsRoute
+  SettingsPasswordRoute: typeof SettingsPasswordRoute
+  SettingsPhotoRoute: typeof SettingsPhotoRoute
+  SettingsProfileRoute: typeof SettingsProfileRoute
+  SettingsRolesRoute: typeof SettingsRolesRoute
+  SettingsStructureRoute: typeof SettingsStructureRoute
+  SettingsSystemRoute: typeof SettingsSystemRoute
+  SettingsThemeRoute: typeof SettingsThemeRoute
+  SettingsUsersRoute: typeof SettingsUsersRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsCompanyRoute: SettingsCompanyRoute,
+  SettingsIntegrationsRoute: SettingsIntegrationsRoute,
+  SettingsNotificationsRoute: SettingsNotificationsRoute,
+  SettingsPasswordRoute: SettingsPasswordRoute,
+  SettingsPhotoRoute: SettingsPhotoRoute,
+  SettingsProfileRoute: SettingsProfileRoute,
+  SettingsRolesRoute: SettingsRolesRoute,
+  SettingsStructureRoute: SettingsStructureRoute,
+  SettingsSystemRoute: SettingsSystemRoute,
+  SettingsThemeRoute: SettingsThemeRoute,
+  SettingsUsersRoute: SettingsUsersRoute,
   SettingsIndexRoute: SettingsIndexRoute,
 }
 
