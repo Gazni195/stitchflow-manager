@@ -143,15 +143,21 @@ export function AppShell({
                 <Bell className="h-5 w-5" />
                 <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
               </button>
-              <div className="ml-1 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-primary-glow text-sm font-bold text-primary-foreground shadow-sm">
-                FL
-              </div>
+              <Link
+                to="/settings/profile"
+                aria-label="Account"
+                title={displayName || "Account"}
+                className="ml-1 grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-primary-glow text-sm font-bold text-primary-foreground shadow-sm"
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initials || "U"
+                )}
+              </Link>
               <button
                 aria-label="Sign out"
-                onClick={async () => {
-                  const { supabase } = await import("@/integrations/supabase/client");
-                  await supabase.auth.signOut();
-                }}
+                onClick={handleSignOut}
                 className="hidden rounded-xl px-2 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground sm:inline-flex"
               >
                 Sign out
