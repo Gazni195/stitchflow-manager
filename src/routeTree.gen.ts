@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StockRouteImport } from './routes/stock'
 import { Route as StitchingRouteImport } from './routes/stitching'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SamplesRouteImport } from './routes/samples'
 import { Route as SampleMakingRouteImport } from './routes/sample-making'
 import { Route as QcRouteImport } from './routes/qc'
@@ -25,11 +26,23 @@ import { Route as BarcodeRouteImport } from './routes/barcode'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SampleDevelopmentIndexRouteImport } from './routes/sample-development.index'
 import { Route as ProductionIndexRouteImport } from './routes/production.index'
 import { Route as LinesIndexRouteImport } from './routes/lines.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as SettingsUsersRouteImport } from './routes/settings.users'
+import { Route as SettingsThemeRouteImport } from './routes/settings.theme'
+import { Route as SettingsSystemRouteImport } from './routes/settings.system'
+import { Route as SettingsStructureRouteImport } from './routes/settings.structure'
+import { Route as SettingsRolesRouteImport } from './routes/settings.roles'
+import { Route as SettingsProfileRouteImport } from './routes/settings.profile'
+import { Route as SettingsPhotoRouteImport } from './routes/settings.photo'
+import { Route as SettingsPasswordRouteImport } from './routes/settings.password'
+import { Route as SettingsNotificationsRouteImport } from './routes/settings.notifications'
+import { Route as SettingsIntegrationsRouteImport } from './routes/settings.integrations'
+import { Route as SettingsCompanyRouteImport } from './routes/settings.company'
 import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
 import { Route as ProductionPoRouteImport } from './routes/production.$po'
 import { Route as LinesLineRouteImport } from './routes/lines.$line'
@@ -46,6 +59,11 @@ const StockRoute = StockRouteImport.update({
 const StitchingRoute = StitchingRouteImport.update({
   id: '/stitching',
   path: '/stitching',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SamplesRoute = SamplesRouteImport.update({
@@ -118,6 +136,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SampleDevelopmentIndexRoute = SampleDevelopmentIndexRouteImport.update({
   id: '/sample-development/',
   path: '/sample-development/',
@@ -142,6 +165,61 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminRoute,
+} as any)
+const SettingsUsersRoute = SettingsUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsThemeRoute = SettingsThemeRouteImport.update({
+  id: '/theme',
+  path: '/theme',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsSystemRoute = SettingsSystemRouteImport.update({
+  id: '/system',
+  path: '/system',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsStructureRoute = SettingsStructureRouteImport.update({
+  id: '/structure',
+  path: '/structure',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsRolesRoute = SettingsRolesRouteImport.update({
+  id: '/roles',
+  path: '/roles',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsProfileRoute = SettingsProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsPhotoRoute = SettingsPhotoRouteImport.update({
+  id: '/photo',
+  path: '/photo',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsPasswordRoute = SettingsPasswordRouteImport.update({
+  id: '/password',
+  path: '/password',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsNotificationsRoute = SettingsNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsIntegrationsRoute = SettingsIntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsCompanyRoute = SettingsCompanyRouteImport.update({
+  id: '/company',
+  path: '/company',
+  getParentRoute: () => SettingsRoute,
 } as any)
 const SampleDevelopmentCodeRoute = SampleDevelopmentCodeRouteImport.update({
   id: '/sample-development/$code',
@@ -194,6 +272,7 @@ export interface FileRoutesByFullPath {
   '/qc': typeof QcRoute
   '/sample-making': typeof SampleMakingRoute
   '/samples': typeof SamplesRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/admin/roles': typeof AdminRolesRoute
@@ -202,11 +281,23 @@ export interface FileRoutesByFullPath {
   '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
+  '/settings/company': typeof SettingsCompanyRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/password': typeof SettingsPasswordRoute
+  '/settings/photo': typeof SettingsPhotoRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/roles': typeof SettingsRolesRoute
+  '/settings/structure': typeof SettingsStructureRoute
+  '/settings/system': typeof SettingsSystemRoute
+  '/settings/theme': typeof SettingsThemeRoute
+  '/settings/users': typeof SettingsUsersRoute
   '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
   '/lines/': typeof LinesIndexRoute
   '/production/': typeof ProductionIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
+  '/settings/': typeof SettingsIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
 export interface FileRoutesByTo {
@@ -231,11 +322,23 @@ export interface FileRoutesByTo {
   '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
+  '/settings/company': typeof SettingsCompanyRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/password': typeof SettingsPasswordRoute
+  '/settings/photo': typeof SettingsPhotoRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/roles': typeof SettingsRolesRoute
+  '/settings/structure': typeof SettingsStructureRoute
+  '/settings/system': typeof SettingsSystemRoute
+  '/settings/theme': typeof SettingsThemeRoute
+  '/settings/users': typeof SettingsUsersRoute
   '/admin': typeof AdminIndexRoute
   '/designs': typeof DesignsIndexRoute
   '/lines': typeof LinesIndexRoute
   '/production': typeof ProductionIndexRoute
   '/sample-development': typeof SampleDevelopmentIndexRoute
+  '/settings': typeof SettingsIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
 export interface FileRoutesById {
@@ -254,6 +357,7 @@ export interface FileRoutesById {
   '/qc': typeof QcRoute
   '/sample-making': typeof SampleMakingRoute
   '/samples': typeof SamplesRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
   '/admin/roles': typeof AdminRolesRoute
@@ -262,11 +366,23 @@ export interface FileRoutesById {
   '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
+  '/settings/company': typeof SettingsCompanyRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/password': typeof SettingsPasswordRoute
+  '/settings/photo': typeof SettingsPhotoRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/roles': typeof SettingsRolesRoute
+  '/settings/structure': typeof SettingsStructureRoute
+  '/settings/system': typeof SettingsSystemRoute
+  '/settings/theme': typeof SettingsThemeRoute
+  '/settings/users': typeof SettingsUsersRoute
   '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
   '/lines/': typeof LinesIndexRoute
   '/production/': typeof ProductionIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
+  '/settings/': typeof SettingsIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
 export interface FileRouteTypes {
@@ -286,6 +402,7 @@ export interface FileRouteTypes {
     | '/qc'
     | '/sample-making'
     | '/samples'
+    | '/settings'
     | '/stitching'
     | '/stock'
     | '/admin/roles'
@@ -294,11 +411,23 @@ export interface FileRouteTypes {
     | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
+    | '/settings/company'
+    | '/settings/integrations'
+    | '/settings/notifications'
+    | '/settings/password'
+    | '/settings/photo'
+    | '/settings/profile'
+    | '/settings/roles'
+    | '/settings/structure'
+    | '/settings/system'
+    | '/settings/theme'
+    | '/settings/users'
     | '/admin/'
     | '/designs/'
     | '/lines/'
     | '/production/'
     | '/sample-development/'
+    | '/settings/'
     | '/designs/$code/workflow'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -323,11 +452,23 @@ export interface FileRouteTypes {
     | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
+    | '/settings/company'
+    | '/settings/integrations'
+    | '/settings/notifications'
+    | '/settings/password'
+    | '/settings/photo'
+    | '/settings/profile'
+    | '/settings/roles'
+    | '/settings/structure'
+    | '/settings/system'
+    | '/settings/theme'
+    | '/settings/users'
     | '/admin'
     | '/designs'
     | '/lines'
     | '/production'
     | '/sample-development'
+    | '/settings'
     | '/designs/$code/workflow'
   id:
     | '__root__'
@@ -345,6 +486,7 @@ export interface FileRouteTypes {
     | '/qc'
     | '/sample-making'
     | '/samples'
+    | '/settings'
     | '/stitching'
     | '/stock'
     | '/admin/roles'
@@ -353,11 +495,23 @@ export interface FileRouteTypes {
     | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
+    | '/settings/company'
+    | '/settings/integrations'
+    | '/settings/notifications'
+    | '/settings/password'
+    | '/settings/photo'
+    | '/settings/profile'
+    | '/settings/roles'
+    | '/settings/structure'
+    | '/settings/system'
+    | '/settings/theme'
+    | '/settings/users'
     | '/admin/'
     | '/designs/'
     | '/lines/'
     | '/production/'
     | '/sample-development/'
+    | '/settings/'
     | '/designs/$code/workflow'
   fileRoutesById: FileRoutesById
 }
@@ -376,6 +530,7 @@ export interface RootRouteChildren {
   QcRoute: typeof QcRoute
   SampleMakingRoute: typeof SampleMakingRoute
   SamplesRoute: typeof SamplesRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   StitchingRoute: typeof StitchingRoute
   StockRoute: typeof StockRoute
   DesignsCodeRoute: typeof DesignsCodeRouteWithChildren
@@ -402,6 +557,13 @@ declare module '@tanstack/react-router' {
       path: '/stitching'
       fullPath: '/stitching'
       preLoaderRoute: typeof StitchingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/samples': {
@@ -502,6 +664,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/sample-development/': {
       id: '/sample-development/'
       path: '/sample-development'
@@ -536,6 +705,83 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/settings/users': {
+      id: '/settings/users'
+      path: '/users'
+      fullPath: '/settings/users'
+      preLoaderRoute: typeof SettingsUsersRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/theme': {
+      id: '/settings/theme'
+      path: '/theme'
+      fullPath: '/settings/theme'
+      preLoaderRoute: typeof SettingsThemeRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/system': {
+      id: '/settings/system'
+      path: '/system'
+      fullPath: '/settings/system'
+      preLoaderRoute: typeof SettingsSystemRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/structure': {
+      id: '/settings/structure'
+      path: '/structure'
+      fullPath: '/settings/structure'
+      preLoaderRoute: typeof SettingsStructureRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/roles': {
+      id: '/settings/roles'
+      path: '/roles'
+      fullPath: '/settings/roles'
+      preLoaderRoute: typeof SettingsRolesRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/profile': {
+      id: '/settings/profile'
+      path: '/profile'
+      fullPath: '/settings/profile'
+      preLoaderRoute: typeof SettingsProfileRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/photo': {
+      id: '/settings/photo'
+      path: '/photo'
+      fullPath: '/settings/photo'
+      preLoaderRoute: typeof SettingsPhotoRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/password': {
+      id: '/settings/password'
+      path: '/password'
+      fullPath: '/settings/password'
+      preLoaderRoute: typeof SettingsPasswordRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/notifications': {
+      id: '/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof SettingsNotificationsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/integrations': {
+      id: '/settings/integrations'
+      path: '/integrations'
+      fullPath: '/settings/integrations'
+      preLoaderRoute: typeof SettingsIntegrationsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/company': {
+      id: '/settings/company'
+      path: '/company'
+      fullPath: '/settings/company'
+      preLoaderRoute: typeof SettingsCompanyRouteImport
+      parentRoute: typeof SettingsRoute
     }
     '/sample-development/$code': {
       id: '/sample-development/$code'
@@ -603,6 +849,40 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
+interface SettingsRouteChildren {
+  SettingsCompanyRoute: typeof SettingsCompanyRoute
+  SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute
+  SettingsNotificationsRoute: typeof SettingsNotificationsRoute
+  SettingsPasswordRoute: typeof SettingsPasswordRoute
+  SettingsPhotoRoute: typeof SettingsPhotoRoute
+  SettingsProfileRoute: typeof SettingsProfileRoute
+  SettingsRolesRoute: typeof SettingsRolesRoute
+  SettingsStructureRoute: typeof SettingsStructureRoute
+  SettingsSystemRoute: typeof SettingsSystemRoute
+  SettingsThemeRoute: typeof SettingsThemeRoute
+  SettingsUsersRoute: typeof SettingsUsersRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsCompanyRoute: SettingsCompanyRoute,
+  SettingsIntegrationsRoute: SettingsIntegrationsRoute,
+  SettingsNotificationsRoute: SettingsNotificationsRoute,
+  SettingsPasswordRoute: SettingsPasswordRoute,
+  SettingsPhotoRoute: SettingsPhotoRoute,
+  SettingsProfileRoute: SettingsProfileRoute,
+  SettingsRolesRoute: SettingsRolesRoute,
+  SettingsStructureRoute: SettingsStructureRoute,
+  SettingsSystemRoute: SettingsSystemRoute,
+  SettingsThemeRoute: SettingsThemeRoute,
+  SettingsUsersRoute: SettingsUsersRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
+
 interface DesignsCodeRouteChildren {
   DesignsCodeWorkflowRoute: typeof DesignsCodeWorkflowRoute
 }
@@ -630,6 +910,7 @@ const rootRouteChildren: RootRouteChildren = {
   QcRoute: QcRoute,
   SampleMakingRoute: SampleMakingRoute,
   SamplesRoute: SamplesRoute,
+  SettingsRoute: SettingsRouteWithChildren,
   StitchingRoute: StitchingRoute,
   StockRoute: StockRoute,
   DesignsCodeRoute: DesignsCodeRouteWithChildren,
