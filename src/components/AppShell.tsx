@@ -1,10 +1,12 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Menu, Bell, Search, LayoutDashboard, Shirt, FlaskConical, Factory, Warehouse, Package, X, PlayCircle, ShieldCheck, Settings as SettingsIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { WORKFLOW } from "@/lib/workflow";
 import { cn } from "@/lib/utils";
-import { useRequireAuth } from "@/hooks/use-auth";
+import { useRequireAuth, useSession } from "@/hooks/use-auth";
 import { useCan } from "@/lib/rbac/use-rbac";
+import { supabase } from "@/integrations/supabase/client";
 
 const PRIMARY_NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
