@@ -409,9 +409,35 @@ function statusLabel(s: StepStatus) {
 // preview, add/replace/delete) only appears once the popup is opened, so
 // images never compete with Design Information / Workflow for space.
 
-function DesignImagesButton({ designId, designName }: { designId: string; designName: string }) {
-  const { data: images = [] } = useDesignImages(designId);
+function DesignImagesButton({
+  designId,
+  designName,
+  coverPath,
+}: {
+  designId: string;
+  designName: string;
+  coverPath: string | null | undefined;
+}) {
+  const { data: dbImages = [] } = useDesignImages(designId);
   const [open, setOpen] = useState(false);
+
+  // Merge the design's cover image (designs.image_path — the same file shown
+  // on the Designs list) as a synthetic first entry so the gallery isn't
+  // empty when only the cover exists. Skip if the cover was already added
+  // separately as a labelled gallery image.
+  const images: DesignImageRow[] = useMemo(() => {
+    if (!coverPath) return dbImages;
+    if (dbImages.some((i) => i.path === coverPath)) return dbImages;
+    const cover: DesignImageRow = {
+      id: "__cover__",
+      designId,
+      path: coverPath,
+      label: "Cover",
+      sortOrder: -1,
+    };
+    return [cover, ...dbImages];
+  }, [coverPath, dbImages, designId]);
+
   const firstPath = images[0]?.path;
   const { data: urls = {} } = useDesignImageUrls(firstPath ? [firstPath] : []);
   const thumbUrl = firstPath ? urls[firstPath] : undefined;
