@@ -62,12 +62,6 @@ function DesignsList() {
           <button className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium">
             <Filter className="h-4 w-4" /> Filter
           </button>
-          <button
-            onClick={() => setWizard(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm sm:hidden"
-          >
-            <Plus className="h-4 w-4" /> New
-          </button>
         </section>
 
         {isLoading ? (
@@ -95,6 +89,18 @@ function DesignsList() {
           </section>
         )}
       </div>
+
+      {/* Mobile-only floating action button, replacing the old inline
+          toolbar "New" button — matches the Dashboard's floating button
+          style. Desktop keeps the existing top-bar "New Design" action
+          (the `action` prop above) unchanged. */}
+      <button
+        type="button"
+        onClick={() => setWizard(true)}
+        className="fixed bottom-20 right-5 z-30 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-lg shadow-primary/30 hover:opacity-90 sm:hidden"
+      >
+        <Plus className="h-3.5 w-3.5" /> New Design
+      </button>
 
       <DesignWizard open={wizard} onClose={() => setWizard(false)} />
     </AppShell>
