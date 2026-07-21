@@ -542,6 +542,10 @@ function DesignImageGallery({
   async function handleReplaceFile(files: FileList | null) {
     console.log("[DesignImages] Replace onChange, files:", files);
     if (!files || files.length === 0 || !active) return;
+    if (active.id === "__cover__") {
+      toast.info("The cover image is managed from Edit Design.");
+      return;
+    }
     try {
       await replaceImage.mutateAsync({ id: active.id, oldPath: active.path, file: files[0] });
       toast.success("Image replaced");
@@ -554,6 +558,10 @@ function DesignImageGallery({
 
   async function handleDelete() {
     if (!active) return;
+    if (active.id === "__cover__") {
+      toast.info("The cover image is managed from Edit Design.");
+      return;
+    }
     if (!window.confirm(`Delete this image (${active.label})? This cannot be undone.`)) return;
     try {
       await deleteImage.mutateAsync({ id: active.id, path: active.path });
