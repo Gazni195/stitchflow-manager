@@ -164,13 +164,14 @@ function Dashboard() {
         </section>
 
         {/* + New Design — floating on mobile (sized down so it doesn't sit
-            over the sample cards), inline at the end of the column on
-            desktop exactly as before. Opens the existing Create Design
-            wizard in place; it never navigates away from the Dashboard. */}
+            over the sample cards) and on desktop (bottom-right of the
+            viewport, so it never requires scrolling to the end of the
+            dashboard column). Opens the existing Create Design wizard in
+            place; it never navigates away from the Dashboard. */}
         <button
           type="button"
           onClick={() => setWizard(true)}
-          className="fixed bottom-20 right-5 z-30 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-lg shadow-primary/30 hover:opacity-90 lg:static lg:w-fit lg:self-end lg:gap-2 lg:px-5 lg:py-3 lg:text-sm"
+          className="fixed bottom-20 right-5 z-30 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-lg shadow-primary/30 hover:opacity-90 lg:bottom-8 lg:right-8 lg:gap-2 lg:px-5 lg:py-3 lg:text-sm"
         >
           <Plus className="h-3.5 w-3.5 lg:h-4 lg:w-4" /> New Design
         </button>
