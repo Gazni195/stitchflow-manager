@@ -12,6 +12,7 @@ import {
   Image as ImageIcon,
   Layers,
   Loader2,
+  MoreVertical,
   Palette,
   Pencil,
   Plus,
@@ -184,8 +185,11 @@ function DesignDetails({ design }: { design: Design }) {
         {/* Lifecycle actions */}
         <section className="grid gap-3 rounded-3xl border border-border bg-card p-5 shadow-sm sm:grid-cols-2">
           <div className="rounded-2xl border border-border bg-background p-4">
-            <div className="flex items-center gap-2 text-sm font-bold">
-              <ShieldCheck className="h-4 w-4 text-primary" /> Design approval
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-bold">
+                <ShieldCheck className="h-4 w-4 text-primary" /> Design approval
+              </div>
+              {isApproved && <DesignApprovalMenu design={design} />}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {isRejected
@@ -195,11 +199,10 @@ function DesignDetails({ design }: { design: Design }) {
                   : "Approve this design to move it into sample development."}
             </p>
             {isApproved ? (
-              <div className="mt-3 flex items-center justify-between gap-2">
+              <div className="mt-3">
                 <span className="inline-flex items-center gap-1.5 rounded-xl bg-success/15 px-4 py-2 text-sm font-bold text-success">
                   <CheckCircle2 className="h-4 w-4" /> Design Approved
                 </span>
-                <ReturnToDraftButton design={design} />
               </div>
             ) : (
               <button
@@ -250,24 +253,50 @@ function DesignDetails({ design }: { design: Design }) {
   );
 }
 
-// Beside the "Design Approved" status once approved: no more Edit here —
-// editing an approved design happens through the same three-dot menu in
-// the top bar (DesignActionsMenu) as any other design, no second edit
-// flow. This is now the only way out of the approved state, and it's a
-// single, direct action (not a dropdown) since there's only one thing to
-// do here. Confirmation is required because, unlike Approve, this is
-// undoing something rather than moving forward.
-function ReturnToDraftButton({ design }: { design: Design }) {
+// Card-level menu for secondary approval actions. Only Return to Draft
+// lives here — Reject Design was retired when Return to Draft replaced it
+// (useRejectDesign in lib/api/designs.ts has no remaining call sites), so
+// there's nothing else to list. Kept as a three-dot menu rather than an
+// inline button so the "Design Approved" badge reads cleanly on its own,
+// consistent with how DesignActionsMenu keeps the top bar to one trigger.
+function DesignApprovalMenu({ design }: { design: Design }) {
+  const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
 
   return (
     <>
-      <button
-        onClick={() => setConfirm(true)}
-        className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
-      >
-        <RotateCcw className="h-3.5 w-3.5" /> Return to Draft
-      </button>
+      <div ref={wrapRef} className="relative">
+        <button
+          aria-label="Design approval actions"
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </button>
+        {open && (
+          <div className="absolute right-0 top-9 z-40 w-48 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+            <button
+              onClick={() => {
+                setOpen(false);
+                setConfirm(true);
+              }}
+              className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-semibold hover:bg-accent"
+            >
+              <RotateCcw className="h-4 w-4 text-muted-foreground" /> Return to Draft
+            </button>
+          </div>
+        )}
+      </div>
       {confirm && <ReturnToDraftDialog design={design} onClose={() => setConfirm(false)} />}
     </>
   );
