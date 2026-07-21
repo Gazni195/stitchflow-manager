@@ -27,50 +27,44 @@ export function DesignActionsMenu({ design }: { design: Design }) {
 
   return (
     <>
-      <div className="flex items-center gap-2">
+      {/* Single entry point now — no more standalone Edit button duplicating
+          the "Edit design" item already in this menu. */}
+      <div ref={wrapRef} className="relative">
         <button
-          onClick={() => setEdit(true)}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold hover:bg-accent"
+          aria-label="More actions"
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
         >
-          <Pencil className="h-4 w-4" /> Edit
+          <MoreVertical className="h-5 w-5" />
         </button>
-        <div ref={wrapRef} className="relative">
-          <button
-            aria-label="More actions"
-            onClick={() => setOpen((v) => !v)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
-            <MoreVertical className="h-5 w-5" />
-          </button>
-          {open && (
-            <div className="absolute right-0 top-12 z-40 w-60 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
-              <button
-                onClick={() => {
-                  setOpen(false);
-                  setEdit(true);
-                }}
-                className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-semibold hover:bg-accent"
-              >
-                <Pencil className="h-4 w-4 text-primary" /> Edit design
-              </button>
-              <button
-                disabled={!canDelete}
-                onClick={() => {
-                  setOpen(false);
-                  setConfirm(true);
-                }}
-                className="flex w-full items-center gap-2.5 border-t border-border px-4 py-3 text-left text-sm font-semibold text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent"
-              >
-                <Trash2 className="h-4 w-4" /> Delete design
-              </button>
-              {!canDelete && (
-                <p className="border-t border-border bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground">
-                  Deletion is only available while the design is in Draft (currently {STATUS_LABEL[design.status]}).
-                </p>
-              )}
-            </div>
-          )}
-        </div>
+        {open && (
+          <div className="absolute right-0 top-12 z-40 w-60 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+            <button
+              onClick={() => {
+                setOpen(false);
+                setEdit(true);
+              }}
+              className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-semibold hover:bg-accent"
+            >
+              <Pencil className="h-4 w-4 text-primary" /> Edit design
+            </button>
+            <button
+              disabled={!canDelete}
+              onClick={() => {
+                setOpen(false);
+                setConfirm(true);
+              }}
+              className="flex w-full items-center gap-2.5 border-t border-border px-4 py-3 text-left text-sm font-semibold text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent"
+            >
+              <Trash2 className="h-4 w-4" /> Delete design
+            </button>
+            {!canDelete && (
+              <p className="border-t border-border bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground">
+                Deletion is only available while the design is in Draft (currently {STATUS_LABEL[design.status]}).
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {edit && <EditDesignDialog design={design} onClose={() => setEdit(false)} />}
