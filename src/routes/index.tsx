@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus, ArrowRight, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
+import { DesignWizard } from "@/components/DesignWizard";
 import { useDesigns } from "@/lib/api/designs";
 import { STATUS_LABEL, STATUS_TONE, type Design } from "@/lib/designs";
 import { useMemo, useState } from "react";
@@ -40,6 +41,7 @@ function bucketOf(d: Design): Filter {
 function Dashboard() {
   const { data: designs = [], isLoading } = useDesigns();
   const [filter, setFilter] = useState<Filter>("in_progress");
+  const [wizard, setWizard] = useState(false);
 
   const counts = useMemo(() => {
     const c: Record<Filter, number> = { in_progress: 0, completed: 0, on_hold: 0 };
@@ -161,14 +163,20 @@ function Dashboard() {
           )}
         </section>
 
-        {/* + New Sample */}
-        <Link
-          to="/designs"
-          className="fixed bottom-20 right-5 z-30 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/30 hover:opacity-90 lg:static lg:w-fit lg:self-end"
+        {/* + New Design — floating on mobile (sized down so it doesn't sit
+            over the sample cards), inline at the end of the column on
+            desktop exactly as before. Opens the existing Create Design
+            wizard in place; it never navigates away from the Dashboard. */}
+        <button
+          type="button"
+          onClick={() => setWizard(true)}
+          className="fixed bottom-20 right-5 z-30 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-lg shadow-primary/30 hover:opacity-90 lg:static lg:w-fit lg:self-end lg:gap-2 lg:px-5 lg:py-3 lg:text-sm"
         >
-          <Plus className="h-4 w-4" /> New Sample
-        </Link>
+          <Plus className="h-3.5 w-3.5 lg:h-4 lg:w-4" /> New Design
+        </button>
       </div>
+
+      <DesignWizard open={wizard} onClose={() => setWizard(false)} />
     </AppShell>
   );
 }
