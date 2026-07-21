@@ -145,7 +145,7 @@ function DesignDetails({ design }: { design: Design }) {
             </span>
           </div>
 
-          <DesignImagesButton designId={design.id} designName={design.name} />
+          <DesignImagesButton designId={design.id} designName={design.name} coverPath={design.imagePath} />
 
           <div className="rounded-2xl border border-border bg-gradient-to-br from-primary-soft to-background p-4">
             <div className="flex items-center justify-between text-sm">
