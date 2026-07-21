@@ -275,12 +275,14 @@ export function AppShell({
           </li>
         </ul>
 
-        {/* UI placeholder only — intentionally no onClick/navigation yet. */}
+        {/* UI placeholder only — intentionally no onClick/navigation yet.
+            Shifted down from the bar's top edge so it sits inside the bar
+            instead of poking above it; size/color/icon unchanged. */}
         <button
           type="button"
           disabled
           aria-label="Quick add (coming soon)"
-          className="absolute left-1/2 top-0 grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow-lg shadow-primary/30 disabled:opacity-100"
+          className="absolute left-1/2 top-[20px] grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow-lg shadow-primary/30 disabled:opacity-100"
         >
           <Plus className="h-6 w-6" />
         </button>
