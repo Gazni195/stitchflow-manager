@@ -1,98 +1,63 @@
+# Shared Workspace Migration Plan
+
 ## Goal
+Every authenticated user sees the same business data (designs, samples, production, materials, workflows, approvals, images, activities, reservations). Ownership columns (`created_by`, `updated_by`, timestamps) stay for audit only. UI-level RBAC (`useCan`, `<Can>`) is unchanged.
 
-Replace the current in-memory/seeded workflow model with a real production workflow engine backed by Lovable Cloud. Each design has its own Sample Workflow, built up during sample development. Approving the sample snapshots it as the Bulk Workflow. The Bulk Workflow stays editable until bulk production begins, then locks. New designs come from a full Create Design wizard (with image upload). All demo/hardcoded design data is removed.
+## Scope of Change
+All changes are database-only (one migration). No frontend code, no RBAC schema, no route changes.
 
-## Data model (Lovable Cloud / Postgres)
+## Audit — Owner-Based Surfaces Found
 
-Tables in `public`, all with RLS + explicit GRANTs.
+**Helper functions (currently filter by `auth.uid() = created_by`):**
+- `public.has_design_access(_design_id)`
+- `public.has_workflow_access(_workflow_id)`
+- `public.has_production_order_access(_po_id)`
 
-- **designs**
-  - `id uuid pk`, `code text unique`, `name text`, `customer text`, `category text`, `fabric text`, `color text`, `order_quantity int`, `image_path text` (storage key), `status text` — one of `draft | sampling | sample_approved | in_production | completed`, `created_by uuid`, timestamps.
-- **operations_catalog** (seeded, read-only for users)
-  - `id text pk` (e.g. `cutting`), `name`, `short`, `category`, `repeatable bool`, `sort int`.
-- **design_workflows**
-  - `id uuid pk`, `design_id uuid fk`, `kind text check in ('sample','bulk')`, `locked bool default false`, `created_at`, unique `(design_id, kind)`.
-- **workflow_steps**
-  - `id uuid pk`, `workflow_id uuid fk`, `operation_id text fk`, `sequence int`, `label text null`, `status text check in ('pending','in-progress','completed','skipped') default 'pending'`, `assigned_to text`, `input_quantity int`, `output_quantity int`, `wastage_quantity int`, `start_date date`, `end_date date`, `remarks text`, timestamps. Index `(workflow_id, sequence)`.
+**RLS policies restricting visibility by creator:**
+| Table | Policies to replace |
+|---|---|
+| `designs` | `designs owner select/insert/update/delete` |
+| `design_images` | `Owners can view/insert/update/delete design images` |
+| `design_materials` | `design_materials owner all` |
+| `design_workflows` | `design_workflows owner all` |
+| `workflow_steps` | `workflow_steps owner all` |
+| `sample_approvals` | `Owners view/insert sample approvals` |
+| `production_orders` | `own production orders` |
+| `production_processes` | `own production processes` |
+| `production_activities` | `own production activities`, `Owners can view/insert/update/delete activities` |
+| `production_reservations` | `reservations select/insert/update/delete own` |
 
-Storage bucket `design-images` (public read, authenticated write).
+**Left as-is (already correct):**
+- `materials` — role-based reads/writes.
+- `operations_catalog`, `permissions`, `role_permissions`, `user_roles` — RBAC tables.
+- RPCs (`start_production`, `issue_bundle`, `complete_process`, `approve_sample`, `start_bulk_production`) — their internal `has_*_access` guards become "is authenticated" automatically once the helpers are rewritten. No signature changes.
 
-RLS: authenticated users can CRUD their org's rows (single-tenant for now → `auth.uid() = created_by` on designs, workflow rows joined via design ownership through a `has_design_access(design_id)` SECURITY DEFINER helper). Service role bypass as usual.
+## Migration (single file)
 
-## Server functions (`src/lib/*.functions.ts`)
+1. **Rewrite helper functions** to gate on authentication only:
+   - `has_design_access(_design_id)` → returns `auth.uid() IS NOT NULL AND EXISTS(SELECT 1 FROM designs WHERE id = _design_id)`
+   - `has_workflow_access(_workflow_id)` → same shape against `design_workflows`
+   - `has_production_order_access(_po_id)` → same shape against `production_orders`
 
-All go through `requireSupabaseAuth`.
+   (Keep signatures/return types so existing RPCs and policies referencing them keep working.)
 
-- `designs.functions.ts`: `listDesigns`, `getDesign(code)`, `createDesign(input)`, `updateDesign`, `uploadDesignImage` (returns signed upload URL or accepts base64 → stores in bucket).
-- `workflows.functions.ts`:
-  - `getWorkflows(designId)` → `{ sample, bulk }`
-  - `upsertSampleStep`, `addStep(workflowId, operationId, atIndex)`, `removeStep`, `moveStep(stepId, dir)`, `reorderSteps(workflowId, orderedIds)`, `duplicateStep`, `renameStep`, `toggleSkip`, `updateStepFields` (assigned/quantities/dates/remarks/status).
-  - `approveSample(designId)` — server-side snapshot: copy sample steps → new bulk workflow, set `designs.status = 'sample_approved'`.
-  - `startBulkProduction(designId)` — locks the bulk workflow, sets status `in_production`.
-- `operations.functions.ts`: `listOperations()` from catalog table.
+2. **Drop and recreate policies** on each table listed above with a single permissive rule per command:
+   - `USING (auth.uid() IS NOT NULL)` for SELECT/UPDATE/DELETE
+   - `WITH CHECK (auth.uid() IS NOT NULL)` for INSERT/UPDATE
 
-Client-side reads use TanStack Query with `ensureQueryData` in loaders.
+   This gives every signed-in user full read + write visibility across the shared workspace, matching the stated requirement. Action-level restrictions remain enforced client-side via the existing RBAC (`useCan` / `<Can>`).
 
-## Frontend changes
+3. **Audit columns unchanged.** `created_by`, `updated_by`, `created_at`, `updated_at` stay on all tables and continue to be populated by existing insert/update code paths.
 
-### 1. Remove demo data
-- Delete seeded designs from `src/lib/designs.ts` and the seed block in `src/lib/design-workflow.ts`. Keep the operation catalog as a fallback until the DB catalog loads (single source of truth: DB, but the static list mirrors it for icon/route lookup).
-- `SAMPLE_ORDERS` in `production/ui.tsx` becomes a live query for in-production designs (or is removed from module screens in favor of an actual design picker driven by DB rows).
+## Out of Scope
+- No changes to `src/**` code.
+- No changes to RBAC tables, permissions, or role assignments.
+- No changes to storage bucket policies (they already use role checks).
+- No data backfill needed.
 
-### 2. New Design wizard (`/designs/new`)
-Multi-step form:
-1. Basics — code (auto-suggested), name, customer, category.
-2. Specs — fabric, color, order quantity.
-3. Image upload — drop zone → uploads to `design-images` bucket.
-4. Sample workflow starter — optional; user can add first few operations now or later.
-Submit → `createDesign` → redirect to `/designs/<code>`.
+## Risk / Notes
+- After migration, any authenticated user can INSERT/UPDATE/DELETE business rows at the DB layer. The stated requirement accepts this because action gating is handled by RBAC in the UI. If you want DB-level write gating too (e.g. only `designs.edit` permission can update `designs`), say so and I'll add `public.has_permission(auth.uid(), '<key>')` checks into the `WITH CHECK` clauses instead of the flat authenticated check — this is a natural extension but changes the scope.
+- Existing RPCs remain callable by any authenticated user (their guards degrade to "is authenticated") — matches the shared-workspace goal.
 
-### 3. Design Details (`/designs/$code`)
-- Two-tab "Workflow" section: **Sample Workflow** and **Bulk Workflow**.
-- Sample tab: always editable while `status !== 'sample_approved'`. Big "Approve Sample & Generate Bulk Workflow" CTA.
-- Bulk tab: appears after approval; editable while `status === 'sample_approved'`; shows "Start Bulk Production" CTA that locks it. After lock, read-only with progress.
-- Both tabs render the shared **Workflow Configurator** component.
-
-### 4. Workflow Configurator (`src/components/workflow/Configurator.tsx`)
-Uses `@dnd-kit/core` + `@dnd-kit/sortable`.
-- Vertical sortable list of step cards (drag handle, sequence #, operation name, status pill, quantities summary).
-- Per card: edit label, duplicate, skip toggle, delete, expand to edit assigned/quantities/dates/remarks.
-- Bottom "Add Operation" palette (chips grouped by category) → inserts at end or at a chosen "+" slot between existing cards.
-- All mutations optimistic via TanStack Query + `invalidateQueries`.
-- Disabled when workflow is `locked`.
-
-### 5. Production modules
-Each module screen (`cutting`, `handwork`, `stitching`, `qc`, `packing`, `barcode`, `stock`) keeps the `useStageChrome` hook but sources the workflow from DB via `getWorkflows(designId).bulk`. Saving a step calls `updateStepFields`. "Next" navigation reads the DB sequence.
-
-### 6. Dashboard & list
-- `/designs` lists rows from DB, empty state → "Create your first design" CTA.
-- Dashboard KPIs become live counts (designs in each status).
-
-## Files touched
-
-New:
-- Migration files for tables + storage bucket + RLS + GRANTs + operation catalog seed.
-- `src/lib/designs.functions.ts`, `src/lib/workflows.functions.ts`, `src/lib/operations.functions.ts`.
-- `src/routes/designs.new.tsx` (wizard).
-- `src/components/workflow/Configurator.tsx`, `StepCard.tsx`, `AddOperationPalette.tsx`.
-
-Rewritten:
-- `src/lib/designs.ts` → thin types + query hooks (no mock data).
-- `src/lib/design-workflow.ts` → server-backed helpers + query hooks (no seed).
-- `src/routes/designs.index.tsx`, `src/routes/designs.$code.tsx`, `src/routes/designs.$code.workflow.tsx` (becomes redirect into the details tab, or removed).
-- `src/routes/index.tsx` (live KPIs).
-- `src/components/production/ui.tsx` (drop `SAMPLE_ORDERS`).
-- All production module routes (DB-backed step reads/writes).
-
-Dependency: `bun add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities`.
-
-## Out of scope for this pass
-- Multi-tenant orgs / role-based permissions (Production Manager vs operator). All authenticated users can edit for now; noted in a follow-up.
-- Real-time collaboration on the configurator (single-user optimistic updates only).
-- ERPNext sync.
-
-## Technical notes
-- `approveSample` runs in a single SQL transaction (RPC) so the snapshot is atomic.
-- `locked` on bulk workflows is enforced by both an RLS/CHECK trigger and the client (disabled UI). Modules can still write step **execution** fields (status/quantities/dates/remarks) on a locked workflow — the lock only blocks structural changes (add/remove/reorder/rename/skip).
-- Step identity remains UUID so deep links (`?step=<uuid>`) keep working.
-- Image upload goes through a signed-URL flow to keep the service role out of the client.
+## Approval
+Reply "approve" and I'll issue the single migration. No code will be committed or pushed.
