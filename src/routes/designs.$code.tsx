@@ -12,23 +12,22 @@ import {
   Image as ImageIcon,
   Layers,
   Loader2,
-  MoreVertical,
   Palette,
   Pencil,
   Plus,
+  RotateCcw,
   Settings2,
   ShieldCheck,
   Trash2,
   Users,
   X,
-  XCircle,
   ZoomIn,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { DesignActionsMenu, EditDesignDialog } from "@/components/DesignActionsMenu";
+import { DesignActionsMenu } from "@/components/DesignActionsMenu";
 import { useRequireAuth } from "@/hooks/use-auth";
 import { STATUS_LABEL, STATUS_TONE, type Design } from "@/lib/designs";
-import { useApproveDesign, useDesignByCode, useRejectDesign } from "@/lib/api/designs";
+import { useApproveDesign, useDesignByCode, useReturnDesignToDraft } from "@/lib/api/designs";
 import { useWorkflows, stepLabel, type DesignWorkflow, type StepStatus } from "@/lib/api/workflows";
 import { useOperationCatalog } from "@/lib/api/operations";
 import {
@@ -200,7 +199,7 @@ function DesignDetails({ design }: { design: Design }) {
                 <span className="inline-flex items-center gap-1.5 rounded-xl bg-success/15 px-4 py-2 text-sm font-bold text-success">
                   <CheckCircle2 className="h-4 w-4" /> Design Approved
                 </span>
-                <DesignApprovalMenu design={design} />
+                <ReturnToDraftButton design={design} />
               </div>
             ) : (
               <button
@@ -251,64 +250,79 @@ function DesignDetails({ design }: { design: Design }) {
   );
 }
 
-// Beside the "Design Approved" status once approved: Edit reuses the exact
-// same dialog as the top-bar Design actions menu (no second edit flow), and
-// Reject is the only way back out of the approved state — a direct status
-// flip via useRejectDesign, mirroring useApproveDesign's directness rather
-// than adding a confirmation step the Approve action doesn't have either.
-function DesignApprovalMenu({ design }: { design: Design }) {
-  const [open, setOpen] = useState(false);
-  const [edit, setEdit] = useState(false);
-  const reject = useRejectDesign();
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onClick(e: MouseEvent) {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [open]);
+// Beside the "Design Approved" status once approved: no more Edit here —
+// editing an approved design happens through the same three-dot menu in
+// the top bar (DesignActionsMenu) as any other design, no second edit
+// flow. This is now the only way out of the approved state, and it's a
+// single, direct action (not a dropdown) since there's only one thing to
+// do here. Confirmation is required because, unlike Approve, this is
+// undoing something rather than moving forward.
+function ReturnToDraftButton({ design }: { design: Design }) {
+  const [confirm, setConfirm] = useState(false);
 
   return (
     <>
-      <div ref={wrapRef} className="relative">
-        <button
-          aria-label="Design approval actions"
-          onClick={() => setOpen((v) => !v)}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <MoreVertical className="h-4 w-4" />
-        </button>
-        {open && (
-          <div className="absolute right-0 top-11 z-40 w-48 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
-            <button
-              onClick={() => {
-                setOpen(false);
-                setEdit(true);
-              }}
-              className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-semibold hover:bg-accent"
-            >
-              <Pencil className="h-4 w-4 text-primary" /> Edit Design
-            </button>
-            <button
-              disabled={reject.isPending}
-              onClick={() => {
-                setOpen(false);
-                reject.mutate({ id: design.id, code: design.code });
-              }}
-              className="flex w-full items-center gap-2.5 border-t border-border px-4 py-3 text-left text-sm font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
-            >
-              {reject.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-              Reject Design
-            </button>
-          </div>
-        )}
-      </div>
-
-      {edit && <EditDesignDialog design={design} onClose={() => setEdit(false)} />}
+      <button
+        onClick={() => setConfirm(true)}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
+      >
+        <RotateCcw className="h-3.5 w-3.5" /> Return to Draft
+      </button>
+      {confirm && <ReturnToDraftDialog design={design} onClose={() => setConfirm(false)} />}
     </>
+  );
+}
+
+function ReturnToDraftDialog({ design, onClose }: { design: Design; onClose: () => void }) {
+  const returnToDraft = useReturnDesignToDraft();
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    setError(null);
+    try {
+      await returnToDraft.mutateAsync({ id: design.id, code: design.code });
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update design");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/40 p-4 sm:items-center">
+      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-background shadow-2xl">
+        <div className="px-5 pt-6 text-center">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-warning/10 text-warning">
+            <RotateCcw className="h-6 w-6" />
+          </div>
+          <h2 className="mt-4 text-lg font-extrabold">Return to Draft?</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Move this design back to Draft? You can edit and resubmit it for approval later.
+          </p>
+          {error && (
+            <p className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </p>
+          )}
+        </div>
+        <div className="mt-6 grid grid-cols-2 gap-2 border-t border-border p-4">
+          <button
+            onClick={onClose}
+            disabled={returnToDraft.isPending}
+            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-accent disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={returnToDraft.isPending}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-50"
+          >
+            {returnToDraft.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Return to Draft
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
