@@ -11,71 +11,93 @@ import {
   Trash2,
   ArrowUp,
   ArrowDown,
+  ChevronDown,
+  Search,
 } from "lucide-react";
 import { useCreateDesign } from "@/lib/api/designs";
 import type { DesignPart } from "@/lib/designs";
+import { useMaterials } from "@/lib/api/materials";
 import { cn } from "@/lib/utils";
 
-const CATEGORIES = ["Women's Wear"];
+// This app only ever operates on Women's Wear today — there is no
+// Category step anymore, this is just what gets saved silently.
+const DEFAULT_CATEGORY = "Women's Wear";
 
-const PRODUCT_TYPES = [
-  "Three Piece Set",
-  "Two Piece Set",
-  "Kurti",
-  "Dress",
-  "Gown",
-  "Co-ord Set",
-  "Top Only",
-  "Pant Only",
-  "Shawl Only",
-  "Other",
-] as const;
+const PRODUCT_TYPES = ["Three Piece", "Two Piece", "Kurti", "Other"] as const;
 type ProductType = (typeof PRODUCT_TYPES)[number];
 
 const DEFAULT_PARTS: Record<ProductType, string[]> = {
-  "Three Piece Set": ["Top", "Pant", "Shawl"],
-  "Two Piece Set": ["Top", "Pant"],
+  "Three Piece": ["Top", "Pant", "Shawl"],
+  "Two Piece": ["Top", "Shawl"],
   Kurti: ["Top"],
-  Dress: ["Dress"],
-  Gown: ["Gown"],
-  "Co-ord Set": ["Top", "Bottom"],
-  "Top Only": ["Top"],
-  "Pant Only": ["Pant"],
-  "Shawl Only": ["Shawl"],
   Other: [],
 };
 
+const QUANTITY_PRESETS = ["20", "40", "60", "80"] as const;
+type QuantityChoice = "" | (typeof QUANTITY_PRESETS)[number] | "other";
+
+// No color master exists anywhere in this app, so this is just a
+// starting list for the searchable selector — typing anything else and
+// picking "Use ..." is always available (see SearchableSelect below).
+const COMMON_COLORS = [
+  "Ivory",
+  "White",
+  "Black",
+  "Red",
+  "Maroon",
+  "Pink",
+  "Peach",
+  "Yellow",
+  "Mustard",
+  "Green",
+  "Olive",
+  "Blue",
+  "Navy",
+  "Teal",
+  "Purple",
+  "Lavender",
+  "Grey",
+  "Beige",
+  "Gold",
+  "Silver",
+  "Multicolor",
+];
+
 type Draft = {
-  category: string;
-  productType: ProductType | "";
-  parts: DesignPart[];
-  code: string;
+  imageFile: File | null;
   name: string;
   customer: string;
-  fabric: string;
-  color: string;
-  orderQuantity: number;
-  imageFile: File | null;
+  quantityChoice: QuantityChoice;
+  customQuantity: number;
+  productType: ProductType | "";
+  parts: DesignPart[];
 };
 
 const EMPTY: Draft = {
-  category: "Women's Wear",
-  productType: "",
-  parts: [],
-  code: "",
+  imageFile: null,
   name: "",
   customer: "",
-  fabric: "",
-  color: "",
-  orderQuantity: 0,
-  imageFile: null,
+  quantityChoice: "",
+  customQuantity: 0,
+  productType: "",
+  parts: [],
 };
 
-const TOTAL_STEPS = 5;
-type Step = 0 | 1 | 2 | 3 | 4;
+const TOTAL_STEPS = 2;
+type Step = 0 | 1;
 
 function uid() {
   return (crypto?.randomUUID?.() ?? `p-${Date.now()}-${Math.random()}`).slice(0, 12);
+}
+
+// Design Code is never asked for here — it has no meaning until a design
+// is approved and enters Sample Development, at which point it's the only
+// thing anyone actually looks up by. The `designs.code` column is still
+// NOT NULL + UNIQUE today, so something has to be written; this generates
+// it silently (current time, base-36) so the user never sees or types it,
+// with no schema change required.
+function generateDesignCode(): string {
+  return `FL-${Date.now().toString(36).toUpperCase()}`;
 }
 
 export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -85,6 +107,13 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const create = useCreateDesign();
+  const { data: inventory = [] } = useMaterials();
+
+  // "Fabric" here is simply every active Inventory item — this app's
+  // Materials table has no category/type column to distinguish fabric
+  // from trims/accessories yet, so there's nothing to filter by beyond
+  // active/inactive. Stock is deliberately not read or shown at all.
+  const fabricOptions = inventory.filter((m) => m.status === "active").map((m) => m.name);
 
   if (!open) return null;
 
@@ -120,10 +149,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
   function addPart() {
     setD({
       ...d,
-      parts: [
-        ...d.parts,
-        { id: uid(), name: "", fabric: "", color: "" },
-      ],
+      parts: [...d.parts, { id: uid(), name: "", fabric: "", color: "" }],
     });
   }
   function removePart(id: string) {
@@ -140,35 +166,22 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
     setD({ ...d, parts: next });
   }
 
-  const step0Valid = !!d.category;
-  const partsValid =
-    d.parts.length > 0 &&
-    d.parts.every(
-      (p) =>
-        p.name.trim().length > 0 &&
-        p.fabric.trim().length > 0 &&
-        p.color.trim().length > 0,
-    );
-  const step1Valid = !!d.productType && partsValid;
-  const step2Valid = d.code.trim() && d.name.trim() && d.customer.trim();
-  const step3Valid = d.color.trim() && d.orderQuantity > 0;
+  const step0Valid = !!d.imageFile && d.name.trim().length > 0;
+  const step1Valid = !!d.productType && d.parts.length > 0 && d.parts.every((p) => p.name.trim().length > 0);
 
-  const stepTitle = [
-    "Category",
-    "Product type & parts",
-    "Design basics",
-    "Specifications",
-    "Cover image",
-  ][step];
+  const stepTitle = ["Design Information", "Product Structure"][step];
 
   async function submit() {
     setError(null);
     try {
+      const orderQuantity =
+        d.quantityChoice === "other" ? d.customQuantity : d.quantityChoice ? Number(d.quantityChoice) : 0;
+
       const design = await create.mutateAsync({
-        code: d.code.trim(),
+        code: generateDesignCode(),
         name: d.name.trim(),
         customer: d.customer.trim(),
-        category: d.category,
+        category: DEFAULT_CATEGORY,
         productType: d.productType || "",
         parts: d.parts.map((p) => ({
           id: p.id,
@@ -176,8 +189,8 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
           fabric: p.fabric.trim(),
           color: p.color.trim(),
         })),
-        color: d.color.trim(),
-        orderQuantity: d.orderQuantity,
+        color: "",
+        orderQuantity,
         imageFile: d.imageFile,
       });
       reset();
@@ -186,14 +199,6 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create design");
     }
-  }
-
-  function nextDisabled() {
-    if (step === 0) return !step0Valid;
-    if (step === 1) return !step1Valid;
-    if (step === 2) return !step2Valid;
-    if (step === 3) return !step3Valid;
-    return false;
   }
 
   return (
@@ -206,48 +211,89 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
             </p>
             <h2 className="text-lg font-extrabold">{stepTitle}</h2>
           </div>
-          <button
-            aria-label="Close"
-            onClick={close}
-            className="rounded-xl p-2 text-muted-foreground hover:bg-accent"
-          >
+          <button aria-label="Close" onClick={close} className="rounded-xl p-2 text-muted-foreground hover:bg-accent">
             <X className="h-5 w-5" />
           </button>
         </header>
 
-        <div className={cn("grid gap-1 px-5 pt-4", `grid-cols-${TOTAL_STEPS}`)}
-             style={{ gridTemplateColumns: `repeat(${TOTAL_STEPS}, minmax(0, 1fr))` }}>
+        <div className="grid gap-1 px-5 pt-4" style={{ gridTemplateColumns: `repeat(${TOTAL_STEPS}, minmax(0, 1fr))` }}>
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <div
-              key={i}
-              className={cn("h-1.5 rounded-full", i <= step ? "bg-primary" : "bg-muted")}
-            />
+            <div key={i} className={cn("h-1.5 rounded-full", i <= step ? "bg-primary" : "bg-muted")} />
           ))}
         </div>
 
         <div className="max-h-[70vh] overflow-y-auto px-5 py-5">
           {step === 0 && (
-            <div className="grid gap-3">
-              <Label>Category</Label>
-              <div className="flex flex-wrap gap-2">
-                {CATEGORIES.map((c) => (
+            <div className="grid gap-4">
+              <div>
+                <Label>Reference Image</Label>
+                <label className="mt-1.5 grid cursor-pointer place-items-center rounded-3xl border-2 border-dashed border-border bg-muted/40 py-8 hover:border-primary hover:bg-primary-soft">
+                  {preview ? (
+                    <img src={preview} alt="Preview" className="max-h-40 rounded-2xl object-contain" />
+                  ) : (
+                    <div className="text-center">
+                      <ImagePlus className="mx-auto h-8 w-8 text-primary" />
+                      <p className="mt-2 text-sm font-semibold">Tap to upload reference image</p>
+                      <p className="text-[11px] text-muted-foreground">PNG or JPG, up to ~5MB</p>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => pickImage(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {preview && (
                   <button
-                    key={c}
-                    onClick={() => setD({ ...d, category: c })}
-                    className={cn(
-                      "rounded-2xl border px-4 py-3 text-sm font-semibold",
-                      d.category === c
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-card hover:border-primary/40",
-                    )}
+                    onClick={() => pickImage(null)}
+                    className="mt-1.5 text-sm font-semibold text-muted-foreground hover:text-destructive"
                   >
-                    {c}
+                    Remove image
                   </button>
-                ))}
+                )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                More categories will unlock as your catalog grows.
-              </p>
+
+              <Text
+                label="Design Name"
+                placeholder="Ivory Anarkali Gown"
+                value={d.name}
+                onChange={(v) => setD({ ...d, name: v })}
+              />
+
+              <Text
+                label="Customer (optional)"
+                placeholder="Aanya Couture"
+                value={d.customer}
+                onChange={(v) => setD({ ...d, customer: v })}
+              />
+
+              <div>
+                <Label>Estimated Order Quantity (optional)</Label>
+                <select
+                  value={d.quantityChoice}
+                  onChange={(e) => setD({ ...d, quantityChoice: e.target.value as QuantityChoice })}
+                  className="mt-1.5 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:border-primary"
+                >
+                  <option value="">Not specified</option>
+                  {QUANTITY_PRESETS.map((q) => (
+                    <option key={q} value={q}>
+                      {q} Pieces
+                    </option>
+                  ))}
+                  <option value="other">Other</option>
+                </select>
+                {d.quantityChoice === "other" && (
+                  <input
+                    type="number"
+                    min={1}
+                    value={d.customQuantity || ""}
+                    onChange={(e) => setD({ ...d, customQuantity: Math.max(0, Number(e.target.value) || 0) })}
+                    placeholder="Enter quantity"
+                    className="mt-2 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:border-primary"
+                  />
+                )}
+              </div>
             </div>
           )}
 
@@ -285,7 +331,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
                     </button>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Auto-filled from product type — edit, reorder or add your own.
+                    Auto-filled from product type — edit, reorder or add your own. Fabric and color are optional.
                   </p>
 
                   <div className="mt-3 grid gap-2">
@@ -295,10 +341,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
                       </div>
                     )}
                     {d.parts.map((p, i) => (
-                      <div
-                        key={p.id}
-                        className="rounded-2xl border border-border bg-card p-3"
-                      >
+                      <div key={p.id} className="rounded-2xl border border-border bg-card p-3">
                         <div className="flex items-center gap-2">
                           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary-soft text-xs font-bold text-primary">
                             {i + 1}
@@ -310,11 +353,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
                             className="flex-1 rounded-lg bg-transparent px-2 py-1.5 text-sm font-semibold outline-none focus:bg-muted/40"
                           />
                           <div className="flex items-center gap-1">
-                            <IconBtn
-                              label="Move up"
-                              disabled={i === 0}
-                              onClick={() => movePart(i, -1)}
-                            >
+                            <IconBtn label="Move up" disabled={i === 0} onClick={() => movePart(i, -1)}>
                               <ArrowUp className="h-4 w-4" />
                             </IconBtn>
                             <IconBtn
@@ -324,27 +363,26 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
                             >
                               <ArrowDown className="h-4 w-4" />
                             </IconBtn>
-                            <IconBtn
-                              label="Remove"
-                              onClick={() => removePart(p.id)}
-                              destructive
-                            >
+                            <IconBtn label="Remove" onClick={() => removePart(p.id)} destructive>
                               <Trash2 className="h-4 w-4" />
                             </IconBtn>
                           </div>
                         </div>
 
                         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          <PartField
-                            label="Fabric"
-                            placeholder="Silk Chanderi"
+                          <SearchableSelect
+                            label="Fabric (optional)"
                             value={p.fabric}
+                            options={fabricOptions}
+                            placeholder="Select from Inventory"
                             onChange={(v) => updatePart(p.id, { fabric: v })}
                           />
-                          <PartField
-                            label="Color"
-                            placeholder="Ivory"
+                          <SearchableSelect
+                            label="Color (optional)"
                             value={p.color}
+                            options={COMMON_COLORS}
+                            placeholder="Select or type a color"
+                            allowCustom
                             onChange={(v) => updatePart(p.id, { color: v })}
                           />
                         </div>
@@ -353,104 +391,21 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
                   </div>
                 </div>
               )}
-            </div>
-          )}
 
-          {step === 2 && (
-            <div className="grid gap-4">
-              <Text
-                label="Design Code"
-                placeholder="e.g. FL-2419"
-                value={d.code}
-                onChange={(v) => setD({ ...d, code: v.toUpperCase() })}
-              />
-              <Text
-                label="Design Name"
-                placeholder="Ivory Anarkali Gown"
-                value={d.name}
-                onChange={(v) => setD({ ...d, name: v })}
-              />
-              <Text
-                label="Customer"
-                placeholder="Aanya Couture"
-                value={d.customer}
-                onChange={(v) => setD({ ...d, customer: v })}
-              />
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="grid gap-4">
-              <Text
-                label="Color"
-                placeholder="Ivory"
-                value={d.color}
-                onChange={(v) => setD({ ...d, color: v })}
-              />
-              <div>
-                <Label>Order Quantity</Label>
-                <input
-                  type="number"
-                  min={1}
-                  value={d.orderQuantity || ""}
-                  onChange={(e) =>
-                    setD({
-                      ...d,
-                      orderQuantity: Math.max(0, Number(e.target.value) || 0),
-                    })
-                  }
-                  className="mt-1.5 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:border-primary"
-                />
-              </div>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="grid gap-4">
-              <Label>Design Image (optional)</Label>
-              <label className="grid cursor-pointer place-items-center rounded-3xl border-2 border-dashed border-border bg-muted/40 py-10 hover:border-primary hover:bg-primary-soft">
-                {preview ? (
-                  <img
-                    src={preview}
-                    alt="Preview"
-                    className="max-h-48 rounded-2xl object-contain"
-                  />
-                ) : (
-                  <div className="text-center">
-                    <ImagePlus className="mx-auto h-8 w-8 text-primary" />
-                    <p className="mt-2 text-sm font-semibold">Tap to upload cover image</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      PNG or JPG, up to ~5MB
-                    </p>
-                  </div>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => pickImage(e.target.files?.[0] ?? null)}
-                />
-              </label>
-              {preview && (
-                <button
-                  onClick={() => pickImage(null)}
-                  className="text-sm font-semibold text-muted-foreground hover:text-destructive"
-                >
-                  Remove image
-                </button>
-              )}
-              <div className="rounded-2xl border border-primary/20 bg-primary-soft p-4">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-primary" />
-                  <div>
-                    <p className="text-sm font-bold">Ready to create</p>
-                    <p className="text-xs text-muted-foreground">
-                      {d.parts.length} part{d.parts.length === 1 ? "" : "s"} configured. A
-                      sample workflow will be started automatically.
-                    </p>
+              {step1Valid && (
+                <div className="rounded-2xl border border-primary/20 bg-primary-soft p-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 text-primary" />
+                    <div>
+                      <p className="text-sm font-bold">Ready to create</p>
+                      <p className="text-xs text-muted-foreground">
+                        {d.parts.length} part{d.parts.length === 1 ? "" : "s"} configured. A sample workflow will be
+                        started automatically.
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -469,10 +424,10 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
           >
             <ArrowLeft className="h-4 w-4" /> {step === 0 ? "Cancel" : "Back"}
           </button>
-          {step < TOTAL_STEPS - 1 ? (
+          {step === 0 ? (
             <button
-              onClick={() => setStep((step + 1) as Step)}
-              disabled={nextDisabled()}
+              onClick={() => setStep(1)}
+              disabled={!step0Valid}
               className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-50"
             >
               Next <ArrowRight className="h-4 w-4" />
@@ -480,7 +435,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
           ) : (
             <button
               onClick={submit}
-              disabled={create.isPending}
+              disabled={!step1Valid || create.isPending}
               className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary to-primary-glow px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-md hover:brightness-105 disabled:opacity-70"
             >
               {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -494,11 +449,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-      {children}
-    </span>
-  );
+  return <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{children}</span>;
 }
 
 function Text({
@@ -554,32 +505,105 @@ function IconBtn({
   );
 }
 
-function PartField({
+// Compact searchable dropdown used for per-part Fabric/Color. Fabric is
+// restricted to real Inventory items (allowCustom left off); Color has no
+// backing master data so typing a value that isn't in the starter list is
+// still allowed via the "Use ..." row.
+function SearchableSelect({
   label,
-  placeholder,
   value,
+  options,
   onChange,
-  type = "text",
+  placeholder,
+  allowCustom,
 }: {
   label: string;
-  placeholder?: string;
   value: string;
+  options: string[];
   onChange: (v: string) => void;
-  type?: "text" | "number";
+  placeholder?: string;
+  allowCustom?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const filtered = q ? options.filter((o) => o.toLowerCase().includes(q)) : options;
+
+  function choose(v: string) {
+    onChange(v);
+    setOpen(false);
+    setQuery("");
+  }
+
   return (
-    <label className="grid gap-1">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-        {label}
-      </span>
-      <input
-        type={type}
-        min={type === "number" ? 0 : undefined}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:border-primary"
-      />
+    <label className="relative grid gap-1">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</span>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 text-left text-sm font-semibold outline-none focus:border-primary"
+      >
+        <span className={cn("truncate", !value && "font-normal text-muted-foreground")}>
+          {value || placeholder || "Select"}
+        </span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-50 mt-1 w-full min-w-[12rem] rounded-xl border border-border bg-card shadow-lg">
+            <div className="flex items-center gap-1.5 border-b border-border px-2.5 py-2">
+              <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search…"
+                className="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+            </div>
+            <ul className="max-h-40 overflow-y-auto py-1">
+              {value && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => choose("")}
+                    className="w-full px-2.5 py-1.5 text-left text-xs font-semibold text-muted-foreground hover:bg-accent"
+                  >
+                    Clear selection
+                  </button>
+                </li>
+              )}
+              {filtered.map((o) => (
+                <li key={o}>
+                  <button
+                    type="button"
+                    onClick={() => choose(o)}
+                    className="w-full px-2.5 py-1.5 text-left text-sm font-medium hover:bg-accent"
+                  >
+                    {o}
+                  </button>
+                </li>
+              ))}
+              {filtered.length === 0 && !(allowCustom && query.trim()) && (
+                <li className="px-2.5 py-2 text-xs text-muted-foreground">No matches</li>
+              )}
+              {allowCustom && query.trim() && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => choose(query.trim())}
+                    className="w-full px-2.5 py-1.5 text-left text-sm font-semibold text-primary hover:bg-primary-soft/40"
+                  >
+                    Use "{query.trim()}"
+                  </button>
+                </li>
+              )}
+            </ul>
+          </div>
+        </>
+      )}
     </label>
   );
 }
