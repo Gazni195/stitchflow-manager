@@ -280,6 +280,24 @@ export function useRejectDesign() {
   });
 }
 
+// Return an approved/rejected design back to draft so it can be edited again.
+export function useReturnDesignToDraft() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (design: Pick<Design, "id" | "code">): Promise<void> => {
+      const { error } = await supabase
+        .from("designs")
+        .update({ status: "draft" as DesignStatus })
+        .eq("id", design.id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, design) => {
+      qc.invalidateQueries({ queryKey: ["designs"] });
+      qc.invalidateQueries({ queryKey: ["design", "by-code", design.code] });
+    },
+  });
+}
+
 export function useDeleteDesign() {
   const qc = useQueryClient();
   return useMutation({
