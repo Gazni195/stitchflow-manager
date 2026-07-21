@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -145,7 +145,7 @@ function DesignDetails({ design }: { design: Design }) {
             </span>
           </div>
 
-          <DesignImagesButton designId={design.id} designName={design.name} />
+          <DesignImagesButton designId={design.id} designName={design.name} coverPath={design.imagePath} />
 
           <div className="rounded-2xl border border-border bg-gradient-to-br from-primary-soft to-background p-4">
             <div className="flex items-center justify-between text-sm">
@@ -409,9 +409,35 @@ function statusLabel(s: StepStatus) {
 // preview, add/replace/delete) only appears once the popup is opened, so
 // images never compete with Design Information / Workflow for space.
 
-function DesignImagesButton({ designId, designName }: { designId: string; designName: string }) {
-  const { data: images = [] } = useDesignImages(designId);
+function DesignImagesButton({
+  designId,
+  designName,
+  coverPath,
+}: {
+  designId: string;
+  designName: string;
+  coverPath: string | null | undefined;
+}) {
+  const { data: dbImages = [] } = useDesignImages(designId);
   const [open, setOpen] = useState(false);
+
+  // Merge the design's cover image (designs.image_path — the same file shown
+  // on the Designs list) as a synthetic first entry so the gallery isn't
+  // empty when only the cover exists. Skip if the cover was already added
+  // separately as a labelled gallery image.
+  const images: DesignImageRow[] = useMemo(() => {
+    if (!coverPath) return dbImages;
+    if (dbImages.some((i) => i.path === coverPath)) return dbImages;
+    const cover: DesignImageRow = {
+      id: "__cover__",
+      designId,
+      path: coverPath,
+      label: "Cover",
+      sortOrder: -1,
+    };
+    return [cover, ...dbImages];
+  }, [coverPath, dbImages, designId]);
+
   const firstPath = images[0]?.path;
   const { data: urls = {} } = useDesignImageUrls(firstPath ? [firstPath] : []);
   const thumbUrl = firstPath ? urls[firstPath] : undefined;
@@ -516,6 +542,10 @@ function DesignImageGallery({
   async function handleReplaceFile(files: FileList | null) {
     console.log("[DesignImages] Replace onChange, files:", files);
     if (!files || files.length === 0 || !active) return;
+    if (active.id === "__cover__") {
+      toast.info("The cover image is managed from Edit Design.");
+      return;
+    }
     try {
       await replaceImage.mutateAsync({ id: active.id, oldPath: active.path, file: files[0] });
       toast.success("Image replaced");
@@ -528,6 +558,10 @@ function DesignImageGallery({
 
   async function handleDelete() {
     if (!active) return;
+    if (active.id === "__cover__") {
+      toast.info("The cover image is managed from Edit Design.");
+      return;
+    }
     if (!window.confirm(`Delete this image (${active.label})? This cannot be undone.`)) return;
     try {
       await deleteImage.mutateAsync({ id: active.id, path: active.path });
