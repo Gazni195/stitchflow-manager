@@ -1,47 +1,6 @@
 // Supabase-backed workflow CRUD with react-query hooks.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Shirt,
-  FlaskConical,
-  Layers,
-  Hammer,
-  Calculator,
-  ShieldCheck,
-  Scissors,
-  Hand,
-  Sparkles,
-  QrCode,
-  PackageCheck,
-  Warehouse,
-  type LucideIcon,
-} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import type { DesignStatus } from "@/lib/designs";
-
-export type WorkflowStage = {
-  id: string;
-  step: number;
-  phase: string;
-  title: string;
-  description: string;
-  to: string;
-  icon: LucideIcon;
-};
-
-export const WORKFLOW: WorkflowStage[] = [
-  { id: "sample-creation", step: 1, phase: "Sampling", title: "Sample Creation", description: "Kick off a new style with a sample request.", to: "/samples", icon: Shirt },
-  { id: "material-selection", step: 2, phase: "Sampling", title: "Material Selection", description: "Pick fabrics, trims and consumption.", to: "/materials", icon: Layers },
-  { id: "sample-making", step: 3, phase: "Sampling", title: "Sample Making", description: "Produce the physical sample.", to: "/sample-making", icon: FlaskConical },
-  { id: "costing", step: 4, phase: "Sampling", title: "Costing", description: "Compute per-piece costs.", to: "/costing", icon: Calculator },
-  { id: "sample-approval", step: 5, phase: "Sampling", title: "Sample Approval", description: "Collect sign-offs before production.", to: "/approvals", icon: ShieldCheck },
-  { id: "cutting", step: 6, phase: "Production", title: "Bulk Cutting", description: "Cut fabric per size breakdown.", to: "/cutting", icon: Scissors },
-  { id: "handwork", step: 7, phase: "Production", title: "Hand Work", description: "Manual embellishments.", to: "/handwork", icon: Hand },
-  { id: "stitching", step: 8, phase: "Production", title: "Bulk Stitching", description: "Assemble garments on the line.", to: "/stitching", icon: Hammer },
-  { id: "qc", step: 9, phase: "Production", title: "Quality Check", description: "Inspect finished garments.", to: "/qc", icon: Sparkles },
-  { id: "packing", step: 10, phase: "Finishing", title: "Packing", description: "Fold, tag and pack the order.", to: "/packing", icon: PackageCheck },
-  { id: "barcode", step: 11, phase: "Finishing", title: "Barcode", description: "Generate and apply barcodes.", to: "/barcode", icon: QrCode },
-  { id: "stock", step: 12, phase: "Finishing", title: "Ready Stock", description: "Move finished goods to stock.", to: "/stock", icon: Warehouse },
-];
 
 export type WorkflowKind = "sample" | "bulk";
 export type StepStatus = "pending" | "in-progress" | "completed" | "skipped" | "deleted";
@@ -261,48 +220,33 @@ export function useApproveSample(designId: string) {
   });
 }
 
-// Reverse of Design Approval a stage later — Return to Sample Development
-// undoes a completed sample approval so it can be edited and resubmitted.
-// Blocked once production has actually started: start_production flips
-// designs.status to "in_production" the instant a Production Order is
-// created (supabase/migrations/..._5e36e6ac...sql), so that one status
-// value already covers both "converted into a PO" and "production work has
-// started" — the UI guards on it (see canReturn in
-// sample-development.$code.tsx) and this mutation never runs otherwise.
-// Clears the existing sample_approvals sign-offs so the approval process
-// must genuinely be redone (otherwise ApprovalPanel's auto-approve effect
-// would instantly re-approve the moment status flips back to unlocked),
-// unlocks the sample workflow for editing again, and removes the bulk
-// workflow that approve_sample auto-generated as a point-in-time snapshot
-// (workflow_steps cascade-delete with it — it holds no real production
-// data since production never started). Design materials/costing and the
-// sample workflow's own steps/history are untouched.
+// Reverse of approve_sample (above) — Withdraw Approval undoes a completed
+// sample approval so it can be edited and resubmitted. This calls a
+// SECURITY DEFINER RPC (supabase/migrations/..._revert_sample_approval.sql)
+// rather than issuing the sample_approvals/design_workflows/designs writes
+// directly from the client, for two concrete reasons found while
+// debugging "Could not update sample":
+//   1. sample_approvals has no client-facing DELETE (or UPDATE) RLS policy
+//      at all — it was dropped in 20260721153518 and never recreated by
+//      the later role-based policy migration, so a direct client delete
+//      silently affects 0 rows.
+//   2. design_workflows/designs writes are gated on the 'designs.edit'
+//      permission, which the roles that actually record sample approvals
+//      (e.g. production_manager, via 'approvals.create'/'approvals.edit')
+//      do not hold — so those roles could never actually withdraw an
+//      approval they themselves recorded.
+// Running as SECURITY DEFINER with its own explicit permission check
+// (mirroring how approve_sample already does this for the forward
+// transition) fixes both gaps atomically instead of widening client RLS,
+// and the RPC re-validates design.status === 'sample_approved' server-side
+// so withdrawal is refused once production has actually started, matching
+// the UI guard in sample-development.$code.tsx.
 export function useReturnSampleToDevelopment(designId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (): Promise<void> => {
-      const { error: approvalsErr } = await supabase.from("sample_approvals").delete().eq("design_id", designId);
-      if (approvalsErr) throw approvalsErr;
-
-      const { error: unlockErr } = await supabase
-        .from("design_workflows")
-        .update({ locked: false })
-        .eq("design_id", designId)
-        .eq("kind", "sample");
-      if (unlockErr) throw unlockErr;
-
-      const { error: bulkErr } = await supabase
-        .from("design_workflows")
-        .delete()
-        .eq("design_id", designId)
-        .eq("kind", "bulk");
-      if (bulkErr) throw bulkErr;
-
-      const { error: statusErr } = await supabase
-        .from("designs")
-        .update({ status: "sampling" as DesignStatus })
-        .eq("id", designId);
-      if (statusErr) throw statusErr;
+      const { error } = await supabase.rpc("revert_sample_approval", { _design_id: designId });
+      if (error) throw error;
     },
     onSuccess: () => {
       invalidate(qc, designId);
