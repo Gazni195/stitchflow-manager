@@ -1,6 +1,7 @@
 // Supabase-backed workflow CRUD with react-query hooks.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { DesignStatus } from "@/lib/designs";
 
 export type WorkflowKind = "sample" | "bulk";
 export type StepStatus = "pending" | "in-progress" | "completed" | "skipped" | "deleted";
