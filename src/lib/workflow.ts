@@ -96,7 +96,7 @@ export const WORKFLOW: WorkflowStage[] = [
     title: "Bulk Stitching",
     phase: "Production",
     description: "Assemble cut parts into finished garments on the line.",
-    icon: SewingPin,
+    icon: Pin,
     to: "/stitching",
   },
   {
