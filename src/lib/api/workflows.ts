@@ -1,6 +1,7 @@
 // Supabase-backed workflow CRUD with react-query hooks.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { DesignStatus } from "@/lib/designs";
 
 export type WorkflowKind = "sample" | "bulk";
 export type StepStatus = "pending" | "in-progress" | "completed" | "skipped" | "deleted";
@@ -213,6 +214,40 @@ export function useApproveSample(designId: string) {
       if (error) throw error;
     },
     onSuccess: () => invalidate(qc, designId),
+  });
+}
+
+export function useReturnSampleToDevelopment(designId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<void> => {
+      const { error: approvalsErr } = await supabase.from("sample_approvals").delete().eq("design_id", designId);
+      if (approvalsErr) throw approvalsErr;
+
+      const { error: unlockErr } = await supabase
+        .from("design_workflows")
+        .update({ locked: false })
+        .eq("design_id", designId)
+        .eq("kind", "sample");
+      if (unlockErr) throw unlockErr;
+
+      const { error: bulkErr } = await supabase
+        .from("design_workflows")
+        .delete()
+        .eq("design_id", designId)
+        .eq("kind", "bulk");
+      if (bulkErr) throw bulkErr;
+
+      const { error: statusErr } = await supabase
+        .from("designs")
+        .update({ status: "sampling" as DesignStatus })
+        .eq("id", designId);
+      if (statusErr) throw statusErr;
+    },
+    onSuccess: () => {
+      invalidate(qc, designId);
+      qc.invalidateQueries({ queryKey: ["sample-approvals", designId] });
+    },
   });
 }
 

@@ -1,7 +1,47 @@
 // Supabase-backed workflow CRUD with react-query hooks.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Shirt,
+  FlaskConical,
+  Layers,
+  Hammer,
+  Calculator,
+  ShieldCheck,
+  Scissors,
+  Hand,
+  Sparkles,
+  QrCode,
+  PackageCheck,
+  Warehouse,
+  type LucideIcon,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { DesignStatus } from "@/lib/designs";
+
+export type WorkflowStage = {
+  id: string;
+  step: number;
+  phase: string;
+  title: string;
+  description: string;
+  to: string;
+  icon: LucideIcon;
+};
+
+export const WORKFLOW: WorkflowStage[] = [
+  { id: "sample-creation", step: 1, phase: "Sampling", title: "Sample Creation", description: "Kick off a new style with a sample request.", to: "/samples", icon: Shirt },
+  { id: "material-selection", step: 2, phase: "Sampling", title: "Material Selection", description: "Pick fabrics, trims and consumption.", to: "/materials", icon: Layers },
+  { id: "sample-making", step: 3, phase: "Sampling", title: "Sample Making", description: "Produce the physical sample.", to: "/sample-making", icon: FlaskConical },
+  { id: "costing", step: 4, phase: "Sampling", title: "Costing", description: "Compute per-piece costs.", to: "/costing", icon: Calculator },
+  { id: "sample-approval", step: 5, phase: "Sampling", title: "Sample Approval", description: "Collect sign-offs before production.", to: "/approvals", icon: ShieldCheck },
+  { id: "cutting", step: 6, phase: "Production", title: "Bulk Cutting", description: "Cut fabric per size breakdown.", to: "/cutting", icon: Scissors },
+  { id: "handwork", step: 7, phase: "Production", title: "Hand Work", description: "Manual embellishments.", to: "/handwork", icon: Hand },
+  { id: "stitching", step: 8, phase: "Production", title: "Bulk Stitching", description: "Assemble garments on the line.", to: "/stitching", icon: Hammer },
+  { id: "qc", step: 9, phase: "Production", title: "Quality Check", description: "Inspect finished garments.", to: "/qc", icon: Sparkles },
+  { id: "packing", step: 10, phase: "Finishing", title: "Packing", description: "Fold, tag and pack the order.", to: "/packing", icon: PackageCheck },
+  { id: "barcode", step: 11, phase: "Finishing", title: "Barcode", description: "Generate and apply barcodes.", to: "/barcode", icon: QrCode },
+  { id: "stock", step: 12, phase: "Finishing", title: "Ready Stock", description: "Move finished goods to stock.", to: "/stock", icon: Warehouse },
+];
 
 export type WorkflowKind = "sample" | "bulk";
 export type StepStatus = "pending" | "in-progress" | "completed" | "skipped" | "deleted";
