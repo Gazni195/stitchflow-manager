@@ -10,9 +10,9 @@ import {
   Hand,
   Layers,
   Package,
+  Pin,
   Scissors,
   ShieldCheck,
-  SewingPin,
   Warehouse,
 } from "lucide-react";
 
