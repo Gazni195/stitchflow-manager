@@ -10,6 +10,7 @@ import {
   FileCheck2,
   Layers,
   Loader2,
+  MoreVertical,
   Pencil,
   Plus,
   RotateCcw,
@@ -37,6 +38,7 @@ import {
   useAddStep,
   useApproveSample,
   useDeleteStep,
+  useReturnSampleToDevelopment,
   useUpdateStep,
   useWorkflows,
   type DesignWorkflow,
@@ -2237,11 +2239,16 @@ function ApprovalPanel({ design }: { design: Design }) {
         <div className="rounded-2xl border border-success/40 bg-success/10 p-5">
           <div className="flex items-start gap-3">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-success">Sample approved · Ready for Production</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                This sample has been signed off and moved to the production queue.
-              </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-success">Sample approved · Ready for Production</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    This sample has been signed off and moved to the production queue.
+                  </p>
+                </div>
+                <SampleApprovalMenu design={design} />
+              </div>
               <Link
                 to="/production"
                 className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:opacity-90"
@@ -2263,6 +2270,115 @@ function ApprovalPanel({ design }: { design: Design }) {
           automatically once all mandatory approvers sign off.
         </p>
       )}
+    </div>
+  );
+}
+
+// Card-level menu for the one reversible approval action. canReturn mirrors
+// the "converted into a Production Order / production started" guard by
+// checking design.status directly — "sample_approved" is reversible,
+// "in_production" (and "completed") is not, since start_production sets
+// that status the instant a Production Order exists.
+function SampleApprovalMenu({ design }: { design: Design }) {
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const canReturn = design.status === "sample_approved";
+
+  useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  return (
+    <>
+      <div ref={wrapRef} className="relative shrink-0">
+        <button
+          aria-label="Sample approval actions"
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </button>
+        {open && (
+          <div className="absolute right-0 top-9 z-40 w-64 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+            <button
+              disabled={!canReturn}
+              onClick={() => {
+                setOpen(false);
+                setConfirm(true);
+              }}
+              className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-semibold hover:bg-accent disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent"
+            >
+              <RotateCcw className="h-4 w-4 text-muted-foreground" /> Return to Sample Development
+            </button>
+            {!canReturn && (
+              <p className="border-t border-border bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground">
+                This sample is already in Production and cannot be returned to Sample Development.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+      {confirm && <ReturnSampleDialog design={design} onClose={() => setConfirm(false)} />}
+    </>
+  );
+}
+
+function ReturnSampleDialog({ design, onClose }: { design: Design; onClose: () => void }) {
+  const returnToDev = useReturnSampleToDevelopment(design.id);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    setError(null);
+    try {
+      await returnToDev.mutateAsync();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update sample");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/40 p-4 sm:items-center">
+      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-background shadow-2xl">
+        <div className="px-5 pt-6 text-center">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-warning/10 text-warning">
+            <RotateCcw className="h-6 w-6" />
+          </div>
+          <h2 className="mt-4 text-lg font-extrabold">Return to Sample Development?</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Return this sample to Sample Development? This will reopen the sample workflow so changes can be made before
+            approval again.
+          </p>
+          {error && (
+            <p className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </p>
+          )}
+        </div>
+        <div className="mt-6 grid grid-cols-2 gap-2 border-t border-border p-4">
+          <button
+            onClick={onClose}
+            disabled={returnToDev.isPending}
+            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-accent disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={returnToDev.isPending}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-50"
+          >
+            {returnToDev.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Return to Sample Development
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
