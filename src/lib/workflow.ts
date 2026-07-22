@@ -1,6 +1,141 @@
 // Supabase-backed workflow CRUD with react-query hooks.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { LucideIcon } from "lucide-react";
+import {
+  Barcode,
+  Coins,
+  FileCheck2,
+  FilePlus2,
+  Hand,
+  Layers,
+  Package,
+  Pin,
+  Scissors,
+  ShieldCheck,
+  Warehouse,
+} from "lucide-react";
+
+export type WorkflowStage = {
+  id: string;
+  step: number;
+  title: string;
+  phase: string;
+  description: string;
+  icon: LucideIcon;
+  to: string;
+};
+
+export const WORKFLOW: WorkflowStage[] = [
+  {
+    id: "sample-creation",
+    step: 1,
+    title: "Sample Creation",
+    phase: "Pre-Production",
+    description: "Create and register new sample requests for styles.",
+    icon: FilePlus2,
+    to: "/samples",
+  },
+  {
+    id: "material-selection",
+    step: 2,
+    title: "Material Selection",
+    phase: "Pre-Production",
+    description: "Choose fabrics, trims, and accessories for each garment part.",
+    icon: Layers,
+    to: "/materials",
+  },
+  {
+    id: "costing",
+    step: 3,
+    title: "Costing",
+    phase: "Pre-Production",
+    description: "Calculate material, labor, and overhead costs before approval.",
+    icon: Coins,
+    to: "/costing",
+  },
+  {
+    id: "sample-making",
+    step: 4,
+    title: "Sample Making",
+    phase: "Sampling",
+    description: "Sew the prototype and record sample construction details.",
+    icon: Scissors,
+    to: "/sample-making",
+  },
+  {
+    id: "sample-approval",
+    step: 5,
+    title: "Sample Approval",
+    phase: "Sampling",
+    description: "Designer, merchandiser, and production head sign-off.",
+    icon: FileCheck2,
+    to: "/approvals",
+  },
+  {
+    id: "cutting",
+    step: 6,
+    title: "Bulk Cutting",
+    phase: "Production",
+    description: "Cut bulk fabric bundles according to the approved pattern.",
+    icon: Scissors,
+    to: "/cutting",
+  },
+  {
+    id: "handwork",
+    step: 7,
+    title: "Bulk Hand Work",
+    phase: "Production",
+    description: "Embroidery, beadwork, and other manual surface embellishments.",
+    icon: Hand,
+    to: "/handwork",
+  },
+  {
+    id: "stitching",
+    step: 8,
+    title: "Bulk Stitching",
+    phase: "Production",
+    description: "Assemble cut parts into finished garments on the line.",
+    icon: Pin,
+    to: "/stitching",
+  },
+  {
+    id: "qc",
+    step: 9,
+    title: "Quality Check",
+    phase: "Production",
+    description: "Inspect finished pieces against quality standards.",
+    icon: ShieldCheck,
+    to: "/qc",
+  },
+  {
+    id: "packing",
+    step: 10,
+    title: "Packaging",
+    phase: "Post-Production",
+    description: "Fold, tag, and pack approved garments for dispatch.",
+    icon: Package,
+    to: "/packing",
+  },
+  {
+    id: "barcode",
+    step: 11,
+    title: "Barcode",
+    phase: "Post-Production",
+    description: "Generate and attach barcodes for inventory tracking.",
+    icon: Barcode,
+    to: "/barcode",
+  },
+  {
+    id: "ready-stock",
+    step: 12,
+    title: "Ready Stock",
+    phase: "Post-Production",
+    description: "Move finished and packed goods into the warehouse.",
+    icon: Warehouse,
+    to: "/stock",
+  },
+];
 
 export type WorkflowKind = "sample" | "bulk";
 export type StepStatus = "pending" | "in-progress" | "completed" | "skipped" | "deleted";

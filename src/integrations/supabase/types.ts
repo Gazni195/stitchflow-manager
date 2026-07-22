@@ -767,6 +767,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      revert_sample_approval: {
+        Args: { _design_id: string }
+        Returns: undefined
+      }
       start_bulk_production: {
         Args: { _design_id: string }
         Returns: undefined
