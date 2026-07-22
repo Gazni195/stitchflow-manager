@@ -2185,6 +2185,12 @@ function ApprovalPanel({ design }: { design: Design }) {
 
   return (
     <div className="grid gap-4">
+      {sampleLocked && (
+        <div className="flex items-center justify-end">
+          <SampleApprovalMenu design={design} />
+        </div>
+      )}
+
       <div className="rounded-2xl border border-border bg-gradient-to-br from-primary-soft to-background p-5">
         <div className="flex items-center justify-between text-sm">
           <div>
@@ -2239,16 +2245,11 @@ function ApprovalPanel({ design }: { design: Design }) {
         <div className="rounded-2xl border border-success/40 bg-success/10 p-5">
           <div className="flex items-start gap-3">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-success">Sample approved · Ready for Production</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    This sample has been signed off and moved to the production queue.
-                  </p>
-                </div>
-                <SampleApprovalMenu design={design} />
-              </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-success">Sample approved · Ready for Production</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                This sample has been signed off and moved to the production queue.
+              </p>
               <Link
                 to="/production"
                 className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:opacity-90"
@@ -2274,16 +2275,18 @@ function ApprovalPanel({ design }: { design: Design }) {
   );
 }
 
-// Card-level menu for the one reversible approval action. canReturn mirrors
-// the "converted into a Production Order / production started" guard by
-// checking design.status directly — "sample_approved" is reversible,
-// "in_production" (and "completed") is not, since start_production sets
-// that status the instant a Production Order exists.
+// Card-level menu for the one reversible approval action. canWithdraw
+// mirrors the "converted into a Production Order / production started"
+// guard by checking design.status directly — "sample_approved" is
+// reversible, "in_production" (and "completed") is not, since
+// start_production sets that status the instant a Production Order
+// exists. The same check is re-validated server-side inside
+// revert_sample_approval, so this is a UX guard, not the only guard.
 function SampleApprovalMenu({ design }: { design: Design }) {
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const canReturn = design.status === "sample_approved";
+  const canWithdraw = design.status === "sample_approved";
 
   useEffect(() => {
     if (!open) return;
@@ -2307,16 +2310,16 @@ function SampleApprovalMenu({ design }: { design: Design }) {
         {open && (
           <div className="absolute right-0 top-9 z-40 w-64 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
             <button
-              disabled={!canReturn}
+              disabled={!canWithdraw}
               onClick={() => {
                 setOpen(false);
                 setConfirm(true);
               }}
               className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-semibold hover:bg-accent disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent"
             >
-              <RotateCcw className="h-4 w-4 text-muted-foreground" /> Return to Sample Development
+              <RotateCcw className="h-4 w-4 text-muted-foreground" /> Withdraw Approval
             </button>
-            {!canReturn && (
+            {!canWithdraw && (
               <p className="border-t border-border bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground">
                 This sample is already in Production and cannot be returned to Sample Development.
               </p>
@@ -2324,12 +2327,25 @@ function SampleApprovalMenu({ design }: { design: Design }) {
           </div>
         )}
       </div>
-      {confirm && <ReturnSampleDialog design={design} onClose={() => setConfirm(false)} />}
+      {confirm && <WithdrawApprovalDialog design={design} onClose={() => setConfirm(false)} />}
     </>
   );
 }
 
-function ReturnSampleDialog({ design, onClose }: { design: Design; onClose: () => void }) {
+// Extracts a message from whatever shape a thrown value has instead of
+// gating on `instanceof Error` — the mutation throws the `error` returned
+// by supabase.rpc(), and relying on instanceof was hiding that error's real
+// message behind the generic fallback, which is exactly the "Could not
+// update sample" symptom this dialog used to show with no way to diagnose it.
+function errorMessage(e: unknown, fallback: string): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string") {
+    return (e as { message: string }).message;
+  }
+  return fallback;
+}
+
+function WithdrawApprovalDialog({ design, onClose }: { design: Design; onClose: () => void }) {
   const returnToDev = useReturnSampleToDevelopment(design.id);
   const [error, setError] = useState<string | null>(null);
 
@@ -2339,7 +2355,7 @@ function ReturnSampleDialog({ design, onClose }: { design: Design; onClose: () =
       await returnToDev.mutateAsync();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update sample");
+      setError(errorMessage(e, "Could not update sample"));
     }
   }
 
@@ -2350,10 +2366,10 @@ function ReturnSampleDialog({ design, onClose }: { design: Design; onClose: () =
           <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-warning/10 text-warning">
             <RotateCcw className="h-6 w-6" />
           </div>
-          <h2 className="mt-4 text-lg font-extrabold">Return to Sample Development?</h2>
+          <h2 className="mt-4 text-lg font-extrabold">Withdraw Approval?</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Return this sample to Sample Development? This will reopen the sample workflow so changes can be made before
-            approval again.
+            Withdraw this completed approval? This will return the sample to Sample Development so changes can be made
+            before approval again.
           </p>
           {error && (
             <p className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -2375,7 +2391,7 @@ function ReturnSampleDialog({ design, onClose }: { design: Design; onClose: () =
             className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-50"
           >
             {returnToDev.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Return to Sample Development
+            Withdraw Approval
           </button>
         </div>
       </div>
