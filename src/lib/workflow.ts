@@ -1,46 +1,7 @@
 // Supabase-backed workflow CRUD with react-query hooks.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Shirt,
-  Layers,
-  Calculator,
-  Hammer,
-  ClipboardCheck,
-  Scissors,
-  Sparkles,
-  Factory,
-  ShieldCheck,
-  Package,
-  QrCode,
-  Warehouse,
-  type LucideIcon,
-} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-
-export type WorkflowStage = {
-  id: string;
-  step: number;
-  title: string;
-  to: string;
-  phase: string;
-  description: string;
-  icon: LucideIcon;
-};
-
-export const WORKFLOW: WorkflowStage[] = [
-  { id: "sample-creation", step: 1, title: "Sample Creation", to: "/samples", phase: "Sample", description: "Kick off a new style with a sample request.", icon: Shirt },
-  { id: "material-selection", step: 2, title: "Material Selection", to: "/materials", phase: "Sample", description: "Assign fabrics and trims for each garment part.", icon: Layers },
-  { id: "costing", step: 3, title: "Costing", to: "/costing", phase: "Sample", description: "Estimate material and labour cost.", icon: Calculator },
-  { id: "sample-making", step: 4, title: "Sample Making", to: "/sample-making", phase: "Sample", description: "Produce the physical sample.", icon: Hammer },
-  { id: "sample-approval", step: 5, title: "Sample Approval", to: "/approvals", phase: "Sample", description: "Departmental sign-off before bulk.", icon: ClipboardCheck },
-  { id: "bulk-cutting", step: 6, title: "Bulk Cutting", to: "/cutting", phase: "Production", description: "Cut fabric for the full order.", icon: Scissors },
-  { id: "bulk-handwork", step: 7, title: "Bulk Hand Work", to: "/handwork", phase: "Production", description: "Beading, embroidery and other hand work.", icon: Sparkles },
-  { id: "bulk-stitching", step: 8, title: "Bulk Stitching", to: "/stitching", phase: "Production", description: "Stitch garments in bulk.", icon: Factory },
-  { id: "quality-check", step: 9, title: "Quality Check", to: "/qc", phase: "Finishing", description: "Inspect finished garments.", icon: ShieldCheck },
-  { id: "packaging", step: 10, title: "Packaging", to: "/packing", phase: "Finishing", description: "Pack garments for dispatch.", icon: Package },
-  { id: "barcode", step: 11, title: "Barcode", to: "/barcode", phase: "Finishing", description: "Generate and attach barcodes.", icon: QrCode },
-  { id: "ready-stock", step: 12, title: "Ready Stock", to: "/stock", phase: "Stock", description: "Move to ready stock warehouse.", icon: Warehouse },
-];
+import type { DesignStatus } from "@/lib/designs";
 
 export type WorkflowKind = "sample" | "bulk";
 export type StepStatus = "pending" | "in-progress" | "completed" | "skipped" | "deleted";
@@ -158,6 +119,7 @@ export function useWorkflows(designId: string | undefined) {
 function invalidate(qc: ReturnType<typeof useQueryClient>, designId: string) {
   qc.invalidateQueries({ queryKey: ["workflows", designId] });
   qc.invalidateQueries({ queryKey: ["designs"] });
+  qc.invalidateQueries({ predicate: (query) => query.queryKey[0] === "design" });
 }
 
 export function useAddStep(designId: string) {
@@ -256,6 +218,56 @@ export function useApproveSample(designId: string) {
       if (error) throw error;
     },
     onSuccess: () => invalidate(qc, designId),
+  });
+}
+
+// Reverse of Design Approval a stage later — Return to Sample Development
+// undoes a completed sample approval so it can be edited and resubmitted.
+// Blocked once production has actually started: start_production flips
+// designs.status to "in_production" the instant a Production Order is
+// created (supabase/migrations/..._5e36e6ac...sql), so that one status
+// value already covers both "converted into a PO" and "production work has
+// started" — the UI guards on it (see canReturn in
+// sample-development.$code.tsx) and this mutation never runs otherwise.
+// Clears the existing sample_approvals sign-offs so the approval process
+// must genuinely be redone (otherwise ApprovalPanel's auto-approve effect
+// would instantly re-approve the moment status flips back to unlocked),
+// unlocks the sample workflow for editing again, and removes the bulk
+// workflow that approve_sample auto-generated as a point-in-time snapshot
+// (workflow_steps cascade-delete with it — it holds no real production
+// data since production never started). Design materials/costing and the
+// sample workflow's own steps/history are untouched.
+export function useReturnSampleToDevelopment(designId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<void> => {
+      const { error: approvalsErr } = await supabase.from("sample_approvals").delete().eq("design_id", designId);
+      if (approvalsErr) throw approvalsErr;
+
+      const { error: unlockErr } = await supabase
+        .from("design_workflows")
+        .update({ locked: false })
+        .eq("design_id", designId)
+        .eq("kind", "sample");
+      if (unlockErr) throw unlockErr;
+
+      const { error: bulkErr } = await supabase
+        .from("design_workflows")
+        .delete()
+        .eq("design_id", designId)
+        .eq("kind", "bulk");
+      if (bulkErr) throw bulkErr;
+
+      const { error: statusErr } = await supabase
+        .from("designs")
+        .update({ status: "sampling" as DesignStatus })
+        .eq("id", designId);
+      if (statusErr) throw statusErr;
+    },
+    onSuccess: () => {
+      invalidate(qc, designId);
+      qc.invalidateQueries({ queryKey: ["sample-approvals", designId] });
+    },
   });
 }
 
