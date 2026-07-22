@@ -217,6 +217,40 @@ export function useApproveSample(designId: string) {
   });
 }
 
+export function useReturnSampleToDevelopment(designId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<void> => {
+      const { error: approvalsErr } = await supabase.from("sample_approvals").delete().eq("design_id", designId);
+      if (approvalsErr) throw approvalsErr;
+
+      const { error: unlockErr } = await supabase
+        .from("design_workflows")
+        .update({ locked: false })
+        .eq("design_id", designId)
+        .eq("kind", "sample");
+      if (unlockErr) throw unlockErr;
+
+      const { error: bulkErr } = await supabase
+        .from("design_workflows")
+        .delete()
+        .eq("design_id", designId)
+        .eq("kind", "bulk");
+      if (bulkErr) throw bulkErr;
+
+      const { error: statusErr } = await supabase
+        .from("designs")
+        .update({ status: "sampling" as DesignStatus })
+        .eq("id", designId);
+      if (statusErr) throw statusErr;
+    },
+    onSuccess: () => {
+      invalidate(qc, designId);
+      qc.invalidateQueries({ queryKey: ["sample-approvals", designId] });
+    },
+  });
+}
+
 export function useStartBulkProduction(designId: string) {
   const qc = useQueryClient();
   return useMutation({
