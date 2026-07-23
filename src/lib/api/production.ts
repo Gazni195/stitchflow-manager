@@ -39,7 +39,6 @@ export type ProductionOrder = {
   orderQuantity: number;
   startDate: string;
   supervisor: string | null;
-  assignedLine: string | null;
   status: "running" | "completed";
   completedAt: string | null;
   createdAt: string;
@@ -58,7 +57,6 @@ type DbPO = {
   order_quantity: number;
   start_date: string;
   supervisor: string | null;
-  assigned_line: string | null;
   status: "running" | "completed";
   completed_at: string | null;
   created_at: string;
@@ -93,7 +91,6 @@ function mapPO(r: DbPO): ProductionOrder {
     orderQuantity: r.order_quantity,
     startDate: r.start_date,
     supervisor: r.supervisor,
-    assignedLine: r.assigned_line ?? null,
     status: r.status,
     completedAt: r.completed_at,
     createdAt: r.created_at,
@@ -145,10 +142,7 @@ export function usePendingProduction() {
       const ids = (designs ?? []).map((d) => d.id as string);
       if (!ids.length) return [];
       // Exclude ones that already have a production order
-      const { data: existing } = await supabase
-        .from("production_orders")
-        .select("design_id")
-        .in("design_id", ids);
+      const { data: existing } = await supabase.from("production_orders").select("design_id").in("design_id", ids);
       const taken = new Set((existing ?? []).map((p) => p.design_id as string));
       return (designs ?? [])
         .filter((d) => !taken.has(d.id as string))
@@ -183,7 +177,7 @@ export function useProductionOrders(status: "running" | "completed") {
         .select("*")
         .in("production_order_id", ids)
         .order("sequence", { ascending: true });
-      const list = (procs as unknown as DbProc[] ?? []).map(mapProc);
+      const list = ((procs as unknown as DbProc[]) ?? []).map(mapProc);
       return orders.map((o) => ({ ...o, processes: list.filter((p) => p.productionOrderId === o.id) }));
     },
   });
@@ -207,7 +201,7 @@ export function useProductionOrder(code: string | undefined) {
         .select("*")
         .eq("production_order_id", po.id)
         .order("sequence", { ascending: true });
-      po.processes = (procs as unknown as DbProc[] ?? []).map(mapProc);
+      po.processes = ((procs as unknown as DbProc[]) ?? []).map(mapProc);
       return po;
     },
   });
@@ -217,12 +211,7 @@ export function useProductionOrder(code: string | undefined) {
 export function useStartProduction() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (v: {
-      designId: string;
-      orderQuantity: number;
-      startDate: string;
-      supervisor: string;
-    }) => {
+    mutationFn: async (v: { designId: string; orderQuantity: number; startDate: string; supervisor: string }) => {
       const { data, error } = await supabase.rpc("start_production", {
         _design_id: v.designId,
         _order_quantity: v.orderQuantity,
@@ -293,46 +282,3 @@ export function currentStage(processes: ProductionProcess[] | undefined): string
   if (active) return OP_NAME[active.operationId];
   return "Completed";
 }
-
-// ---------- Assigned Line ----------
-export function useAssignLine() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (v: { productionOrderId: string; line: string }) => {
-      const { error } = await supabase
-        .from("production_orders")
-        .update({ assigned_line: v.line })
-        .eq("id", v.productionOrderId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["production"] });
-    },
-  });
-}
-
-export function useOrdersByLine(lineName: string | undefined) {
-  return useQuery({
-    queryKey: ["production", "by-line", lineName],
-    enabled: !!lineName,
-    queryFn: async (): Promise<ProductionOrder[]> => {
-      const { data, error } = await supabase
-        .from("production_orders")
-        .select("*, designs(code, name, customer, image_path)")
-        .eq("assigned_line", lineName!)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      const orders = (data as unknown as DbPO[]).map(mapPO);
-      const ids = orders.map((o) => o.id);
-      if (!ids.length) return orders;
-      const { data: procs } = await supabase
-        .from("production_processes")
-        .select("*")
-        .in("production_order_id", ids)
-        .order("sequence", { ascending: true });
-      const list = (procs as unknown as DbProc[] ?? []).map(mapProc);
-      return orders.map((o) => ({ ...o, processes: list.filter((p) => p.productionOrderId === o.id) }));
-    },
-  });
-}
-
