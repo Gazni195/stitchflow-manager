@@ -1,14 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import {
-  ArrowRight,
-  CheckCircle2,
-  Factory,
-  Loader2,
-  PlayCircle,
-  Clock,
-  X,
-} from "lucide-react";
+import { ArrowRight, CheckCircle2, Factory, Loader2, PlayCircle, Clock, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
 import { useRequireAuth } from "@/hooks/use-auth";
@@ -16,12 +8,13 @@ import {
   usePendingProduction,
   useProductionOrders,
   useStartProduction,
+  useAssignLine,
   computeProgress,
   currentStage,
   type PendingDesign,
   type ProductionOrder,
 } from "@/lib/api/production";
-
+import { PRODUCTION_LINES, slugForLine } from "@/lib/lines";
 
 export const Route = createFileRoute("/production/")({
   head: () => ({ meta: [{ title: "Production — Fawri Lifestyle" }] }),
@@ -44,7 +37,7 @@ function ProductionHome() {
           empty="No approved samples awaiting production."
           loading={pending.isLoading}
         >
-          <ul className="grid gap-3 sm:grid-cols-2">
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {(pending.data ?? []).map((d) => (
               <PendingCard key={d.id} d={d} onStart={() => setStartFor(d)} />
             ))}
@@ -92,9 +85,7 @@ function Section({
     <section className="grid gap-3">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-bold">{title}</h2>
-        <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary">
-          {count}
-        </span>
+        <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary">{count}</span>
       </div>
       {loading ? (
         <div className="grid place-items-center rounded-2xl border border-border bg-card p-10">
@@ -112,42 +103,44 @@ function Section({
   );
 }
 
+// Compact layout matching the Sample Development card exactly (same p-3
+// container, h-16 w-16 thumbnail, same code/name/customer typography) —
+// only the extra row (Qty/Approved/Start Production) is new, since Pending
+// cards need fields Sample cards don't.
 function PendingCard({ d, onStart }: { d: PendingDesign; onStart: () => void }) {
   return (
-    <li className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-      <div className="relative aspect-[16/9] w-full bg-primary-soft">
-        <DesignImage path={d.imagePath} alt={d.name} />
-        <span className="absolute right-2 top-2 rounded-full bg-success/90 px-2.5 py-1 text-[11px] font-bold text-success-foreground shadow-sm">
-          Sample Approved
-        </span>
+    <li className="rounded-2xl border border-border bg-card p-3 shadow-sm transition hover:border-primary/40 hover:shadow-md">
+      <div className="flex items-center gap-3">
+        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-primary-soft">
+          <DesignImage path={d.imagePath} alt={d.name} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[11px] font-bold tracking-wider text-muted-foreground">{d.code}</p>
+          <p className="truncate text-sm font-bold">{d.name}</p>
+          <p className="truncate text-xs text-muted-foreground">{d.customer}</p>
+        </div>
       </div>
-      <div className="grid gap-3 p-4">
-        <div className="min-w-0">
-          <p className="truncate text-[11px] font-bold tracking-widest text-muted-foreground">{d.code}</p>
-          <p className="truncate text-base font-extrabold">{d.name}</p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{d.customer}</p>
+
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border pt-2.5">
+        <div className="flex min-w-0 items-center gap-3 text-xs text-muted-foreground">
+          <span className="font-bold text-foreground">{d.orderQuantity.toLocaleString()} Pcs</span>
+          <span className="inline-flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3 text-success" />
+            {d.approvedAt
+              ? new Date(d.approvedAt).toLocaleDateString(undefined, {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })
+              : "—"}
+          </span>
         </div>
-        <dl className="grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-lg border border-border bg-background p-2">
-            <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Order Qty</dt>
-            <dd className="mt-0.5 font-bold">{d.orderQuantity.toLocaleString()} Pcs</dd>
-          </div>
-          <div className="rounded-lg border border-border bg-background p-2">
-            <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Approved</dt>
-            <dd className="mt-0.5 inline-flex items-center gap-1 font-bold">
-              <CheckCircle2 className="h-3 w-3 text-success" />
-              {d.approvedAt ? new Date(d.approvedAt).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" }) : "—"}
-            </dd>
-          </div>
-        </dl>
-        <div className="flex justify-end">
-          <button
-            onClick={onStart}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:opacity-90"
-          >
-            <PlayCircle className="h-3.5 w-3.5" /> Start Production
-          </button>
-        </div>
+        <button
+          onClick={onStart}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90"
+        >
+          <PlayCircle className="h-3.5 w-3.5" /> Start Production
+        </button>
       </div>
     </li>
   );
@@ -178,11 +171,7 @@ function OrdersTable({ orders, completed = false }: { orders: ProductionOrder[];
               return (
                 <tr key={o.id} className="hover:bg-accent/30">
                   <td className="px-4 py-3 font-bold text-foreground">
-                    <Link
-                      to="/production/$po"
-                      params={{ po: o.code }}
-                      className="hover:text-primary"
-                    >
+                    <Link to="/production/$po" params={{ po: o.code }} className="hover:text-primary">
                       {o.code}
                     </Link>
                   </td>
@@ -207,9 +196,18 @@ function OrdersTable({ orders, completed = false }: { orders: ProductionOrder[];
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="text-xs italic text-muted-foreground">—</span>
+                    {o.assignedLine ? (
+                      <Link
+                        to="/lines/$line"
+                        params={{ line: slugForLine(o.assignedLine) ?? "" }}
+                        className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-foreground hover:text-primary"
+                      >
+                        <Factory className="h-3 w-3" /> {o.assignedLine}
+                      </Link>
+                    ) : (
+                      <span className="text-xs italic text-muted-foreground">Unassigned</span>
+                    )}
                   </td>
-
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
@@ -222,9 +220,7 @@ function OrdersTable({ orders, completed = false }: { orders: ProductionOrder[];
                     <span
                       className={
                         "rounded-full px-2 py-0.5 text-[11px] font-bold " +
-                        (o.status === "completed"
-                          ? "bg-success/15 text-success"
-                          : "bg-primary-soft text-primary")
+                        (o.status === "completed" ? "bg-success/15 text-success" : "bg-primary-soft text-primary")
                       }
                     >
                       {o.status === "completed" ? "Completed" : "Running"}
@@ -253,19 +249,22 @@ function StartProductionDialog({ design, onClose }: { design: PendingDesign; onC
   const [quantity, setQuantity] = useState<number>(design.orderQuantity);
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [supervisor, setSupervisor] = useState<string>("");
+  const [line, setLine] = useState<string>("");
   const start = useStartProduction();
+  const assign = useAssignLine();
 
   async function submit() {
     if (!quantity || quantity < 1) return;
-    await start.mutateAsync({
+    if (!line) return;
+    const poId = await start.mutateAsync({
       designId: design.id,
       orderQuantity: quantity,
       startDate,
       supervisor: supervisor.trim(),
     });
+    await assign.mutateAsync({ productionOrderId: poId, line });
     onClose();
   }
-
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/40 p-4">
@@ -310,6 +309,20 @@ function StartProductionDialog({ design, onClose }: { design: PendingDesign; onC
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
             />
           </Field>
+          <Field label="Assign Production Line">
+            <select
+              value={line}
+              onChange={(e) => setLine(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+            >
+              <option value="">Select a line…</option>
+              {PRODUCTION_LINES.map((l) => (
+                <option key={l.slug} value={l.name}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label="Supervisor (optional)">
             <input
               value={supervisor}
@@ -318,9 +331,9 @@ function StartProductionDialog({ design, onClose }: { design: PendingDesign; onC
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
             />
           </Field>
-          {start.error && (
+          {(start.error || assign.error) && (
             <p className="text-xs text-destructive">
-              {(start.error as Error).message ?? "Could not start production"}
+              {((start.error || assign.error) as Error).message ?? "Could not start production"}
             </p>
           )}
         </div>
@@ -333,14 +346,17 @@ function StartProductionDialog({ design, onClose }: { design: PendingDesign; onC
           </button>
           <button
             onClick={submit}
-            disabled={start.isPending}
+            disabled={start.isPending || assign.isPending || !line}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-60"
           >
-            {start.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlayCircle className="h-3.5 w-3.5" />}
+            {start.isPending || assign.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <PlayCircle className="h-3.5 w-3.5" />
+            )}
             Start Production
           </button>
         </div>
-
       </div>
     </div>
   );
