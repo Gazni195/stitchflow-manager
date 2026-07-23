@@ -318,6 +318,7 @@ export type Database = {
           status: string
           updated_at: string
           variance_reason: string | null
+          workstation_id: string | null
         }
         Insert: {
           assigned_to: string
@@ -339,6 +340,7 @@ export type Database = {
           status?: string
           updated_at?: string
           variance_reason?: string | null
+          workstation_id?: string | null
         }
         Update: {
           assigned_to?: string
@@ -360,6 +362,7 @@ export type Database = {
           status?: string
           updated_at?: string
           variance_reason?: string | null
+          workstation_id?: string | null
         }
         Relationships: [
           {
