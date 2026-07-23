@@ -16,13 +16,12 @@ import {
   usePendingProduction,
   useProductionOrders,
   useStartProduction,
-  useAssignLine,
   computeProgress,
   currentStage,
   type PendingDesign,
   type ProductionOrder,
 } from "@/lib/api/production";
-import { PRODUCTION_LINES, slugForLine } from "@/lib/lines";
+
 
 export const Route = createFileRoute("/production/")({
   head: () => ({ meta: [{ title: "Production — Fawri Lifestyle" }] }),
@@ -208,18 +207,9 @@ function OrdersTable({ orders, completed = false }: { orders: ProductionOrder[];
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {o.assignedLine ? (
-                      <Link
-                        to="/lines/$line"
-                        params={{ line: slugForLine(o.assignedLine) ?? "" }}
-                        className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-foreground hover:text-primary"
-                      >
-                        <Factory className="h-3 w-3" /> {o.assignedLine}
-                      </Link>
-                    ) : (
-                      <span className="text-xs italic text-muted-foreground">Unassigned</span>
-                    )}
+                    <span className="text-xs italic text-muted-foreground">—</span>
                   </td>
+
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
@@ -263,22 +253,19 @@ function StartProductionDialog({ design, onClose }: { design: PendingDesign; onC
   const [quantity, setQuantity] = useState<number>(design.orderQuantity);
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [supervisor, setSupervisor] = useState<string>("");
-  const [line, setLine] = useState<string>("");
   const start = useStartProduction();
-  const assign = useAssignLine();
 
   async function submit() {
     if (!quantity || quantity < 1) return;
-    if (!line) return;
-    const poId = await start.mutateAsync({
+    await start.mutateAsync({
       designId: design.id,
       orderQuantity: quantity,
       startDate,
       supervisor: supervisor.trim(),
     });
-    await assign.mutateAsync({ productionOrderId: poId, line });
     onClose();
   }
+
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/40 p-4">
@@ -323,18 +310,6 @@ function StartProductionDialog({ design, onClose }: { design: PendingDesign; onC
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
             />
           </Field>
-          <Field label="Assign Production Line">
-            <select
-              value={line}
-              onChange={(e) => setLine(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            >
-              <option value="">Select a line…</option>
-              {PRODUCTION_LINES.map((l) => (
-                <option key={l.slug} value={l.name}>{l.name}</option>
-              ))}
-            </select>
-          </Field>
           <Field label="Supervisor (optional)">
             <input
               value={supervisor}
@@ -343,9 +318,9 @@ function StartProductionDialog({ design, onClose }: { design: PendingDesign; onC
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
             />
           </Field>
-          {(start.error || assign.error) && (
+          {start.error && (
             <p className="text-xs text-destructive">
-              {((start.error || assign.error) as Error).message ?? "Could not start production"}
+              {(start.error as Error).message ?? "Could not start production"}
             </p>
           )}
         </div>
@@ -358,13 +333,14 @@ function StartProductionDialog({ design, onClose }: { design: PendingDesign; onC
           </button>
           <button
             onClick={submit}
-            disabled={start.isPending || assign.isPending || !line}
+            disabled={start.isPending}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-60"
           >
-            {start.isPending || assign.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlayCircle className="h-3.5 w-3.5" />}
+            {start.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlayCircle className="h-3.5 w-3.5" />}
             Start Production
           </button>
         </div>
+
       </div>
     </div>
   );
