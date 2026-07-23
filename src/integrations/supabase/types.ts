@@ -560,6 +560,47 @@ export type Database = {
           },
         ]
       }
+      sample_approval_audit: {
+        Row: {
+          action: string
+          actor_name: string | null
+          actor_user_id: string | null
+          created_at: string
+          design_id: string
+          id: string
+          notes: string | null
+          role: string
+        }
+        Insert: {
+          action: string
+          actor_name?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          design_id: string
+          id?: string
+          notes?: string | null
+          role: string
+        }
+        Update: {
+          action?: string
+          actor_name?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          design_id?: string
+          id?: string
+          notes?: string | null
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sample_approval_audit_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sample_approvals: {
         Row: {
           approved_at: string
@@ -816,6 +857,10 @@ export type Database = {
           _supervisor: string
         }
         Returns: string
+      }
+      withdraw_sample_approval: {
+        Args: { _design_id: string; _role: string }
+        Returns: undefined
       }
     }
     Enums: {
