@@ -293,20 +293,6 @@ function StartProductionDialog({ design, onClose }: { design: PendingDesign; onC
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
             />
           </Field>
-          <Field label="Assign Production Line">
-            <select
-              value={line}
-              onChange={(e) => setLine(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            >
-              <option value="">Select a line…</option>
-              {PRODUCTION_LINES.map((l) => (
-                <option key={l.slug} value={l.name}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </Field>
           <Field label="Supervisor (optional)">
             <input
               value={supervisor}
@@ -315,9 +301,9 @@ function StartProductionDialog({ design, onClose }: { design: PendingDesign; onC
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
             />
           </Field>
-          {(start.error || assign.error) && (
+          {start.error && (
             <p className="text-xs text-destructive">
-              {((start.error || assign.error) as Error).message ?? "Could not start production"}
+              {(start.error as Error).message ?? "Could not start production"}
             </p>
           )}
         </div>
@@ -330,16 +316,17 @@ function StartProductionDialog({ design, onClose }: { design: PendingDesign; onC
           </button>
           <button
             onClick={submit}
-            disabled={start.isPending || assign.isPending || !line}
+            disabled={start.isPending}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-60"
           >
-            {start.isPending || assign.isPending ? (
+            {start.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <PlayCircle className="h-3.5 w-3.5" />
             )}
             Start Production
           </button>
+
         </div>
       </div>
     </div>
