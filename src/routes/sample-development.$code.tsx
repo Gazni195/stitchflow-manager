@@ -38,7 +38,7 @@ import {
   useAddStep,
   useApproveSample,
   useDeleteStep,
-  useWithdrawSampleApproval,
+  useReturnSampleToDevelopment,
   useUpdateStep,
   useWorkflows,
   type DesignWorkflow,
@@ -2185,6 +2185,12 @@ function ApprovalPanel({ design }: { design: Design }) {
 
   return (
     <div className="grid gap-4">
+      {sampleLocked && (
+        <div className="flex items-center justify-end">
+          <SampleApprovalMenu design={design} />
+        </div>
+      )}
+
       <div className="rounded-2xl border border-border bg-gradient-to-br from-primary-soft to-background p-5">
         <div className="flex items-center justify-between text-sm">
           <div>
@@ -2212,7 +2218,6 @@ function ApprovalPanel({ design }: { design: Design }) {
           {MANDATORY_APPROVAL_ROLES.map((role) => (
             <ApprovalCard
               key={role}
-              design={design}
               role={role}
               existing={byRole.get(role) ?? null}
               disabled={sampleLocked || record.isPending || !currentUserName}
@@ -2270,28 +2275,18 @@ function ApprovalPanel({ design }: { design: Design }) {
   );
 }
 
-// Per-approver menu — each approver manages only their own approval, so
-// this is scoped to a single role and only ever touches that role's
-// sample_approvals row. Shown only when this specific approval is already
-// completed (nothing to withdraw while still Pending — ApprovalCard only
-// renders this when `existing` is present). canWithdraw mirrors the
-// "converted into a Production Order / production started" guard by
-// checking design.status directly; the same check is re-validated
-// server-side inside withdraw_sample_approval, so this is a UX guard, not
-// the only guard.
-function ApprovalWithdrawMenu({
-  design,
-  role,
-  approval,
-}: {
-  design: Design;
-  role: ApprovalRoleName;
-  approval: SampleApproval;
-}) {
+// Card-level menu for the one reversible approval action. canWithdraw
+// mirrors the "converted into a Production Order / production started"
+// guard by checking design.status directly — "sample_approved" is
+// reversible, "in_production" (and "completed") is not, since
+// start_production sets that status the instant a Production Order
+// exists. The same check is re-validated server-side inside
+// revert_sample_approval, so this is a UX guard, not the only guard.
+function SampleApprovalMenu({ design }: { design: Design }) {
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const canWithdraw = design.status !== "in_production" && design.status !== "completed";
+  const canWithdraw = design.status === "sample_approved";
 
   useEffect(() => {
     if (!open) return;
@@ -2306,14 +2301,14 @@ function ApprovalWithdrawMenu({
     <>
       <div ref={wrapRef} className="relative shrink-0">
         <button
-          aria-label={`${role} approval actions`}
+          aria-label="Sample approval actions"
           onClick={() => setOpen((v) => !v)}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <MoreVertical className="h-4 w-4" />
         </button>
         {open && (
-          <div className="absolute right-0 top-8 z-40 w-60 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+          <div className="absolute right-0 top-9 z-40 w-64 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
             <button
               disabled={!canWithdraw}
               onClick={() => {
@@ -2326,15 +2321,13 @@ function ApprovalWithdrawMenu({
             </button>
             {!canWithdraw && (
               <p className="border-t border-border bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground">
-                This sample is already in Production and cannot be withdrawn.
+                This sample is already in Production and cannot be returned to Sample Development.
               </p>
             )}
           </div>
         )}
       </div>
-      {confirm && (
-        <WithdrawApprovalDialog design={design} role={role} approval={approval} onClose={() => setConfirm(false)} />
-      )}
+      {confirm && <WithdrawApprovalDialog design={design} onClose={() => setConfirm(false)} />}
     </>
   );
 }
@@ -2342,7 +2335,8 @@ function ApprovalWithdrawMenu({
 // Extracts a message from whatever shape a thrown value has instead of
 // gating on `instanceof Error` — the mutation throws the `error` returned
 // by supabase.rpc(), and relying on instanceof was hiding that error's real
-// message behind a generic fallback in an earlier version of this dialog.
+// message behind the generic fallback, which is exactly the "Could not
+// update sample" symptom this dialog used to show with no way to diagnose it.
 function errorMessage(e: unknown, fallback: string): string {
   if (e instanceof Error) return e.message;
   if (e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string") {
@@ -2351,33 +2345,17 @@ function errorMessage(e: unknown, fallback: string): string {
   return fallback;
 }
 
-function WithdrawApprovalDialog({
-  design,
-  role,
-  approval,
-  onClose,
-}: {
-  design: Design;
-  role: ApprovalRoleName;
-  approval: SampleApproval;
-  onClose: () => void;
-}) {
-  const { session } = useSession();
-  const actorName =
-    (session?.user?.user_metadata?.full_name as string | undefined) ||
-    (session?.user?.user_metadata?.name as string | undefined) ||
-    session?.user?.email ||
-    "";
-  const withdraw = useWithdrawSampleApproval(design.id);
+function WithdrawApprovalDialog({ design, onClose }: { design: Design; onClose: () => void }) {
+  const returnToDev = useReturnSampleToDevelopment(design.id);
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
     setError(null);
     try {
-      await withdraw.mutateAsync({ role, actorName });
+      await returnToDev.mutateAsync();
       onClose();
     } catch (e) {
-      setError(errorMessage(e, "Could not withdraw approval"));
+      setError(errorMessage(e, "Could not update sample"));
     }
   }
 
@@ -2388,12 +2366,10 @@ function WithdrawApprovalDialog({
           <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-warning/10 text-warning">
             <RotateCcw className="h-6 w-6" />
           </div>
-          <h2 className="mt-4 text-lg font-extrabold">Withdraw {role}'s Approval?</h2>
+          <h2 className="mt-4 text-lg font-extrabold">Withdraw Approval?</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {approval.approverName}'s approval will be removed and {role} will return to Pending.
-            {design.status === "sample_approved"
-              ? " Since the sample was fully approved, it will no longer be considered approved and will be removed from the Production Queue until every required approval is completed again."
-              : " No other approver's sign-off is affected."}
+            Withdraw this completed approval? This will return the sample to Sample Development so changes can be made
+            before approval again.
           </p>
           {error && (
             <p className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -2404,17 +2380,17 @@ function WithdrawApprovalDialog({
         <div className="mt-6 grid grid-cols-2 gap-2 border-t border-border p-4">
           <button
             onClick={onClose}
-            disabled={withdraw.isPending}
+            disabled={returnToDev.isPending}
             className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-accent disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={submit}
-            disabled={withdraw.isPending}
+            disabled={returnToDev.isPending}
             className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-50"
           >
-            {withdraw.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            {returnToDev.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Withdraw Approval
           </button>
         </div>
@@ -2424,13 +2400,11 @@ function WithdrawApprovalDialog({
 }
 
 function ApprovalCard({
-  design,
   role,
   existing,
   disabled,
   onApprove,
 }: {
-  design: Design;
   role: ApprovalRoleName;
   existing: SampleApproval | null;
   disabled: boolean;
@@ -2455,18 +2429,15 @@ function ApprovalCard({
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{role}</p>
           <p className="mt-0.5 truncate text-base font-bold">{isApproved ? existing!.approverName : "—"}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <span
-            className={
-              "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold " +
-              (isApproved ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")
-            }
-          >
-            {isApproved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-            {isApproved ? "Approved" : "Pending"}
-          </span>
-          {isApproved && <ApprovalWithdrawMenu design={design} role={role} approval={existing!} />}
-        </div>
+        <span
+          className={
+            "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold " +
+            (isApproved ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")
+          }
+        >
+          {isApproved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+          {isApproved ? "Approved" : "Pending"}
+        </span>
       </div>
 
       {isApproved ? (
