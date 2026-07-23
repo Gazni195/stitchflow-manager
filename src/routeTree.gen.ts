@@ -32,6 +32,7 @@ import { Route as ProductionIndexRouteImport } from './routes/production.index'
 import { Route as LinesIndexRouteImport } from './routes/lines.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as SettingsWorkstationsRouteImport } from './routes/settings.workstations'
 import { Route as SettingsUsersRouteImport } from './routes/settings.users'
 import { Route as SettingsThemeRouteImport } from './routes/settings.theme'
 import { Route as SettingsSystemRouteImport } from './routes/settings.system'
@@ -166,6 +167,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const SettingsWorkstationsRoute = SettingsWorkstationsRouteImport.update({
+  id: '/workstations',
+  path: '/workstations',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsUsersRoute = SettingsUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -292,6 +298,7 @@ export interface FileRoutesByFullPath {
   '/settings/system': typeof SettingsSystemRoute
   '/settings/theme': typeof SettingsThemeRoute
   '/settings/users': typeof SettingsUsersRoute
+  '/settings/workstations': typeof SettingsWorkstationsRoute
   '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
   '/lines/': typeof LinesIndexRoute
@@ -333,6 +340,7 @@ export interface FileRoutesByTo {
   '/settings/system': typeof SettingsSystemRoute
   '/settings/theme': typeof SettingsThemeRoute
   '/settings/users': typeof SettingsUsersRoute
+  '/settings/workstations': typeof SettingsWorkstationsRoute
   '/admin': typeof AdminIndexRoute
   '/designs': typeof DesignsIndexRoute
   '/lines': typeof LinesIndexRoute
@@ -377,6 +385,7 @@ export interface FileRoutesById {
   '/settings/system': typeof SettingsSystemRoute
   '/settings/theme': typeof SettingsThemeRoute
   '/settings/users': typeof SettingsUsersRoute
+  '/settings/workstations': typeof SettingsWorkstationsRoute
   '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
   '/lines/': typeof LinesIndexRoute
@@ -422,6 +431,7 @@ export interface FileRouteTypes {
     | '/settings/system'
     | '/settings/theme'
     | '/settings/users'
+    | '/settings/workstations'
     | '/admin/'
     | '/designs/'
     | '/lines/'
@@ -463,6 +473,7 @@ export interface FileRouteTypes {
     | '/settings/system'
     | '/settings/theme'
     | '/settings/users'
+    | '/settings/workstations'
     | '/admin'
     | '/designs'
     | '/lines'
@@ -506,6 +517,7 @@ export interface FileRouteTypes {
     | '/settings/system'
     | '/settings/theme'
     | '/settings/users'
+    | '/settings/workstations'
     | '/admin/'
     | '/designs/'
     | '/lines/'
@@ -706,6 +718,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/settings/workstations': {
+      id: '/settings/workstations'
+      path: '/workstations'
+      fullPath: '/settings/workstations'
+      preLoaderRoute: typeof SettingsWorkstationsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/users': {
       id: '/settings/users'
       path: '/users'
@@ -861,6 +880,7 @@ interface SettingsRouteChildren {
   SettingsSystemRoute: typeof SettingsSystemRoute
   SettingsThemeRoute: typeof SettingsThemeRoute
   SettingsUsersRoute: typeof SettingsUsersRoute
+  SettingsWorkstationsRoute: typeof SettingsWorkstationsRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
 }
 
@@ -876,6 +896,7 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsSystemRoute: SettingsSystemRoute,
   SettingsThemeRoute: SettingsThemeRoute,
   SettingsUsersRoute: SettingsUsersRoute,
+  SettingsWorkstationsRoute: SettingsWorkstationsRoute,
   SettingsIndexRoute: SettingsIndexRoute,
 }
 
