@@ -49,6 +49,7 @@ export function sumSizeBreakdown(b: SizeBreakdown | null | undefined): number {
 export type ProductionActivity = {
   id: string;
   productionOrderId: string;
+  workstationId: string | null;
   operationId: ActivityOperationId;
   assignedTo: string;
   issuedQty: number;
@@ -68,6 +69,7 @@ export type ProductionActivity = {
 type DbRow = {
   id: string;
   production_order_id: string;
+  workstation_id: string | null;
   operation_id: string;
   assigned_to: string;
   issued_qty: number;
@@ -88,6 +90,7 @@ function mapRow(r: DbRow): ProductionActivity {
   return {
     id: r.id,
     productionOrderId: r.production_order_id,
+    workstationId: r.workstation_id ?? null,
     operationId: r.operation_id as ActivityOperationId,
     assignedTo: r.assigned_to,
     issuedQty: r.issued_qty,
@@ -183,10 +186,16 @@ export function useStartActivity(productionOrderId: string) {
       issuedQty: number;
       issuedSizes?: SizeBreakdown | null;
       notes?: string;
+      /** Workstation ID (e.g. "T3") doing this work — see
+       *  WORKSTATION_TYPE_OPERATION in lib/api/workstations.ts for which
+       *  operations map to a workstation type. null for operations with no
+       *  workstation concept (printing, washing, qc, packing). */
+      workstationId?: string | null;
     }) => {
       const { data: userRes } = await supabase.auth.getUser();
       const { error } = await supabase.from("production_activities").insert({
         production_order_id: productionOrderId,
+        workstation_id: v.workstationId ?? null,
         operation_id: v.operationId,
         assigned_to: v.assignedTo,
         issued_qty: v.issuedQty,
@@ -198,7 +207,11 @@ export function useStartActivity(productionOrderId: string) {
       });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["production-activities", productionOrderId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["production-activities", productionOrderId] });
+      qc.invalidateQueries({ queryKey: ["workstation-cards"] });
+      qc.invalidateQueries({ predicate: (query) => query.queryKey[0] === "workstation-history" });
+    },
   });
 }
 
@@ -229,7 +242,11 @@ export function useCompleteActivity(productionOrderId: string) {
       const { error } = await supabase.from("production_activities").update(patch).eq("id", v.activity.id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["production-activities", productionOrderId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["production-activities", productionOrderId] });
+      qc.invalidateQueries({ queryKey: ["workstation-cards"] });
+      qc.invalidateQueries({ predicate: (query) => query.queryKey[0] === "workstation-history" });
+    },
   });
 }
 
@@ -243,7 +260,11 @@ export function useCancelActivity(productionOrderId: string) {
         .eq("id", activityId);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["production-activities", productionOrderId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["production-activities", productionOrderId] });
+      qc.invalidateQueries({ queryKey: ["workstation-cards"] });
+      qc.invalidateQueries({ predicate: (query) => query.queryKey[0] === "workstation-history" });
+    },
   });
 }
 
@@ -274,9 +295,9 @@ export const PRODUCTION_SEQUENCE: ActivityOperationId[] = [
   "packing",
 ];
 export const OPTIONAL_OPERATIONS: Set<ActivityOperationId> = new Set(["embroidery"]);
-export const ADDITIONAL_OPERATIONS: ActivityOperationId[] = ACTIVITY_OPERATIONS
-  .map((o) => o.id)
-  .filter((id) => !PRODUCTION_SEQUENCE.includes(id));
+export const ADDITIONAL_OPERATIONS: ActivityOperationId[] = ACTIVITY_OPERATIONS.map((o) => o.id).filter(
+  (id) => !PRODUCTION_SEQUENCE.includes(id),
+);
 
 // Next operation the operator should be prompted for. null = sequence done
 // OR an activity is still running (must complete/cancel first).
@@ -285,9 +306,7 @@ export function nextSequentialOperation(
   skipped: Set<ActivityOperationId> = new Set(),
 ): ActivityOperationId | null {
   if (activities?.some((a) => a.status === "running")) return null;
-  const doneOps = new Set(
-    (activities ?? []).filter((a) => a.status === "completed").map((a) => a.operationId),
-  );
+  const doneOps = new Set((activities ?? []).filter((a) => a.status === "completed").map((a) => a.operationId));
   for (const op of PRODUCTION_SEQUENCE) {
     if (doneOps.has(op)) continue;
     if (skipped.has(op)) continue;
