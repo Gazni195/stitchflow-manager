@@ -26,11 +26,13 @@ import { Route as BarcodeRouteImport } from './routes/barcode'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WorkstationsIndexRouteImport } from './routes/workstations.index'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SampleDevelopmentIndexRouteImport } from './routes/sample-development.index'
 import { Route as ProductionIndexRouteImport } from './routes/production.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as WorkstationsCodeRouteImport } from './routes/workstations.$code'
 import { Route as SettingsWorkstationsRouteImport } from './routes/settings.workstations'
 import { Route as SettingsUsersRouteImport } from './routes/settings.users'
 import { Route as SettingsThemeRouteImport } from './routes/settings.theme'
@@ -135,6 +137,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkstationsIndexRoute = WorkstationsIndexRouteImport.update({
+  id: '/workstations/',
+  path: '/workstations/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -159,6 +166,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminRoute,
+} as any)
+const WorkstationsCodeRoute = WorkstationsCodeRouteImport.update({
+  id: '/workstations/$code',
+  path: '/workstations/$code',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsWorkstationsRoute = SettingsWorkstationsRouteImport.update({
   id: '/workstations',
@@ -286,11 +298,13 @@ export interface FileRoutesByFullPath {
   '/settings/theme': typeof SettingsThemeRoute
   '/settings/users': typeof SettingsUsersRoute
   '/settings/workstations': typeof SettingsWorkstationsRoute
+  '/workstations/$code': typeof WorkstationsCodeRoute
   '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
   '/production/': typeof ProductionIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
   '/settings/': typeof SettingsIndexRoute
+  '/workstations/': typeof WorkstationsIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
 export interface FileRoutesByTo {
@@ -326,11 +340,13 @@ export interface FileRoutesByTo {
   '/settings/theme': typeof SettingsThemeRoute
   '/settings/users': typeof SettingsUsersRoute
   '/settings/workstations': typeof SettingsWorkstationsRoute
+  '/workstations/$code': typeof WorkstationsCodeRoute
   '/admin': typeof AdminIndexRoute
   '/designs': typeof DesignsIndexRoute
   '/production': typeof ProductionIndexRoute
   '/sample-development': typeof SampleDevelopmentIndexRoute
   '/settings': typeof SettingsIndexRoute
+  '/workstations': typeof WorkstationsIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
 export interface FileRoutesById {
@@ -369,11 +385,13 @@ export interface FileRoutesById {
   '/settings/theme': typeof SettingsThemeRoute
   '/settings/users': typeof SettingsUsersRoute
   '/settings/workstations': typeof SettingsWorkstationsRoute
+  '/workstations/$code': typeof WorkstationsCodeRoute
   '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
   '/production/': typeof ProductionIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
   '/settings/': typeof SettingsIndexRoute
+  '/workstations/': typeof WorkstationsIndexRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
 }
 export interface FileRouteTypes {
@@ -413,11 +431,13 @@ export interface FileRouteTypes {
     | '/settings/theme'
     | '/settings/users'
     | '/settings/workstations'
+    | '/workstations/$code'
     | '/admin/'
     | '/designs/'
     | '/production/'
     | '/sample-development/'
     | '/settings/'
+    | '/workstations/'
     | '/designs/$code/workflow'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -453,11 +473,13 @@ export interface FileRouteTypes {
     | '/settings/theme'
     | '/settings/users'
     | '/settings/workstations'
+    | '/workstations/$code'
     | '/admin'
     | '/designs'
     | '/production'
     | '/sample-development'
     | '/settings'
+    | '/workstations'
     | '/designs/$code/workflow'
   id:
     | '__root__'
@@ -495,11 +517,13 @@ export interface FileRouteTypes {
     | '/settings/theme'
     | '/settings/users'
     | '/settings/workstations'
+    | '/workstations/$code'
     | '/admin/'
     | '/designs/'
     | '/production/'
     | '/sample-development/'
     | '/settings/'
+    | '/workstations/'
     | '/designs/$code/workflow'
   fileRoutesById: FileRoutesById
 }
@@ -524,9 +548,11 @@ export interface RootRouteChildren {
   DesignsCodeRoute: typeof DesignsCodeRouteWithChildren
   ProductionPoRoute: typeof ProductionPoRoute
   SampleDevelopmentCodeRoute: typeof SampleDevelopmentCodeRoute
+  WorkstationsCodeRoute: typeof WorkstationsCodeRoute
   DesignsIndexRoute: typeof DesignsIndexRoute
   ProductionIndexRoute: typeof ProductionIndexRoute
   SampleDevelopmentIndexRoute: typeof SampleDevelopmentIndexRoute
+  WorkstationsIndexRoute: typeof WorkstationsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -650,6 +676,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/workstations/': {
+      id: '/workstations/'
+      path: '/workstations'
+      fullPath: '/workstations/'
+      preLoaderRoute: typeof WorkstationsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings/': {
       id: '/settings/'
       path: '/'
@@ -684,6 +717,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/workstations/$code': {
+      id: '/workstations/$code'
+      path: '/workstations/$code'
+      fullPath: '/workstations/$code'
+      preLoaderRoute: typeof WorkstationsCodeRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/settings/workstations': {
       id: '/settings/workstations'
@@ -897,9 +937,11 @@ const rootRouteChildren: RootRouteChildren = {
   DesignsCodeRoute: DesignsCodeRouteWithChildren,
   ProductionPoRoute: ProductionPoRoute,
   SampleDevelopmentCodeRoute: SampleDevelopmentCodeRoute,
+  WorkstationsCodeRoute: WorkstationsCodeRoute,
   DesignsIndexRoute: DesignsIndexRoute,
   ProductionIndexRoute: ProductionIndexRoute,
   SampleDevelopmentIndexRoute: SampleDevelopmentIndexRoute,
+  WorkstationsIndexRoute: WorkstationsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
