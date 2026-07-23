@@ -16,13 +16,12 @@ import {
   usePendingProduction,
   useProductionOrders,
   useStartProduction,
-  useAssignLine,
   computeProgress,
   currentStage,
   type PendingDesign,
   type ProductionOrder,
 } from "@/lib/api/production";
-import { PRODUCTION_LINES, slugForLine } from "@/lib/lines";
+
 
 export const Route = createFileRoute("/production/")({
   head: () => ({ meta: [{ title: "Production — Fawri Lifestyle" }] }),
