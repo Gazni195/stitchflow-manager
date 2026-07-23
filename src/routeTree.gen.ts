@@ -45,7 +45,6 @@ import { Route as SettingsIntegrationsRouteImport } from './routes/settings.inte
 import { Route as SettingsCompanyRouteImport } from './routes/settings.company'
 import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
 import { Route as ProductionPoRouteImport } from './routes/production.$po'
-import { Route as LinesLineRouteImport } from './routes/lines.$line'
 import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminRolesRouteImport } from './routes/admin.roles'
@@ -231,11 +230,6 @@ const ProductionPoRoute = ProductionPoRouteImport.update({
   path: '/production/$po',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LinesLineRoute = LinesLineRouteImport.update({
-  id: '/lines/$line',
-  path: '/lines/$line',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DesignsCodeRoute = DesignsCodeRouteImport.update({
   id: '/designs/$code',
   path: '/designs/$code',
@@ -278,7 +272,6 @@ export interface FileRoutesByFullPath {
   '/admin/roles': typeof AdminRolesRoute
   '/admin/users': typeof AdminUsersRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
-  '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/settings/company': typeof SettingsCompanyRoute
@@ -319,7 +312,6 @@ export interface FileRoutesByTo {
   '/admin/roles': typeof AdminRolesRoute
   '/admin/users': typeof AdminUsersRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
-  '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/settings/company': typeof SettingsCompanyRoute
@@ -363,7 +355,6 @@ export interface FileRoutesById {
   '/admin/roles': typeof AdminRolesRoute
   '/admin/users': typeof AdminUsersRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
-  '/lines/$line': typeof LinesLineRoute
   '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/settings/company': typeof SettingsCompanyRoute
@@ -408,7 +399,6 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/users'
     | '/designs/$code'
-    | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
     | '/settings/company'
@@ -449,7 +439,6 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/users'
     | '/designs/$code'
-    | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
     | '/settings/company'
@@ -492,7 +481,6 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/users'
     | '/designs/$code'
-    | '/lines/$line'
     | '/production/$po'
     | '/sample-development/$code'
     | '/settings/company'
@@ -534,7 +522,6 @@ export interface RootRouteChildren {
   StitchingRoute: typeof StitchingRoute
   StockRoute: typeof StockRoute
   DesignsCodeRoute: typeof DesignsCodeRouteWithChildren
-  LinesLineRoute: typeof LinesLineRoute
   ProductionPoRoute: typeof ProductionPoRoute
   SampleDevelopmentCodeRoute: typeof SampleDevelopmentCodeRoute
   DesignsIndexRoute: typeof DesignsIndexRoute
@@ -796,13 +783,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductionPoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/lines/$line': {
-      id: '/lines/$line'
-      path: '/lines/$line'
-      fullPath: '/lines/$line'
-      preLoaderRoute: typeof LinesLineRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/designs/$code': {
       id: '/designs/$code'
       path: '/designs/$code'
@@ -915,7 +895,6 @@ const rootRouteChildren: RootRouteChildren = {
   StitchingRoute: StitchingRoute,
   StockRoute: StockRoute,
   DesignsCodeRoute: DesignsCodeRouteWithChildren,
-  LinesLineRoute: LinesLineRoute,
   ProductionPoRoute: ProductionPoRoute,
   SampleDevelopmentCodeRoute: SampleDevelopmentCodeRoute,
   DesignsIndexRoute: DesignsIndexRoute,
