@@ -57,7 +57,7 @@ import {
   type Material,
 } from "@/lib/api/materials";
 import { supabase } from "@/integrations/supabase/client";
-import type { Design } from "@/lib/designs";
+import type { Design, DesignStatus } from "@/lib/designs";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/designs";
 
 export const Route = createFileRoute("/sample-development/$code")({
