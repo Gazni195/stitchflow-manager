@@ -34,7 +34,7 @@ const PRIMARY_NAV = [
   { to: "/sample-development", label: "Samples", icon: FlaskConical },
   { to: "/production", label: "Production", icon: PlayCircle },
   { to: "/inventory", label: "Inventory", icon: Package },
-  { to: "/lines", label: "Lines", icon: Factory },
+  { to: "/workstations", label: "Workstations", icon: Factory },
   { to: "/stock", label: "Stock", icon: Warehouse },
 ] as const;
 
@@ -61,7 +61,7 @@ const BOTTOM_NAV_ITEMS = [
 const MORE_MENU_ITEMS = [
   { to: "/designs", label: "Designs", icon: Shirt },
   { to: "/inventory", label: "Inventory", icon: Package },
-  { to: "/lines", label: "Lines", icon: Factory },
+  { to: "/workstations", label: "Workstations", icon: Factory },
   { to: "/stock", label: "Stock", icon: Warehouse },
 ] as const;
 
@@ -213,7 +213,7 @@ export function AppShell({
       {/* Bottom nav — mobile + tablet only (lg:hidden, same breakpoint the
           desktop sidebar above uses to take over). Dashboard / Samples /
           Production / More, with a floating "+" placeholder centered
-          between Samples and Production. Designs/Inventory/Lines/Stock
+          between Samples and Production. Designs/Inventory/Workstations/Stock
           moved into the More sheet below; the desktop sidebar (aside +
           SidebarContent) is untouched and still shows all of them. */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur lg:hidden">
@@ -291,7 +291,7 @@ export function AppShell({
       {/* "More" sheet — mobile + tablet only, opened from the bottom nav
           above. Deliberately a different pattern (bottom sheet) from the
           hamburger drawer so the two are easy to tell apart; contents are
-          exactly Designs/Inventory/Lines/Stock/Settings/Admin, not the
+          exactly Designs/Inventory/Workstations/Stock/Settings/Admin, not the
           full sidebar (no Dashboard/Samples/Production duplicated, no
           Workflow stage list). */}
       {moreOpen && (
