@@ -253,22 +253,19 @@ function StartProductionDialog({ design, onClose }: { design: PendingDesign; onC
   const [quantity, setQuantity] = useState<number>(design.orderQuantity);
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [supervisor, setSupervisor] = useState<string>("");
-  const [line, setLine] = useState<string>("");
   const start = useStartProduction();
-  const assign = useAssignLine();
 
   async function submit() {
     if (!quantity || quantity < 1) return;
-    if (!line) return;
-    const poId = await start.mutateAsync({
+    await start.mutateAsync({
       designId: design.id,
       orderQuantity: quantity,
       startDate,
       supervisor: supervisor.trim(),
     });
-    await assign.mutateAsync({ productionOrderId: poId, line });
     onClose();
   }
+
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/40 p-4">
