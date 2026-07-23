@@ -2271,18 +2271,97 @@ function ApprovalPanel({ design }: { design: Design }) {
   );
 }
 
-// Card-level menu for the one reversible approval action. canWithdraw
-// mirrors the "converted into a Production Order / production started"
-// guard by checking design.status directly — "sample_approved" is
-// reversible, "in_production" (and "completed") is not, since
-// start_production sets that status the instant a Production Order
-// exists. The same check is re-validated server-side inside
-// revert_sample_approval, so this is a UX guard, not the only guard.
-function SampleApprovalMenu({ design }: { design: Design }) {
+// Extracts a message from whatever shape a thrown value has.
+function errorMessage(e: unknown, fallback: string): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string") {
+    return (e as { message: string }).message;
+  }
+  return fallback;
+}
+
+function WithdrawApprovalDialog({
+  designId,
+  role,
+  approverName,
+  onClose,
+}: {
+  designId: string;
+  role: string;
+  approverName: string;
+  onClose: () => void;
+}) {
+  const withdraw = useWithdrawApproval(designId);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    setError(null);
+    try {
+      await withdraw.mutateAsync(role);
+      onClose();
+    } catch (e) {
+      setError(errorMessage(e, "Could not withdraw approval"));
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/40 p-4 sm:items-center">
+      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-background shadow-2xl">
+        <div className="px-5 pt-6 text-center">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-warning/10 text-warning">
+            <RotateCcw className="h-6 w-6" />
+          </div>
+          <h2 className="mt-4 text-lg font-extrabold">Withdraw {role} approval?</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            This removes only {approverName || role}'s sign-off. Other approvals stay intact. If the sample was fully
+            approved, it returns to Sampling and is removed from the Production Queue.
+          </p>
+          {error && (
+            <p className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </p>
+          )}
+        </div>
+        <div className="mt-6 grid grid-cols-2 gap-2 border-t border-border p-4">
+          <button
+            onClick={onClose}
+            disabled={withdraw.isPending}
+            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-accent disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={withdraw.isPending}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-50"
+          >
+            {withdraw.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Withdraw Approval
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Per-card three-dot menu. Only appears for approvals already granted, and
+// only while the sample has NOT progressed to bulk production (matching the
+// server-side guard inside withdraw_sample_approval).
+function ApprovalCardMenu({
+  designId,
+  role,
+  approverName,
+  designStatus,
+}: {
+  designId: string;
+  role: string;
+  approverName: string;
+  designStatus: DesignStatus;
+}) {
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const canWithdraw = design.status === "sample_approved";
+  const canWithdraw = designStatus !== "in_production" && designStatus !== "completed";
 
   useEffect(() => {
     if (!open) return;
@@ -2297,7 +2376,7 @@ function SampleApprovalMenu({ design }: { design: Design }) {
     <>
       <div ref={wrapRef} className="relative shrink-0">
         <button
-          aria-label="Sample approval actions"
+          aria-label={`${role} approval actions`}
           onClick={() => setOpen((v) => !v)}
           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
         >
@@ -2317,90 +2396,34 @@ function SampleApprovalMenu({ design }: { design: Design }) {
             </button>
             {!canWithdraw && (
               <p className="border-t border-border bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground">
-                This sample is already in Production and cannot be returned to Sample Development.
+                Bulk production has started — approvals can no longer be withdrawn.
               </p>
             )}
           </div>
         )}
       </div>
-      {confirm && <WithdrawApprovalDialog design={design} onClose={() => setConfirm(false)} />}
+      {confirm && (
+        <WithdrawApprovalDialog
+          designId={designId}
+          role={role}
+          approverName={approverName}
+          onClose={() => setConfirm(false)}
+        />
+      )}
     </>
   );
 }
 
-// Extracts a message from whatever shape a thrown value has instead of
-// gating on `instanceof Error` — the mutation throws the `error` returned
-// by supabase.rpc(), and relying on instanceof was hiding that error's real
-// message behind the generic fallback, which is exactly the "Could not
-// update sample" symptom this dialog used to show with no way to diagnose it.
-function errorMessage(e: unknown, fallback: string): string {
-  if (e instanceof Error) return e.message;
-  if (e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string") {
-    return (e as { message: string }).message;
-  }
-  return fallback;
-}
-
-function WithdrawApprovalDialog({ design, onClose }: { design: Design; onClose: () => void }) {
-  const returnToDev = useReturnSampleToDevelopment(design.id);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit() {
-    setError(null);
-    try {
-      await returnToDev.mutateAsync();
-      onClose();
-    } catch (e) {
-      setError(errorMessage(e, "Could not update sample"));
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/40 p-4 sm:items-center">
-      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-background shadow-2xl">
-        <div className="px-5 pt-6 text-center">
-          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-warning/10 text-warning">
-            <RotateCcw className="h-6 w-6" />
-          </div>
-          <h2 className="mt-4 text-lg font-extrabold">Withdraw Approval?</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Withdraw this completed approval? This will return the sample to Sample Development so changes can be made
-            before approval again.
-          </p>
-          {error && (
-            <p className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </p>
-          )}
-        </div>
-        <div className="mt-6 grid grid-cols-2 gap-2 border-t border-border p-4">
-          <button
-            onClick={onClose}
-            disabled={returnToDev.isPending}
-            className="rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold hover:bg-accent disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={returnToDev.isPending}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-50"
-          >
-            {returnToDev.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Withdraw Approval
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ApprovalCard({
+  designId,
+  designStatus,
   role,
   existing,
   disabled,
   onApprove,
 }: {
+  designId: string;
+  designStatus: DesignStatus;
   role: ApprovalRoleName;
   existing: SampleApproval | null;
   disabled: boolean;
@@ -2425,15 +2448,25 @@ function ApprovalCard({
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{role}</p>
           <p className="mt-0.5 truncate text-base font-bold">{isApproved ? existing!.approverName : "—"}</p>
         </div>
-        <span
-          className={
-            "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold " +
-            (isApproved ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")
-          }
-        >
-          {isApproved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-          {isApproved ? "Approved" : "Pending"}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span
+            className={
+              "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold " +
+              (isApproved ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")
+            }
+          >
+            {isApproved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+            {isApproved ? "Approved" : "Pending"}
+          </span>
+          {isApproved && (
+            <ApprovalCardMenu
+              designId={designId}
+              role={role}
+              approverName={existing!.approverName}
+              designStatus={designStatus}
+            />
+          )}
+        </div>
       </div>
 
       {isApproved ? (
