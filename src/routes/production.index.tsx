@@ -157,11 +157,11 @@ function OrdersTable({ orders, completed = false }: { orders: ProductionOrder[];
               <th className="px-4 py-3 text-left">Customer</th>
               <th className="px-4 py-3 text-right">Qty</th>
               <th className="px-4 py-3 text-left">{completed ? "Finished" : "Current Stage"}</th>
-              <th className="px-4 py-3 text-left">Assigned Line</th>
               <th className="px-4 py-3 text-left">Progress</th>
               <th className="px-4 py-3 text-left">Status</th>
               <th className="px-4 py-3" />
             </tr>
+
           </thead>
           <tbody className="divide-y divide-border">
             {orders.map((o) => {
