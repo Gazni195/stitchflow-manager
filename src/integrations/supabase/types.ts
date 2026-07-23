@@ -715,6 +715,39 @@ export type Database = {
           },
         ]
       }
+      workstation_config: {
+        Row: {
+          count: number
+          created_at: string
+          id: string
+          label: string
+          prefix: string
+          sort_order: number
+          type_key: string
+          updated_at: string
+        }
+        Insert: {
+          count?: number
+          created_at?: string
+          id?: string
+          label: string
+          prefix: string
+          sort_order?: number
+          type_key: string
+          updated_at?: string
+        }
+        Update: {
+          count?: number
+          created_at?: string
+          id?: string
+          label?: string
+          prefix?: string
+          sort_order?: number
+          type_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

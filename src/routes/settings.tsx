@@ -15,6 +15,7 @@ import {
   Network,
   Settings as SettingsIcon,
   Plug,
+  Factory,
 } from "lucide-react";
 import type { PermissionKey } from "@/lib/rbac/roles";
 
@@ -43,6 +44,7 @@ const SECTIONS: Section[] = [
   { to: "/settings/users", label: "Users", icon: Users, permission: "users.view" },
   { to: "/settings/roles", label: "Roles & Permissions", icon: ShieldCheck, permission: "roles.view" },
   { to: "/settings/structure", label: "Company Structure", icon: Network, permission: "settings.edit" },
+  { to: "/settings/workstations", label: "Workstations", icon: Factory, permission: "settings.edit" },
   { to: "/settings/system", label: "System Settings", icon: SettingsIcon, permission: "settings.edit" },
   { to: "/settings/integrations", label: "Integration Status", icon: Plug, permission: "settings.view" },
 ];
