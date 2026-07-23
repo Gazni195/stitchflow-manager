@@ -45,7 +45,7 @@ import {
   type StepStatus,
   type WorkflowStep,
 } from "@/lib/api/workflows";
-import { useSampleApprovals, useRecordApproval, type SampleApproval } from "@/lib/api/approvals";
+import { useSampleApprovals, useRecordApproval, useWithdrawApproval, type SampleApproval } from "@/lib/api/approvals";
 
 import {
   useAddDesignMaterial,
