@@ -62,7 +62,37 @@ export function useRecordApproval(designId: string) {
         approver_user_id: userData.user?.id ?? null,
       });
       if (error) throw error;
+      await supabase.from("sample_approval_audit").insert({
+        design_id: designId,
+        role: v.role,
+        action: "approved",
+        actor_user_id: userData.user?.id ?? null,
+        actor_name: v.approverName || null,
+      });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sample-approvals", designId] }),
+  });
+}
+
+// Withdraw a single approver's sign-off. If the sample was fully approved,
+// the server-side RPC also unlocks the sample workflow, drops the seeded
+// bulk workflow, and reverts design status to `sampling` — which removes it
+// from the Production Queue.
+export function useWithdrawApproval(designId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (role: string) => {
+      const { error } = await supabase.rpc("withdraw_sample_approval", {
+        _design_id: designId,
+        _role: role,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sample-approvals", designId] });
+      qc.invalidateQueries({ queryKey: ["workflows", designId] });
+      qc.invalidateQueries({ queryKey: ["designs"] });
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "design" });
+    },
   });
 }
