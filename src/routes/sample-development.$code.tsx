@@ -2185,12 +2185,6 @@ function ApprovalPanel({ design }: { design: Design }) {
 
   return (
     <div className="grid gap-4">
-      {sampleLocked && (
-        <div className="flex items-center justify-end">
-          <SampleApprovalMenu design={design} />
-        </div>
-      )}
-
       <div className="rounded-2xl border border-border bg-gradient-to-br from-primary-soft to-background p-5">
         <div className="flex items-center justify-between text-sm">
           <div>
@@ -2218,6 +2212,8 @@ function ApprovalPanel({ design }: { design: Design }) {
           {MANDATORY_APPROVAL_ROLES.map((role) => (
             <ApprovalCard
               key={role}
+              designId={design.id}
+              designStatus={design.status}
               role={role}
               existing={byRole.get(role) ?? null}
               disabled={sampleLocked || record.isPending || !currentUserName}
