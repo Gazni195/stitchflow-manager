@@ -11,11 +11,24 @@ export const Route = createFileRoute("/login")({
       { name: "description", content: "Sign in to Fawri Lifestyle production." },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" && s.next.startsWith("/") && !s.next.startsWith("//")
+      ? s.next
+      : undefined,
+  }),
   component: LoginPage,
 });
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
+  const goNext = () => {
+    if (next) {
+      window.location.assign(next);
+    } else {
+      navigate({ to: "/" });
+    }
+  };
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [showPw, setShowPw] = useState(false);
   const [email, setEmail] = useState("");
