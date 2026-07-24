@@ -109,7 +109,7 @@ function Consent() {
               Requested access
             </p>
             <ul className="mt-2 space-y-1 text-sm">
-              {scopes.map((s) => (
+              {scopes.map((s: string) => (
                 <li key={s} className="rounded-md bg-muted px-2 py-1 font-mono text-xs">
                   {s}
                 </li>
