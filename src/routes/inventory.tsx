@@ -1,37 +1,54 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, Search, Package, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Package, Loader2, Settings, Layers, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import {
   useMaterials,
-  useUpsertMaterial,
+  useCreateMaterial,
+  useUpdateMaterial,
   useDeleteMaterial,
+  useMaterialCodeSettings,
+  useUpdateMaterialCodeSettings,
+  useMaterialBundles,
+  useUpsertBundle,
+  useDeleteBundle,
   type Material,
+  type MaterialBundle,
   type MaterialStatus,
 } from "@/lib/api/materials";
 
-const UNIT_OPTIONS = ["Meter", "Pcs", "Yard", "Kg", "Set", "Roll"];
+const UNIT_OPTIONS = ["Meter", "Yard", "Kg", "Pcs", "Set", "Roll"];
+const COLOR_OPTIONS = ["Black", "White", "Ivory", "Beige", "Red", "Blue", "Green", "Yellow", "Pink", "Grey", "Multi"];
+const WIDTH_OPTIONS = ["36 inch", "44 inch", "56 inch", "60 inch", "150 cm"];
 
 export const Route = createFileRoute("/inventory")({ component: InventoryPage });
+
+function pad(n: number) {
+  return String(n).padStart(4, "0");
+}
 
 function InventoryPage() {
   const { data: materials = [], isLoading } = useMaterials();
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Material | null>(null);
   const [creating, setCreating] = useState(false);
+  const [bundlesFor, setBundlesFor] = useState<Material | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return materials;
     return materials.filter(
-      (m) => m.code.toLowerCase().includes(q) || m.name.toLowerCase().includes(q),
+      (m) =>
+        m.code.toLowerCase().includes(q) ||
+        m.name.toLowerCase().includes(q) ||
+        (m.color ?? "").toLowerCase().includes(q),
     );
   }, [materials, query]);
 
   return (
     <AppShell
       title="Inventory"
-      subtitle="Material Master · shared price list"
+      subtitle="Fabric rolls · bundle-based stock"
       action={
         <button
           onClick={() => setCreating(true)}
@@ -47,22 +64,22 @@ function InventoryPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by code or name"
+            placeholder="Search by code, name, or color"
             className="w-full rounded-2xl border border-border bg-card py-2.5 pl-9 pr-3 text-sm outline-none focus:border-primary"
           />
         </div>
 
         {isLoading ? (
-          <div className="grid place-items-center rounded-2xl border border-border bg-card p-12 text-sm text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
+          <div className="grid place-items-center rounded-2xl border border-border bg-card p-12">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="grid place-items-center gap-3 rounded-2xl border border-dashed border-border bg-card p-12 text-center">
             <Package className="h-8 w-8 text-muted-foreground" />
             <div>
-              <p className="text-sm font-bold">No materials yet</p>
+              <p className="text-sm font-bold">No materials available</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Create your first inventory item to start selecting materials in samples.
+                Create your first material, then add fabric rolls (bundles) to build up stock.
               </p>
             </div>
             <button
@@ -74,25 +91,33 @@ function InventoryPage() {
           </div>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[820px] text-sm">
               <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="p-3 text-left font-semibold">Code</th>
                   <th className="p-3 text-left font-semibold">Name</th>
+                  <th className="p-3 text-left font-semibold">Color</th>
+                  <th className="p-3 text-right font-semibold">Bundles</th>
+                  <th className="p-3 text-right font-semibold">Total Stock</th>
                   <th className="p-3 text-left font-semibold">Unit</th>
-                  <th className="p-3 text-right font-semibold">Stock</th>
-                  <th className="p-3 text-right font-semibold">Cost / Unit</th>
+                  <th className="p-3 text-right font-semibold">Cost</th>
                   <th className="p-3 text-left font-semibold">Status</th>
                   <th className="p-3" />
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((m) => (
-                  <tr key={m.id} className="border-t border-border">
+                  <tr
+                    key={m.id}
+                    onClick={() => setBundlesFor(m)}
+                    className="cursor-pointer border-t border-border hover:bg-accent/40"
+                  >
                     <td className="p-3 font-mono text-xs font-bold">{m.code}</td>
                     <td className="p-3 font-semibold">{m.name}</td>
+                    <td className="p-3 text-muted-foreground">{m.color ?? "—"}</td>
+                    <td className="p-3 text-right tabular-nums">{m.bundleCount ?? 0}</td>
+                    <td className="p-3 text-right tabular-nums font-semibold">{m.availableStock}</td>
                     <td className="p-3 text-muted-foreground">{m.unit}</td>
-                    <td className="p-3 text-right tabular-nums">{m.availableStock}</td>
                     <td className="p-3 text-right tabular-nums">₹{m.costPerUnit.toFixed(2)}</td>
                     <td className="p-3">
                       <span
@@ -108,8 +133,11 @@ function InventoryPage() {
                     </td>
                     <td className="p-3 text-right">
                       <button
-                        onClick={() => setEditing(m)}
-                        aria-label="Edit"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditing(m);
+                        }}
+                        aria-label="Edit material"
                         className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-primary"
                       >
                         <Pencil className="h-4 w-4" />
@@ -123,118 +151,609 @@ function InventoryPage() {
         )}
       </div>
 
+      {creating && <NewMaterialDialog onClose={() => setCreating(false)} />}
+      {editing && <EditMaterialDialog material={editing} onClose={() => setEditing(null)} />}
+      {bundlesFor && <BundlesDialog material={bundlesFor} onClose={() => setBundlesFor(null)} />}
+    </AppShell>
+  );
+}
+
+/* ---------- New Material ---------- */
+
+function NewMaterialDialog({ onClose }: { onClose: () => void }) {
+  const create = useCreateMaterial();
+  const { data: settings } = useMaterialCodeSettings();
+  const [showSettings, setShowSettings] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    color: "",
+    customColor: "",
+    unit: "Meter",
+    costPerUnit: 0,
+    status: "active" as MaterialStatus,
+  });
+
+  const previewCode = settings ? `${settings.prefix}-${pad(settings.nextNumber)}` : "…";
+  const color = form.color === "__custom__" ? form.customColor : form.color;
+  const valid = form.name.trim() !== "";
+
+  async function save() {
+    if (!valid) return;
+    await create.mutateAsync({
+      name: form.name,
+      color: color || null,
+      unit: form.unit,
+      costPerUnit: form.costPerUnit,
+      status: form.status,
+    });
+    onClose();
+  }
+
+  return (
+    <DialogShell title="New material" onClose={onClose}>
+      <div className="grid gap-3">
+        <label className="block">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            Material Code (auto)
+          </span>
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              readOnly
+              value={previewCode}
+              className="flex-1 rounded-xl border border-border bg-muted/60 px-3 py-2 font-mono text-sm font-bold text-muted-foreground"
+            />
+            <button
+              type="button"
+              onClick={() => setShowSettings(true)}
+              aria-label="Code settings"
+              className="rounded-xl border border-border bg-background p-2 text-muted-foreground hover:border-primary hover:text-primary"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
+          </div>
+        </label>
+        <Field label="Material Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Silk Chanderi" />
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Color</span>
+            <select
+              value={form.color}
+              onChange={(e) => setForm({ ...form, color: e.target.value })}
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+            >
+              <option value="">—</option>
+              {COLOR_OPTIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+              <option value="__custom__">Custom…</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Unit</span>
+            <select
+              value={form.unit}
+              onChange={(e) => setForm({ ...form, unit: e.target.value })}
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+            >
+              {UNIT_OPTIONS.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {form.color === "__custom__" && (
+          <Field
+            label="Custom color"
+            value={form.customColor}
+            onChange={(v) => setForm({ ...form, customColor: v })}
+            placeholder="e.g. Emerald"
+          />
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <NumberField
+            label="Cost per Unit (₹)"
+            value={form.costPerUnit}
+            onChange={(v) => setForm({ ...form, costPerUnit: v })}
+          />
+          <label className="block">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Status</span>
+            <select
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value as MaterialStatus })}
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+            >
+              <option value="active">active</option>
+              <option value="inactive">inactive</option>
+            </select>
+          </label>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Stock is built by adding fabric rolls (bundles) after the material is created.
+        </p>
+      </div>
+
+      <div className="mt-5 flex justify-end">
+        <button
+          onClick={save}
+          disabled={!valid || create.isPending}
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-60"
+        >
+          {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          Create material
+        </button>
+      </div>
+
+      {showSettings && <CodeSettingsDialog onClose={() => setShowSettings(false)} />}
+    </DialogShell>
+  );
+}
+
+/* ---------- Edit Material ---------- */
+
+function EditMaterialDialog({ material, onClose }: { material: Material; onClose: () => void }) {
+  const update = useUpdateMaterial();
+  const del = useDeleteMaterial();
+  const inPreset = material.color && COLOR_OPTIONS.includes(material.color);
+  const [form, setForm] = useState({
+    name: material.name,
+    color: inPreset ? (material.color as string) : material.color ? "__custom__" : "",
+    customColor: inPreset ? "" : material.color ?? "",
+    unit: material.unit,
+    costPerUnit: material.costPerUnit,
+    status: material.status,
+  });
+  const color = form.color === "__custom__" ? form.customColor : form.color;
+  const valid = form.name.trim() !== "";
+
+  async function save() {
+    if (!valid) return;
+    await update.mutateAsync({
+      id: material.id,
+      name: form.name,
+      color: color || null,
+      unit: form.unit,
+      costPerUnit: form.costPerUnit,
+      status: form.status,
+    });
+    onClose();
+  }
+  async function remove() {
+    if (!confirm(`Delete ${material.name}? All bundles will be removed. This cannot be undone.`)) return;
+    await del.mutateAsync(material.id);
+    onClose();
+  }
+
+  return (
+    <DialogShell title="Edit material" onClose={onClose}>
+      <div className="grid gap-3">
+        <label className="block">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            Material Code
+          </span>
+          <input
+            readOnly
+            value={material.code}
+            className="mt-1 w-full rounded-xl border border-border bg-muted/60 px-3 py-2 font-mono text-sm font-bold text-muted-foreground"
+          />
+        </label>
+        <Field label="Material Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Color</span>
+            <select
+              value={form.color}
+              onChange={(e) => setForm({ ...form, color: e.target.value })}
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+            >
+              <option value="">—</option>
+              {COLOR_OPTIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+              <option value="__custom__">Custom…</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Unit</span>
+            <select
+              value={form.unit}
+              onChange={(e) => setForm({ ...form, unit: e.target.value })}
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+            >
+              {UNIT_OPTIONS.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {form.color === "__custom__" && (
+          <Field
+            label="Custom color"
+            value={form.customColor}
+            onChange={(v) => setForm({ ...form, customColor: v })}
+          />
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <NumberField
+            label="Cost per Unit (₹)"
+            value={form.costPerUnit}
+            onChange={(v) => setForm({ ...form, costPerUnit: v })}
+          />
+          <label className="block">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Status</span>
+            <select
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value as MaterialStatus })}
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+            >
+              <option value="active">active</option>
+              <option value="inactive">inactive</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div className="mt-5 flex items-center gap-2">
+        <button
+          onClick={remove}
+          disabled={del.isPending}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2.5 text-xs font-bold text-destructive hover:bg-destructive/5 disabled:opacity-60"
+        >
+          <Trash2 className="h-4 w-4" /> Delete
+        </button>
+        <button
+          onClick={save}
+          disabled={!valid || update.isPending}
+          className="ml-auto inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-60"
+        >
+          {update.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          Save changes
+        </button>
+      </div>
+    </DialogShell>
+  );
+}
+
+/* ---------- Code Settings ---------- */
+
+function CodeSettingsDialog({ onClose }: { onClose: () => void }) {
+  const { data: settings } = useMaterialCodeSettings();
+  const save = useUpdateMaterialCodeSettings();
+  const [prefix, setPrefix] = useState(settings?.prefix ?? "FAB");
+  const [nextNumber, setNextNumber] = useState(settings?.nextNumber ?? 1);
+
+  const previews = [0, 1, 2].map((i) => `${prefix}-${pad(nextNumber + i)}`);
+
+  async function submit() {
+    await save.mutateAsync({ prefix: prefix.trim() || "FAB", nextNumber: Math.max(0, Math.floor(nextNumber)) });
+    onClose();
+  }
+
+  return (
+    <DialogShell title="Material Code Settings" onClose={onClose} widthClass="max-w-sm">
+      <div className="grid gap-3">
+        <Field label="Prefix" value={prefix} onChange={setPrefix} placeholder="FAB" />
+        <NumberField label="Next Number" value={nextNumber} onChange={(v) => setNextNumber(Math.floor(v))} />
+        <div className="rounded-xl border border-border bg-muted/40 p-3">
+          <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            Live preview
+          </p>
+          <div className="grid gap-0.5 font-mono text-sm font-bold">
+            {previews.map((p) => (
+              <div key={p}>{p}</div>
+            ))}
+          </div>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Existing material codes are never changed. This only affects the next code created.
+        </p>
+      </div>
+      <div className="mt-5 flex justify-end">
+        <button
+          onClick={submit}
+          disabled={save.isPending}
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-60"
+        >
+          {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          Save
+        </button>
+      </div>
+    </DialogShell>
+  );
+}
+
+/* ---------- Bundles ---------- */
+
+function BundlesDialog({ material, onClose }: { material: Material; onClose: () => void }) {
+  const { data: bundles = [], isLoading } = useMaterialBundles(material.id);
+  const [editing, setEditing] = useState<MaterialBundle | null>(null);
+  const [creating, setCreating] = useState(false);
+  const del = useDeleteBundle(material.id);
+
+  const totalUsable = bundles.reduce((s, b) => s + b.usableLength, 0);
+  const totalRemaining = bundles.reduce((s, b) => s + b.remainingLength, 0);
+
+  async function remove(b: MaterialBundle) {
+    if (!confirm(`Delete Bundle ${b.bundleNumber}? This cannot be undone.`)) return;
+    await del.mutateAsync(b.id);
+  }
+
+  return (
+    <DialogShell
+      title={
+        <span className="flex items-center gap-2">
+          <Layers className="h-4 w-4 text-primary" />
+          <span className="font-mono text-sm font-bold">{material.code}</span>
+          <span className="text-sm font-semibold text-muted-foreground">· {material.name}</span>
+        </span>
+      }
+      onClose={onClose}
+      widthClass="max-w-2xl"
+    >
+      <div className="mb-3 grid grid-cols-3 gap-2 text-center">
+        <Stat label="Bundles" value={String(bundles.length)} />
+        <Stat label="Total Usable" value={`${totalUsable} ${material.unit}`} />
+        <Stat label="Remaining" value={`${totalRemaining} ${material.unit}`} />
+      </div>
+
+      <div className="mb-3 flex justify-end">
+        <button
+          onClick={() => setCreating(true)}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground shadow-sm hover:opacity-90"
+        >
+          <Plus className="h-4 w-4" /> Add bundle
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div className="grid place-items-center rounded-xl border border-border bg-card p-8">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        </div>
+      ) : bundles.length === 0 ? (
+        <div className="grid place-items-center gap-2 rounded-xl border border-dashed border-border bg-card p-8 text-center">
+          <Layers className="h-6 w-6 text-muted-foreground" />
+          <p className="text-xs text-muted-foreground">No bundles yet. Add the first fabric roll.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[560px] text-xs">
+            <thead className="bg-muted/60 uppercase tracking-wider text-muted-foreground">
+              <tr>
+                <th className="p-2 text-left font-semibold">#</th>
+                <th className="p-2 text-left font-semibold">Roll</th>
+                <th className="p-2 text-left font-semibold">Width</th>
+                <th className="p-2 text-right font-semibold">Purchased</th>
+                <th className="p-2 text-right font-semibold">Usable</th>
+                <th className="p-2 text-right font-semibold">Remaining</th>
+                <th className="p-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {bundles.map((b) => (
+                <tr key={b.id} className="border-t border-border">
+                  <td className="p-2 font-mono font-bold">B{b.bundleNumber}</td>
+                  <td className="p-2 text-muted-foreground">{b.rollNumber ?? "—"}</td>
+                  <td className="p-2">{b.fabricWidth}</td>
+                  <td className="p-2 text-right tabular-nums">{b.purchasedLength}</td>
+                  <td className="p-2 text-right tabular-nums font-semibold">{b.usableLength}</td>
+                  <td className="p-2 text-right tabular-nums">
+                    <span
+                      className={
+                        b.remainingLength === 0
+                          ? "text-muted-foreground"
+                          : b.remainingLength < b.usableLength
+                            ? "text-warning"
+                            : "text-success"
+                      }
+                    >
+                      {b.remainingLength}
+                    </span>
+                  </td>
+                  <td className="p-2 text-right">
+                    <div className="flex justify-end gap-1">
+                      <button
+                        onClick={() => setEditing(b)}
+                        aria-label="Edit"
+                        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-primary"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => remove(b)}
+                        aria-label="Delete"
+                        disabled={b.consumedLength > 0}
+                        title={b.consumedLength > 0 ? "Bundle has consumed stock" : "Delete"}
+                        className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {(creating || editing) && (
-        <MaterialDialog
-          material={editing}
+        <BundleFormDialog
+          materialId={material.id}
+          unit={material.unit}
+          bundle={editing}
           onClose={() => {
             setCreating(false);
             setEditing(null);
           }}
         />
       )}
-    </AppShell>
+    </DialogShell>
   );
 }
 
-function MaterialDialog({ material, onClose }: { material: Material | null; onClose: () => void }) {
-  const upsert = useUpsertMaterial();
-  const del = useDeleteMaterial();
+function BundleFormDialog({
+  materialId,
+  unit,
+  bundle,
+  onClose,
+}: {
+  materialId: string;
+  unit: string;
+  bundle: MaterialBundle | null;
+  onClose: () => void;
+}) {
+  const save = useUpsertBundle(materialId);
   const [form, setForm] = useState({
-    code: material?.code ?? "",
-    name: material?.name ?? "",
-    unit: material?.unit ?? "Meter",
-    availableStock: material?.availableStock ?? 0,
-    costPerUnit: material?.costPerUnit ?? 0,
-    status: (material?.status ?? "active") as MaterialStatus,
+    rollNumber: bundle?.rollNumber ?? "",
+    fabricWidth: bundle?.fabricWidth ?? WIDTH_OPTIONS[2],
+    customWidth: WIDTH_OPTIONS.includes(bundle?.fabricWidth ?? "") ? "" : bundle?.fabricWidth ?? "",
+    useCustomWidth: !!bundle?.fabricWidth && !WIDTH_OPTIONS.includes(bundle.fabricWidth),
+    purchasedLength: bundle?.purchasedLength ?? 0,
+    usableLength: bundle?.usableLength ?? 0,
   });
 
-  const valid = form.code.trim() !== "" && form.name.trim() !== "";
+  const width = form.useCustomWidth ? form.customWidth : form.fabricWidth;
+  const invalid = form.usableLength > form.purchasedLength;
+  const valid = width.trim() !== "" && form.purchasedLength > 0 && form.usableLength >= 0 && !invalid;
 
-  async function save() {
+  async function submit() {
     if (!valid) return;
-    await upsert.mutateAsync({ ...form, id: material?.id });
-    onClose();
-  }
-  async function remove() {
-    if (!material) return;
-    if (!confirm(`Delete ${material.name}? This cannot be undone.`)) return;
-    await del.mutateAsync(material.id);
+    await save.mutateAsync({
+      id: bundle?.id,
+      rollNumber: form.rollNumber || null,
+      fabricWidth: width,
+      purchasedLength: form.purchasedLength,
+      usableLength: form.usableLength,
+    });
     onClose();
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-end sm:place-items-center bg-foreground/40 p-0 sm:p-4">
-      <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-border bg-card p-5 shadow-2xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">{material ? "Edit material" : "New material"}</h2>
-          <button onClick={onClose} className="text-xs font-semibold text-muted-foreground hover:text-foreground">
-            Cancel
-          </button>
-        </div>
-        <div className="grid gap-3">
-          <Field label="Barcode / Material Code" value={form.code} onChange={(v) => setForm({ ...form, code: v })} placeholder="MAT-1001" />
-          <Field label="Material Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Silk Chanderi" />
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Unit</span>
+    <DialogShell
+      title={bundle ? `Edit Bundle ${bundle.bundleNumber}` : "Add bundle"}
+      onClose={onClose}
+      widthClass="max-w-sm"
+    >
+      <div className="grid gap-3">
+        <Field
+          label="Roll Number (optional)"
+          value={form.rollNumber}
+          onChange={(v) => setForm({ ...form, rollNumber: v })}
+          placeholder="e.g. R-12"
+        />
+        <label className="block">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Fabric Width</span>
+          <div className="mt-1 flex gap-2">
+            {form.useCustomWidth ? (
+              <input
+                value={form.customWidth}
+                onChange={(e) => setForm({ ...form, customWidth: e.target.value })}
+                placeholder="e.g. 58 inch"
+                className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+              />
+            ) : (
               <select
-                value={form.unit}
-                onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+                value={form.fabricWidth}
+                onChange={(e) => setForm({ ...form, fabricWidth: e.target.value })}
+                className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
               >
-                {UNIT_OPTIONS.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
+                {WIDTH_OPTIONS.map((w) => (
+                  <option key={w} value={w}>
+                    {w}
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="block">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Status</span>
-              <select
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value as MaterialStatus })}
-                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
-              >
-                <option value="active">active</option>
-                <option value="inactive">inactive</option>
-              </select>
-            </label>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <NumberField
-              label="Available Stock"
-              value={form.availableStock}
-              onChange={(v) => setForm({ ...form, availableStock: v })}
-            />
-            <NumberField
-              label="Cost per Unit (₹)"
-              value={form.costPerUnit}
-              onChange={(v) => setForm({ ...form, costPerUnit: v })}
-            />
-          </div>
-        </div>
-
-        <div className="mt-5 flex items-center gap-2">
-          {material && (
+            )}
             <button
-              onClick={remove}
-              disabled={del.isPending}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2.5 text-xs font-bold text-destructive hover:bg-destructive/5 disabled:opacity-60"
+              type="button"
+              onClick={() => setForm({ ...form, useCustomWidth: !form.useCustomWidth })}
+              className="rounded-xl border border-border px-3 text-xs font-bold text-muted-foreground hover:border-primary hover:text-primary"
             >
-              <Trash2 className="h-4 w-4" /> Delete
+              {form.useCustomWidth ? "Preset" : "Custom"}
             </button>
-          )}
+          </div>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <NumberField
+            label={`Purchased (${unit})`}
+            value={form.purchasedLength}
+            onChange={(v) => setForm({ ...form, purchasedLength: v })}
+          />
+          <NumberField
+            label={`Usable (${unit})`}
+            value={form.usableLength}
+            onChange={(v) => setForm({ ...form, usableLength: v })}
+          />
+        </div>
+        {invalid && (
+          <p className="text-[11px] font-semibold text-destructive">
+            Usable length cannot exceed purchased length.
+          </p>
+        )}
+        {bundle && bundle.consumedLength > 0 && (
+          <p className="text-[11px] text-muted-foreground">
+            Already consumed: {bundle.consumedLength} {unit}
+          </p>
+        )}
+      </div>
+      <div className="mt-5 flex justify-end">
+        <button
+          onClick={submit}
+          disabled={!valid || save.isPending}
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-60"
+        >
+          {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          {bundle ? "Save" : "Add bundle"}
+        </button>
+      </div>
+    </DialogShell>
+  );
+}
+
+/* ---------- Shared shell / atoms ---------- */
+
+function DialogShell({
+  title,
+  onClose,
+  children,
+  widthClass = "max-w-md",
+}: {
+  title: React.ReactNode;
+  onClose: () => void;
+  children: React.ReactNode;
+  widthClass?: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-end bg-foreground/40 p-0 sm:place-items-center sm:p-4">
+      <div className={`w-full ${widthClass} max-h-[92vh] overflow-y-auto rounded-t-3xl border border-border bg-card p-5 shadow-2xl sm:rounded-3xl`}>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-base font-bold">{title}</h2>
           <button
-            onClick={save}
-            disabled={!valid || upsert.isPending}
-            className="ml-auto inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
           >
-            {upsert.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            {material ? "Save changes" : "Create material"}
+            <X className="h-4 w-4" />
           </button>
         </div>
+        {children}
       </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-muted/40 p-2.5">
+      <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-0.5 text-sm font-bold tabular-nums">{value}</div>
     </div>
   );
 }
