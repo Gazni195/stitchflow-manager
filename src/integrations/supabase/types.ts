@@ -192,10 +192,82 @@ export type Database = {
         }
         Relationships: []
       }
+      inventory_bundles: {
+        Row: {
+          bundle_number: number
+          consumed_length: number
+          created_at: string
+          fabric_width: string
+          id: string
+          material_id: string
+          purchased_length: number
+          remaining_length: number | null
+          roll_number: string | null
+          updated_at: string
+          usable_length: number
+        }
+        Insert: {
+          bundle_number: number
+          consumed_length?: number
+          created_at?: string
+          fabric_width: string
+          id?: string
+          material_id: string
+          purchased_length: number
+          remaining_length?: number | null
+          roll_number?: string | null
+          updated_at?: string
+          usable_length: number
+        }
+        Update: {
+          bundle_number?: number
+          consumed_length?: number
+          created_at?: string
+          fabric_width?: string
+          id?: string
+          material_id?: string
+          purchased_length?: number
+          remaining_length?: number | null
+          roll_number?: string | null
+          updated_at?: string
+          usable_length?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_bundles_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      material_code_settings: {
+        Row: {
+          id: boolean
+          next_number: number
+          prefix: string
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          next_number?: number
+          prefix?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: boolean
+          next_number?: number
+          prefix?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       materials: {
         Row: {
           available_stock: number
           code: string
+          color: string | null
           cost_per_unit: number
           created_at: string
           created_by: string | null
@@ -209,6 +281,7 @@ export type Database = {
         Insert: {
           available_stock?: number
           code: string
+          color?: string | null
           cost_per_unit?: number
           created_at?: string
           created_by?: string | null
@@ -222,6 +295,7 @@ export type Database = {
         Update: {
           available_stock?: number
           code?: string
+          color?: string | null
           cost_per_unit?: number
           created_at?: string
           created_by?: string | null
@@ -844,6 +918,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      next_material_code: { Args: never; Returns: string }
       revert_sample_approval: {
         Args: { _design_id: string }
         Returns: undefined
