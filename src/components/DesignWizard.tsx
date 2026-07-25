@@ -34,7 +34,23 @@ const DEFAULT_PARTS: Record<ProductType, string[]> = {
 };
 
 const QUANTITY_PRESETS = ["20", "40", "60", "80"] as const;
-type QuantityChoice = "" | (typeof QUANTITY_PRESETS)[number] | "other";
+export type QuantityChoice = "" | (typeof QUANTITY_PRESETS)[number] | "other";
+
+// Converts the plain number stored on a design into the preset-dropdown
+// shape Step1Fields uses, and back. Only Edit Design needs these — New
+// Design always starts from an empty choice — but they live here so both
+// callers share one definition of "which preset does this number match."
+export function quantityToChoice(qty: number): { quantityChoice: QuantityChoice; customQuantity: number } {
+  if (!qty) return { quantityChoice: "", customQuantity: 0 };
+  const preset = QUANTITY_PRESETS.find((q) => Number(q) === qty);
+  if (preset) return { quantityChoice: preset, customQuantity: 0 };
+  return { quantityChoice: "other", customQuantity: qty };
+}
+export function choiceToQuantity(quantityChoice: QuantityChoice, customQuantity: number): number {
+  if (quantityChoice === "other") return customQuantity;
+  if (quantityChoice) return Number(quantityChoice);
+  return 0;
+}
 
 // No color master exists anywhere in this app, so this is just a
 // starting list for the searchable selector — typing anything else and
@@ -65,6 +81,7 @@ const COMMON_COLORS = [
 
 type Draft = {
   imageFile: File | null;
+  code: string;
   name: string;
   customer: string;
   quantityChoice: QuantityChoice;
@@ -75,6 +92,7 @@ type Draft = {
 
 const EMPTY: Draft = {
   imageFile: null,
+  code: "",
   name: "",
   customer: "",
   quantityChoice: "",
@@ -88,16 +106,6 @@ type Step = 0 | 1;
 
 function uid() {
   return (crypto?.randomUUID?.() ?? `p-${Date.now()}-${Math.random()}`).slice(0, 12);
-}
-
-// Design Code is never asked for here — it has no meaning until a design
-// is approved and enters Sample Development, at which point it's the only
-// thing anyone actually looks up by. The `designs.code` column is still
-// NOT NULL + UNIQUE today, so something has to be written; this generates
-// it silently (current time, base-36) so the user never sees or types it,
-// with no schema change required.
-function generateDesignCode(): string {
-  return `FL-${Date.now().toString(36).toUpperCase()}`;
 }
 
 export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -166,7 +174,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
     setD({ ...d, parts: next });
   }
 
-  const step0Valid = !!d.imageFile && d.name.trim().length > 0;
+  const step0Valid = d.code.trim().length > 0;
   const step1Valid = !!d.productType && d.parts.length > 0 && d.parts.every((p) => p.name.trim().length > 0);
 
   const stepTitle = ["Design Information", "Product Structure"][step];
@@ -174,11 +182,8 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
   async function submit() {
     setError(null);
     try {
-      const orderQuantity =
-        d.quantityChoice === "other" ? d.customQuantity : d.quantityChoice ? Number(d.quantityChoice) : 0;
-
       const design = await create.mutateAsync({
-        code: generateDesignCode(),
+        code: d.code.trim(),
         name: d.name.trim(),
         customer: d.customer.trim(),
         category: DEFAULT_CATEGORY,
@@ -190,7 +195,7 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
           color: p.color.trim(),
         })),
         color: "",
-        orderQuantity,
+        orderQuantity: choiceToQuantity(d.quantityChoice, d.customQuantity),
         imageFile: d.imageFile,
       });
       reset();
@@ -224,77 +229,18 @@ export function DesignWizard({ open, onClose }: { open: boolean; onClose: () => 
 
         <div className="max-h-[70vh] overflow-y-auto px-5 py-5">
           {step === 0 && (
-            <div className="grid gap-4">
-              <div>
-                <Label>Reference Image</Label>
-                <label className="mt-1.5 grid cursor-pointer place-items-center rounded-3xl border-2 border-dashed border-border bg-muted/40 py-8 hover:border-primary hover:bg-primary-soft">
-                  {preview ? (
-                    <img src={preview} alt="Preview" className="max-h-40 rounded-2xl object-contain" />
-                  ) : (
-                    <div className="text-center">
-                      <ImagePlus className="mx-auto h-8 w-8 text-primary" />
-                      <p className="mt-2 text-sm font-semibold">Tap to upload reference image</p>
-                      <p className="text-[11px] text-muted-foreground">PNG or JPG, up to ~5MB</p>
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => pickImage(e.target.files?.[0] ?? null)}
-                  />
-                </label>
-                {preview && (
-                  <button
-                    onClick={() => pickImage(null)}
-                    className="mt-1.5 text-sm font-semibold text-muted-foreground hover:text-destructive"
-                  >
-                    Remove image
-                  </button>
-                )}
-              </div>
-
-              <Text
-                label="Design Name"
-                placeholder="Ivory Anarkali Gown"
-                value={d.name}
-                onChange={(v) => setD({ ...d, name: v })}
-              />
-
-              <Text
-                label="Customer (optional)"
-                placeholder="Aanya Couture"
-                value={d.customer}
-                onChange={(v) => setD({ ...d, customer: v })}
-              />
-
-              <div>
-                <Label>Estimated Order Quantity (optional)</Label>
-                <select
-                  value={d.quantityChoice}
-                  onChange={(e) => setD({ ...d, quantityChoice: e.target.value as QuantityChoice })}
-                  className="mt-1.5 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:border-primary"
-                >
-                  <option value="">Not specified</option>
-                  {QUANTITY_PRESETS.map((q) => (
-                    <option key={q} value={q}>
-                      {q} Pieces
-                    </option>
-                  ))}
-                  <option value="other">Other</option>
-                </select>
-                {d.quantityChoice === "other" && (
-                  <input
-                    type="number"
-                    min={1}
-                    value={d.customQuantity || ""}
-                    onChange={(e) => setD({ ...d, customQuantity: Math.max(0, Number(e.target.value) || 0) })}
-                    placeholder="Enter quantity"
-                    className="mt-2 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:border-primary"
-                  />
-                )}
-              </div>
-            </div>
+            <Step1Fields
+              value={{
+                code: d.code,
+                name: d.name,
+                customer: d.customer,
+                quantityChoice: d.quantityChoice,
+                customQuantity: d.customQuantity,
+              }}
+              onChange={(patch) => setD((prev) => ({ ...prev, ...patch }))}
+              imagePreviewUrl={preview}
+              onPickImage={pickImage}
+            />
           )}
 
           {step === 1 && (
@@ -472,6 +418,109 @@ function Text({
         placeholder={placeholder}
         className="mt-1.5 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:border-primary"
       />
+    </div>
+  );
+}
+
+export type Step1Data = {
+  code: string;
+  name: string;
+  customer: string;
+  quantityChoice: QuantityChoice;
+  customQuantity: number;
+};
+
+// Shared between New Design (this file) and Edit Design
+// (DesignActionsMenu.tsx) — the one place Step 1's fields are defined, so
+// the two dialogs can never drift apart again. Image handling is the one
+// thing that's genuinely different between the two callers (upload-only
+// here vs. an existing image that can be kept/replaced/cleared in Edit),
+// so that stays parameterized: the caller decides what URL to preview and
+// what happens when a file is picked or cleared.
+export function Step1Fields({
+  value,
+  onChange,
+  imagePreviewUrl,
+  onPickImage,
+}: {
+  value: Step1Data;
+  onChange: (patch: Partial<Step1Data>) => void;
+  imagePreviewUrl: string | null;
+  onPickImage: (file: File | null) => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <div>
+        <Label>Reference Image (optional)</Label>
+        <label className="mt-1.5 grid cursor-pointer place-items-center rounded-3xl border-2 border-dashed border-border bg-muted/40 py-8 hover:border-primary hover:bg-primary-soft">
+          {imagePreviewUrl ? (
+            <img src={imagePreviewUrl} alt="Preview" className="max-h-40 rounded-2xl object-contain" />
+          ) : (
+            <div className="text-center">
+              <ImagePlus className="mx-auto h-8 w-8 text-primary" />
+              <p className="mt-2 text-sm font-semibold">Tap to upload reference image</p>
+              <p className="text-[11px] text-muted-foreground">PNG or JPG, up to ~5MB</p>
+            </div>
+          )}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => onPickImage(e.target.files?.[0] ?? null)}
+          />
+        </label>
+        {imagePreviewUrl && (
+          <button
+            onClick={() => onPickImage(null)}
+            className="mt-1.5 text-sm font-semibold text-muted-foreground hover:text-destructive"
+          >
+            Remove image
+          </button>
+        )}
+      </div>
+
+      <Text label="Design Number" placeholder="MG001" value={value.code} onChange={(v) => onChange({ code: v })} />
+
+      <Text
+        label="Design Name (optional)"
+        placeholder="Ivory Anarkali Gown"
+        value={value.name}
+        onChange={(v) => onChange({ name: v })}
+      />
+
+      <Text
+        label="Customer (optional)"
+        placeholder="Aanya Couture"
+        value={value.customer}
+        onChange={(v) => onChange({ customer: v })}
+      />
+
+      <div>
+        <Label>Estimated Order Quantity (optional)</Label>
+        <select
+          value={value.quantityChoice}
+          onChange={(e) => onChange({ quantityChoice: e.target.value as QuantityChoice })}
+          className="mt-1.5 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:border-primary"
+        >
+          <option value="">Not specified</option>
+          {QUANTITY_PRESETS.map((q) => (
+            <option key={q} value={q}>
+              {q} Pieces
+            </option>
+          ))}
+          <option value="other">Other</option>
+        </select>
+        {value.quantityChoice === "other" && (
+          <input
+            type="number"
+            min={1}
+            value={value.customQuantity || ""}
+            onChange={(e) => onChange({ customQuantity: Math.max(0, Number(e.target.value) || 0) })}
+            placeholder="Enter quantity"
+            className="mt-2 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:border-primary"
+          />
+        )}
+      </div>
     </div>
   );
 }
