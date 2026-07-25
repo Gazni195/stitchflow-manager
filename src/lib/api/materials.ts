@@ -272,7 +272,8 @@ export function useUpsertBundle(materialId: string) {
       } else {
         const { error } = await supabase
           .from("inventory_bundles")
-          .insert({ ...payload, material_id: materialId });
+          // bundle_number is auto-assigned by trigger; 0 acts as sentinel.
+          .insert({ ...payload, material_id: materialId, bundle_number: 0 });
         if (error) throw error;
       }
     },
