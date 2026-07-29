@@ -611,26 +611,20 @@ function BundleFormDialog({
 }) {
   const save = useUpsertBundle(materialId);
   const [form, setForm] = useState({
-    rollNumber: bundle?.rollNumber ?? "",
-    fabricWidth: bundle?.fabricWidth ?? WIDTH_OPTIONS[2],
-    customWidth: WIDTH_OPTIONS.includes(bundle?.fabricWidth ?? "") ? "" : bundle?.fabricWidth ?? "",
-    useCustomWidth: !!bundle?.fabricWidth && !WIDTH_OPTIONS.includes(bundle.fabricWidth),
+    fabricWidth: bundle?.fabricWidth ?? "",
     purchasedLength: bundle?.purchasedLength ?? 0,
-    usableLength: bundle?.usableLength ?? 0,
+    layerLength: bundle?.layerLength ?? 0,
   });
 
-  const width = form.useCustomWidth ? form.customWidth : form.fabricWidth;
-  const invalid = form.usableLength > form.purchasedLength;
-  const valid = width.trim() !== "" && form.purchasedLength > 0 && form.usableLength >= 0 && !invalid;
+  const valid = form.fabricWidth.trim() !== "" && form.purchasedLength > 0 && form.layerLength > 0;
 
   async function submit() {
     if (!valid) return;
     await save.mutateAsync({
       id: bundle?.id,
-      rollNumber: form.rollNumber || null,
-      fabricWidth: width,
+      fabricWidth: form.fabricWidth,
       purchasedLength: form.purchasedLength,
-      usableLength: form.usableLength,
+      layerLength: form.layerLength,
     });
     onClose();
   }
@@ -642,64 +636,35 @@ function BundleFormDialog({
       widthClass="max-w-sm"
     >
       <div className="grid gap-3">
-        <Field
-          label="Roll Number (optional)"
-          value={form.rollNumber}
-          onChange={(v) => setForm({ ...form, rollNumber: v })}
-          placeholder="e.g. R-12"
-        />
         <label className="block">
-          <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Fabric Width</span>
-          <div className="mt-1 flex gap-2">
-            {form.useCustomWidth ? (
-              <input
-                value={form.customWidth}
-                onChange={(e) => setForm({ ...form, customWidth: e.target.value })}
-                placeholder="e.g. 58 inch"
-                className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
-              />
-            ) : (
-              <select
-                value={form.fabricWidth}
-                onChange={(e) => setForm({ ...form, fabricWidth: e.target.value })}
-                className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
-              >
-                {WIDTH_OPTIONS.map((w) => (
-                  <option key={w} value={w}>
-                    {w}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button
-              type="button"
-              onClick={() => setForm({ ...form, useCustomWidth: !form.useCustomWidth })}
-              className="rounded-xl border border-border px-3 text-xs font-bold text-muted-foreground hover:border-primary hover:text-primary"
-            >
-              {form.useCustomWidth ? "Preset" : "Custom"}
-            </button>
-          </div>
+          <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            Bundle Number (auto)
+          </span>
+          <input
+            readOnly
+            value={bundle ? `B${bundle.bundleNumber}` : "Next in sequence"}
+            className="mt-1 w-full rounded-xl border border-border bg-muted/60 px-3 py-2 font-mono text-sm font-bold text-muted-foreground"
+          />
         </label>
-        <div className="grid grid-cols-2 gap-3">
-          <NumberField
-            label={`Purchased (${unit})`}
-            value={form.purchasedLength}
-            onChange={(v) => setForm({ ...form, purchasedLength: v })}
-          />
-          <NumberField
-            label={`Usable (${unit})`}
-            value={form.usableLength}
-            onChange={(v) => setForm({ ...form, usableLength: v })}
-          />
-        </div>
-        {invalid && (
-          <p className="text-[11px] font-semibold text-destructive">
-            Usable length cannot exceed purchased length.
-          </p>
-        )}
-        {bundle && bundle.consumedLength > 0 && (
+        <NumberField
+          label={`Purchased Quantity (${unit})`}
+          value={form.purchasedLength}
+          onChange={(v) => setForm({ ...form, purchasedLength: v })}
+        />
+        <NumberField
+          label="Layer Length (cm)"
+          value={form.layerLength}
+          onChange={(v) => setForm({ ...form, layerLength: v })}
+        />
+        <Field
+          label="Fabric Width"
+          value={form.fabricWidth}
+          onChange={(v) => setForm({ ...form, fabricWidth: v })}
+          placeholder="e.g. 44 inch"
+        />
+        {bundle && (
           <p className="text-[11px] text-muted-foreground">
-            Already consumed: {bundle.consumedLength} {unit}
+            Status is set automatically ({bundle.status}) as production reserves and consumes this bundle.
           </p>
         )}
       </div>
@@ -716,6 +681,81 @@ function BundleFormDialog({
     </DialogShell>
   );
 }
+
+const BUNDLE_STATUS_STYLE: Record<string, string> = {
+  available: "bg-success/15 text-success",
+  reserved: "bg-warning/15 text-warning",
+  consumed: "bg-muted text-muted-foreground",
+};
+
+function BundleStatusBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={
+        "inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide " +
+        (BUNDLE_STATUS_STYLE[status] ?? "bg-muted text-muted-foreground")
+      }
+    >
+      {status}
+    </span>
+  );
+}
+
+/* ---------- Fabric image ---------- */
+
+function MaterialThumb({ path, className = "" }: { path: string | null; className?: string }) {
+  const { data: url } = useMaterialImageUrl(path);
+  if (!path || !url) {
+    return (
+      <div className={`grid place-items-center rounded-lg bg-muted text-muted-foreground ${className}`}>
+        <ImageIcon className="h-4 w-4" />
+      </div>
+    );
+  }
+  return <img src={url} alt="Fabric" loading="lazy" className={`rounded-lg object-cover ${className}`} />;
+}
+
+function ImageField({
+  path,
+  file,
+  onFile,
+}: {
+  path: string | null;
+  file: File | null;
+  onFile: (f: File | null) => void;
+}) {
+  const preview = file ? URL.createObjectURL(file) : null;
+  return (
+    <label className="block">
+      <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Fabric Image</span>
+      <div className="mt-1 flex items-center gap-3">
+        {preview ? (
+          <img src={preview} alt="Fabric preview" className="h-16 w-16 rounded-xl object-cover" />
+        ) : (
+          <MaterialThumb path={path} className="h-16 w-16" />
+        )}
+        <div className="flex flex-col gap-1">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+            className="text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-primary-foreground"
+          />
+          {file && (
+            <button
+              type="button"
+              onClick={() => onFile(null)}
+              className="w-fit text-[11px] font-bold text-muted-foreground hover:text-destructive"
+            >
+              Remove selection
+            </button>
+          )}
+        </div>
+      </div>
+    </label>
+  );
+}
+
 
 /* ---------- Shared shell / atoms ---------- */
 
