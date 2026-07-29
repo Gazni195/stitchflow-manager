@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export type MaterialStatus = "active" | "inactive";
+export type BundleStatus = "available" | "reserved" | "consumed";
 
 export type Material = {
   id: string;
@@ -15,7 +16,11 @@ export type Material = {
   name: string;
   color: string | null;
   unit: string;
+  imagePath: string | null;
+  /** Σ(purchased − allocated) across bundles — maintained by DB trigger. */
   availableStock: number;
+  /** Σ(purchased) across bundles. */
+  totalPurchased?: number;
   costPerUnit: number;
   status: MaterialStatus;
   bundleCount?: number;
@@ -25,12 +30,11 @@ export type MaterialBundle = {
   id: string;
   materialId: string;
   bundleNumber: number;
-  rollNumber: string | null;
   fabricWidth: string;
   purchasedLength: number;
-  usableLength: number;
-  consumedLength: number;
-  remainingLength: number;
+  layerLength: number;
+  allocatedLength: number;
+  status: BundleStatus;
 };
 
 export type DesignMaterial = {
@@ -50,10 +54,13 @@ type DbMaterial = {
   name: string;
   color: string | null;
   unit: string;
+  image_path?: string | null;
   available_stock: number;
   cost_per_unit: number;
   status: string;
 };
+
+const MATERIAL_COLUMNS = "id, code, name, color, unit, image_path, available_stock, cost_per_unit, status";
 
 function mapMaterial(r: DbMaterial): Material {
   return {
@@ -62,11 +69,39 @@ function mapMaterial(r: DbMaterial): Material {
     name: r.name,
     color: r.color ?? null,
     unit: r.unit,
+    imagePath: r.image_path ?? null,
     availableStock: Number(r.available_stock ?? 0),
     costPerUnit: Number(r.cost_per_unit ?? 0),
     status: (r.status as MaterialStatus) ?? "active",
   };
 }
+
+/** Uploads a fabric image into the shared images bucket, returns its path. */
+export async function uploadMaterialImage(file: File): Promise<string> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
+  const ext = file.name.split(".").pop() ?? "jpg";
+  const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from("design-images").upload(path, file, { upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+export function useMaterialImageUrl(path: string | null | undefined) {
+  return useQuery({
+    queryKey: ["material-image", path],
+    enabled: !!path,
+    staleTime: 50 * 60 * 1000,
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = await supabase.storage.from("design-images").createSignedUrl(path!, 60 * 60);
+      if (error) throw error;
+      return data?.signedUrl ?? null;
+    },
+  });
+}
+
 
 /* ----- Material Code Settings ----- */
 
@@ -111,12 +146,15 @@ export function useMaterials() {
     queryFn: async (): Promise<Material[]> => {
       const { data, error } = await supabase
         .from("materials")
-        .select("id, code, name, color, unit, available_stock, cost_per_unit, status, inventory_bundles(id)")
+        .select(`${MATERIAL_COLUMNS}, inventory_bundles(id, purchased_length)`)
         .order("code", { ascending: true });
       if (error) throw error;
-      return (data as unknown as (DbMaterial & { inventory_bundles: { id: string }[] })[]).map((r) => ({
+      return (
+        data as unknown as (DbMaterial & { inventory_bundles: { id: string; purchased_length: number }[] })[]
+      ).map((r) => ({
         ...mapMaterial(r),
         bundleCount: r.inventory_bundles?.length ?? 0,
+        totalPurchased: (r.inventory_bundles ?? []).reduce((s, b) => s + Number(b.purchased_length ?? 0), 0),
       }));
     },
   });
@@ -128,6 +166,7 @@ export type MaterialCreateInput = {
   unit: string;
   costPerUnit: number;
   status: MaterialStatus;
+  imagePath?: string | null;
 };
 
 export function useCreateMaterial() {
@@ -144,15 +183,16 @@ export function useCreateMaterial() {
           name: input.name.trim(),
           color: input.color?.trim() || null,
           unit: input.unit,
+          image_path: input.imagePath ?? null,
           cost_per_unit: input.costPerUnit,
           rate: input.costPerUnit,
           status: input.status,
           available_stock: 0,
         })
-        .select("id")
+        .select("id, code")
         .single();
       if (error) throw error;
-      return data as { id: string };
+      return data as { id: string; code: string };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["materials"] });
@@ -168,28 +208,37 @@ export type MaterialUpdateInput = {
   unit: string;
   costPerUnit: number;
   status: MaterialStatus;
+  imagePath?: string | null;
 };
 
 export function useUpdateMaterial() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: MaterialUpdateInput) => {
-      const { error } = await supabase
-        .from("materials")
-        .update({
-          name: input.name.trim(),
-          color: input.color?.trim() || null,
-          unit: input.unit,
-          cost_per_unit: input.costPerUnit,
-          rate: input.costPerUnit,
-          status: input.status,
-        })
-        .eq("id", input.id);
+      const patch: {
+        name: string;
+        color: string | null;
+        unit: string;
+        cost_per_unit: number;
+        rate: number;
+        status: string;
+        image_path?: string | null;
+      } = {
+        name: input.name.trim(),
+        color: input.color?.trim() || null,
+        unit: input.unit,
+        cost_per_unit: input.costPerUnit,
+        rate: input.costPerUnit,
+        status: input.status,
+      };
+      if (input.imagePath !== undefined) patch.image_path = input.imagePath;
+      const { error } = await supabase.from("materials").update(patch).eq("id", input.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["materials"] }),
   });
 }
+
 
 export function useDeleteMaterial() {
   const qc = useQueryClient();
@@ -208,25 +257,26 @@ type DbBundle = {
   id: string;
   material_id: string;
   bundle_number: number;
-  roll_number: string | null;
   fabric_width: string;
   purchased_length: number;
-  usable_length: number;
-  consumed_length: number;
-  remaining_length: number;
+  layer_length: number;
+  allocated_length: number;
+  status: string;
 };
+
+const BUNDLE_COLUMNS =
+  "id, material_id, bundle_number, fabric_width, purchased_length, layer_length, allocated_length, status";
 
 function mapBundle(r: DbBundle): MaterialBundle {
   return {
     id: r.id,
     materialId: r.material_id,
     bundleNumber: r.bundle_number,
-    rollNumber: r.roll_number,
     fabricWidth: r.fabric_width,
     purchasedLength: Number(r.purchased_length ?? 0),
-    usableLength: Number(r.usable_length ?? 0),
-    consumedLength: Number(r.consumed_length ?? 0),
-    remainingLength: Number(r.remaining_length ?? 0),
+    layerLength: Number(r.layer_length ?? 0),
+    allocatedLength: Number(r.allocated_length ?? 0),
+    status: (r.status as BundleStatus) ?? "available",
   };
 }
 
@@ -237,7 +287,7 @@ export function useMaterialBundles(materialId: string | undefined) {
     queryFn: async (): Promise<MaterialBundle[]> => {
       const { data, error } = await supabase
         .from("inventory_bundles")
-        .select("id, material_id, bundle_number, roll_number, fabric_width, purchased_length, usable_length, consumed_length, remaining_length")
+        .select(BUNDLE_COLUMNS)
         .eq("material_id", materialId!)
         .order("bundle_number", { ascending: true });
       if (error) throw error;
@@ -247,24 +297,21 @@ export function useMaterialBundles(materialId: string | undefined) {
 }
 
 export type BundleInput = {
-  rollNumber: string | null;
   fabricWidth: string;
   purchasedLength: number;
-  usableLength: number;
+  layerLength: number;
 };
 
 export function useUpsertBundle(materialId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: BundleInput & { id?: string }) => {
-      if (input.usableLength > input.purchasedLength) {
-        throw new Error("Usable length cannot exceed purchased length.");
-      }
+      if (input.purchasedLength <= 0) throw new Error("Purchased quantity must be greater than zero.");
+      if (input.layerLength <= 0) throw new Error("Layer length must be greater than zero.");
       const payload = {
-        roll_number: input.rollNumber?.trim() || null,
         fabric_width: input.fabricWidth.trim(),
         purchased_length: input.purchasedLength,
-        usable_length: input.usableLength,
+        layer_length: input.layerLength,
       };
       if (input.id) {
         const { error } = await supabase.from("inventory_bundles").update(payload).eq("id", input.id);
@@ -354,13 +401,13 @@ async function getStock(materialId: string): Promise<number> {
   return Number((data as { available_stock: number | null }).available_stock ?? 0);
 }
 
-// Deduct against the first bundle(s) with remaining length (FIFO). Restore
-// symmetrically. This keeps materials.available_stock in sync via trigger and
-// preserves bundle-level accounting for future per-bundle production picks.
+// Allocate against the first bundle(s) with free length (FIFO), release
+// symmetrically. Bundle status (available → reserved → consumed) and
+// materials.available_stock are recomputed by DB triggers from these numbers,
+// so the user never edits status or stock by hand.
 async function consumeFromBundles(materialId: string, delta: number): Promise<void> {
   if (delta === 0) return;
   if (delta > 0) {
-    // deduct
     const stock = await getStock(materialId);
     if (delta > stock) {
       throw new Error(`Not enough stock: requested ${delta} but only ${stock} available.`);
@@ -368,46 +415,47 @@ async function consumeFromBundles(materialId: string, delta: number): Promise<vo
     let remaining = delta;
     const { data, error } = await supabase
       .from("inventory_bundles")
-      .select("id, usable_length, consumed_length")
+      .select("id, purchased_length, allocated_length")
       .eq("material_id", materialId)
       .order("bundle_number", { ascending: true });
     if (error) throw error;
-    for (const b of (data ?? []) as { id: string; usable_length: number; consumed_length: number }[]) {
+    for (const b of (data ?? []) as unknown as { id: string; purchased_length: number; allocated_length: number }[]) {
       if (remaining <= 0) break;
-      const free = Number(b.usable_length) - Number(b.consumed_length);
+      const free = Number(b.purchased_length) - Number(b.allocated_length);
       if (free <= 0) continue;
       const take = Math.min(free, remaining);
       const { error: uErr } = await supabase
         .from("inventory_bundles")
-        .update({ consumed_length: Number(b.consumed_length) + take })
+        .update({ allocated_length: Number(b.allocated_length) + take })
         .eq("id", b.id);
       if (uErr) throw uErr;
       remaining -= take;
     }
     if (remaining > 0) throw new Error("Not enough bundle capacity to fulfil deduction.");
   } else {
-    // restore: refund in reverse bundle order
+    // release: refund in reverse bundle order
     let remaining = -delta;
     const { data, error } = await supabase
       .from("inventory_bundles")
-      .select("id, consumed_length")
+      .select("id, allocated_length")
       .eq("material_id", materialId)
       .order("bundle_number", { ascending: false });
     if (error) throw error;
-    for (const b of (data ?? []) as { id: string; consumed_length: number }[]) {
+    for (const b of (data ?? []) as unknown as { id: string; allocated_length: number }[]) {
       if (remaining <= 0) break;
-      const consumed = Number(b.consumed_length);
-      if (consumed <= 0) continue;
-      const give = Math.min(consumed, remaining);
+      const allocated = Number(b.allocated_length);
+      if (allocated <= 0) continue;
+      const give = Math.min(allocated, remaining);
       const { error: uErr } = await supabase
         .from("inventory_bundles")
-        .update({ consumed_length: consumed - give })
+        .update({ allocated_length: allocated - give })
         .eq("id", b.id);
       if (uErr) throw uErr;
       remaining -= give;
     }
   }
 }
+
 
 export function useAddDesignMaterial(designId: string) {
   const qc = useQueryClient();

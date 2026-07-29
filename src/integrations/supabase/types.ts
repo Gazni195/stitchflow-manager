@@ -194,43 +194,40 @@ export type Database = {
       }
       inventory_bundles: {
         Row: {
+          allocated_length: number
           bundle_number: number
-          consumed_length: number
           created_at: string
           fabric_width: string
           id: string
+          layer_length: number
           material_id: string
           purchased_length: number
-          remaining_length: number | null
-          roll_number: string | null
+          status: string
           updated_at: string
-          usable_length: number
         }
         Insert: {
+          allocated_length?: number
           bundle_number: number
-          consumed_length?: number
           created_at?: string
           fabric_width: string
           id?: string
+          layer_length?: number
           material_id: string
           purchased_length: number
-          remaining_length?: number | null
-          roll_number?: string | null
+          status?: string
           updated_at?: string
-          usable_length: number
         }
         Update: {
+          allocated_length?: number
           bundle_number?: number
-          consumed_length?: number
           created_at?: string
           fabric_width?: string
           id?: string
+          layer_length?: number
           material_id?: string
           purchased_length?: number
-          remaining_length?: number | null
-          roll_number?: string | null
+          status?: string
           updated_at?: string
-          usable_length?: number
         }
         Relationships: [
           {
@@ -272,6 +269,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          image_path: string | null
           name: string
           rate: number
           status: string
@@ -286,6 +284,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          image_path?: string | null
           name: string
           rate?: number
           status?: string
@@ -300,6 +299,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          image_path?: string | null
           name?: string
           rate?: number
           status?: string

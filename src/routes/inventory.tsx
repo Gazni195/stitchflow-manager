@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, Search, Package, Loader2, Settings, Layers, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Package, Loader2, Settings, Layers, X, Image as ImageIcon } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import {
   useMaterials,
@@ -12,6 +12,8 @@ import {
   useMaterialBundles,
   useUpsertBundle,
   useDeleteBundle,
+  useMaterialImageUrl,
+  uploadMaterialImage,
   type Material,
   type MaterialBundle,
   type MaterialStatus,
@@ -19,7 +21,7 @@ import {
 
 const UNIT_OPTIONS = ["Meter", "Yard", "Kg", "Pcs", "Set", "Roll"];
 const COLOR_OPTIONS = ["Black", "White", "Ivory", "Beige", "Red", "Blue", "Green", "Yellow", "Pink", "Grey", "Multi"];
-const WIDTH_OPTIONS = ["36 inch", "44 inch", "56 inch", "60 inch", "150 cm"];
+
 
 export const Route = createFileRoute("/inventory")({ component: InventoryPage });
 
@@ -94,11 +96,13 @@ function InventoryPage() {
             <table className="w-full min-w-[820px] text-sm">
               <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
+                  <th className="p-3 text-left font-semibold">Fabric</th>
                   <th className="p-3 text-left font-semibold">Code</th>
                   <th className="p-3 text-left font-semibold">Name</th>
                   <th className="p-3 text-left font-semibold">Color</th>
                   <th className="p-3 text-right font-semibold">Bundles</th>
-                  <th className="p-3 text-right font-semibold">Total Stock</th>
+                  <th className="p-3 text-right font-semibold">Purchased</th>
+                  <th className="p-3 text-right font-semibold">Available</th>
                   <th className="p-3 text-left font-semibold">Unit</th>
                   <th className="p-3 text-right font-semibold">Cost</th>
                   <th className="p-3 text-left font-semibold">Status</th>
@@ -112,13 +116,18 @@ function InventoryPage() {
                     onClick={() => setBundlesFor(m)}
                     className="cursor-pointer border-t border-border hover:bg-accent/40"
                   >
+                    <td className="p-3">
+                      <MaterialThumb path={m.imagePath} className="h-10 w-10" />
+                    </td>
                     <td className="p-3 font-mono text-xs font-bold">{m.code}</td>
                     <td className="p-3 font-semibold">{m.name}</td>
                     <td className="p-3 text-muted-foreground">{m.color ?? "—"}</td>
                     <td className="p-3 text-right tabular-nums">{m.bundleCount ?? 0}</td>
+                    <td className="p-3 text-right tabular-nums">{m.totalPurchased ?? 0}</td>
                     <td className="p-3 text-right tabular-nums font-semibold">{m.availableStock}</td>
                     <td className="p-3 text-muted-foreground">{m.unit}</td>
                     <td className="p-3 text-right tabular-nums">₹{m.costPerUnit.toFixed(2)}</td>
+
                     <td className="p-3">
                       <span
                         className={
@@ -151,7 +160,7 @@ function InventoryPage() {
         )}
       </div>
 
-      {creating && <NewMaterialDialog onClose={() => setCreating(false)} />}
+      {creating && <NewMaterialDialog onClose={() => setCreating(false)} onCreated={(m) => setBundlesFor(m)} />}
       {editing && <EditMaterialDialog material={editing} onClose={() => setEditing(null)} />}
       {bundlesFor && <BundlesDialog material={bundlesFor} onClose={() => setBundlesFor(null)} />}
     </AppShell>
@@ -160,10 +169,12 @@ function InventoryPage() {
 
 /* ---------- New Material ---------- */
 
-function NewMaterialDialog({ onClose }: { onClose: () => void }) {
+function NewMaterialDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (m: Material) => void }) {
   const create = useCreateMaterial();
   const { data: settings } = useMaterialCodeSettings();
   const [showSettings, setShowSettings] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     name: "",
     color: "",
@@ -179,19 +190,43 @@ function NewMaterialDialog({ onClose }: { onClose: () => void }) {
 
   async function save() {
     if (!valid) return;
-    await create.mutateAsync({
-      name: form.name,
-      color: color || null,
-      unit: form.unit,
-      costPerUnit: form.costPerUnit,
-      status: form.status,
-    });
-    onClose();
+    setBusy(true);
+    try {
+      const imagePath = file ? await uploadMaterialImage(file) : null;
+      const created = await create.mutateAsync({
+        name: form.name,
+        color: color || null,
+        unit: form.unit,
+        costPerUnit: form.costPerUnit,
+        status: form.status,
+        imagePath,
+      });
+      onClose();
+      // Step 2 — bundle entry begins right after the material exists.
+      onCreated({
+        id: created.id,
+        code: created.code,
+        name: form.name.trim(),
+        color: color || null,
+        unit: form.unit,
+        imagePath,
+        availableStock: 0,
+        totalPurchased: 0,
+        costPerUnit: form.costPerUnit,
+        status: form.status,
+        bundleCount: 0,
+      });
+    } finally {
+      setBusy(false);
+    }
   }
 
+
   return (
-    <DialogShell title="New material" onClose={onClose}>
+    <DialogShell title="Step 1 · Create material" onClose={onClose}>
       <div className="grid gap-3">
+        <ImageField path={null} file={file} onFile={setFile} />
+
         <label className="block">
           <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
             Material Code (auto)
@@ -272,20 +307,21 @@ function NewMaterialDialog({ onClose }: { onClose: () => void }) {
           </label>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Stock is built by adding fabric rolls (bundles) after the material is created.
+          Next step: add bundles (fabric rolls). Total stock is calculated automatically from them.
         </p>
       </div>
 
       <div className="mt-5 flex justify-end">
         <button
           onClick={save}
-          disabled={!valid || create.isPending}
+          disabled={!valid || busy || create.isPending}
           className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-60"
         >
-          {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-          Create material
+          {(busy || create.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
+          Continue to bundles
         </button>
       </div>
+
 
       {showSettings && <CodeSettingsDialog onClose={() => setShowSettings(false)} />}
     </DialogShell>
@@ -298,6 +334,8 @@ function EditMaterialDialog({ material, onClose }: { material: Material; onClose
   const update = useUpdateMaterial();
   const del = useDeleteMaterial();
   const inPreset = material.color && COLOR_OPTIONS.includes(material.color);
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     name: material.name,
     color: inPreset ? (material.color as string) : material.color ? "__custom__" : "",
@@ -311,15 +349,22 @@ function EditMaterialDialog({ material, onClose }: { material: Material; onClose
 
   async function save() {
     if (!valid) return;
-    await update.mutateAsync({
-      id: material.id,
-      name: form.name,
-      color: color || null,
-      unit: form.unit,
-      costPerUnit: form.costPerUnit,
-      status: form.status,
-    });
-    onClose();
+    setBusy(true);
+    try {
+      const imagePath = file ? await uploadMaterialImage(file) : undefined;
+      await update.mutateAsync({
+        id: material.id,
+        name: form.name,
+        color: color || null,
+        unit: form.unit,
+        costPerUnit: form.costPerUnit,
+        status: form.status,
+        imagePath,
+      });
+      onClose();
+    } finally {
+      setBusy(false);
+    }
   }
   async function remove() {
     if (!confirm(`Delete ${material.name}? All bundles will be removed. This cannot be undone.`)) return;
@@ -330,6 +375,8 @@ function EditMaterialDialog({ material, onClose }: { material: Material; onClose
   return (
     <DialogShell title="Edit material" onClose={onClose}>
       <div className="grid gap-3">
+        <ImageField path={material.imagePath} file={file} onFile={setFile} />
+
         <label className="block">
           <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
             Material Code
@@ -477,8 +524,8 @@ function BundlesDialog({ material, onClose }: { material: Material; onClose: () 
   const [creating, setCreating] = useState(false);
   const del = useDeleteBundle(material.id);
 
-  const totalUsable = bundles.reduce((s, b) => s + b.usableLength, 0);
-  const totalRemaining = bundles.reduce((s, b) => s + b.remainingLength, 0);
+  const totalPurchased = bundles.reduce((s, b) => s + b.purchasedLength, 0);
+
 
   async function remove(b: MaterialBundle) {
     if (!confirm(`Delete Bundle ${b.bundleNumber}? This cannot be undone.`)) return;
@@ -497,10 +544,9 @@ function BundlesDialog({ material, onClose }: { material: Material; onClose: () 
       onClose={onClose}
       widthClass="max-w-2xl"
     >
-      <div className="mb-3 grid grid-cols-3 gap-2 text-center">
-        <Stat label="Bundles" value={String(bundles.length)} />
-        <Stat label="Total Usable" value={`${totalUsable} ${material.unit}`} />
-        <Stat label="Remaining" value={`${totalRemaining} ${material.unit}`} />
+      <div className="mb-3 grid grid-cols-2 gap-2 text-center">
+        <Stat label="Total Bundles" value={String(bundles.length)} />
+        <Stat label="Total Purchased" value={`${totalPurchased} ${material.unit}`} />
       </div>
 
       <div className="mb-3 flex justify-end">
@@ -526,12 +572,11 @@ function BundlesDialog({ material, onClose }: { material: Material; onClose: () 
           <table className="w-full min-w-[560px] text-xs">
             <thead className="bg-muted/60 uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="p-2 text-left font-semibold">#</th>
-                <th className="p-2 text-left font-semibold">Roll</th>
-                <th className="p-2 text-left font-semibold">Width</th>
+                <th className="p-2 text-left font-semibold">Bundle</th>
                 <th className="p-2 text-right font-semibold">Purchased</th>
-                <th className="p-2 text-right font-semibold">Usable</th>
-                <th className="p-2 text-right font-semibold">Remaining</th>
+                <th className="p-2 text-right font-semibold">Layer (cm)</th>
+                <th className="p-2 text-left font-semibold">Width</th>
+                <th className="p-2 text-left font-semibold">Status</th>
                 <th className="p-2" />
               </tr>
             </thead>
@@ -539,22 +584,11 @@ function BundlesDialog({ material, onClose }: { material: Material; onClose: () 
               {bundles.map((b) => (
                 <tr key={b.id} className="border-t border-border">
                   <td className="p-2 font-mono font-bold">B{b.bundleNumber}</td>
-                  <td className="p-2 text-muted-foreground">{b.rollNumber ?? "—"}</td>
+                  <td className="p-2 text-right tabular-nums font-semibold">{b.purchasedLength}</td>
+                  <td className="p-2 text-right tabular-nums">{b.layerLength}</td>
                   <td className="p-2">{b.fabricWidth}</td>
-                  <td className="p-2 text-right tabular-nums">{b.purchasedLength}</td>
-                  <td className="p-2 text-right tabular-nums font-semibold">{b.usableLength}</td>
-                  <td className="p-2 text-right tabular-nums">
-                    <span
-                      className={
-                        b.remainingLength === 0
-                          ? "text-muted-foreground"
-                          : b.remainingLength < b.usableLength
-                            ? "text-warning"
-                            : "text-success"
-                      }
-                    >
-                      {b.remainingLength}
-                    </span>
+                  <td className="p-2">
+                    <BundleStatusBadge status={b.status} />
                   </td>
                   <td className="p-2 text-right">
                     <div className="flex justify-end gap-1">
@@ -568,8 +602,8 @@ function BundlesDialog({ material, onClose }: { material: Material; onClose: () 
                       <button
                         onClick={() => remove(b)}
                         aria-label="Delete"
-                        disabled={b.consumedLength > 0}
-                        title={b.consumedLength > 0 ? "Bundle has consumed stock" : "Delete"}
+                        disabled={b.allocatedLength > 0}
+                        title={b.allocatedLength > 0 ? "Bundle is reserved or consumed" : "Delete"}
                         className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -582,6 +616,7 @@ function BundlesDialog({ material, onClose }: { material: Material; onClose: () 
           </table>
         </div>
       )}
+
 
       {(creating || editing) && (
         <BundleFormDialog
@@ -611,26 +646,20 @@ function BundleFormDialog({
 }) {
   const save = useUpsertBundle(materialId);
   const [form, setForm] = useState({
-    rollNumber: bundle?.rollNumber ?? "",
-    fabricWidth: bundle?.fabricWidth ?? WIDTH_OPTIONS[2],
-    customWidth: WIDTH_OPTIONS.includes(bundle?.fabricWidth ?? "") ? "" : bundle?.fabricWidth ?? "",
-    useCustomWidth: !!bundle?.fabricWidth && !WIDTH_OPTIONS.includes(bundle.fabricWidth),
+    fabricWidth: bundle?.fabricWidth ?? "",
     purchasedLength: bundle?.purchasedLength ?? 0,
-    usableLength: bundle?.usableLength ?? 0,
+    layerLength: bundle?.layerLength ?? 0,
   });
 
-  const width = form.useCustomWidth ? form.customWidth : form.fabricWidth;
-  const invalid = form.usableLength > form.purchasedLength;
-  const valid = width.trim() !== "" && form.purchasedLength > 0 && form.usableLength >= 0 && !invalid;
+  const valid = form.fabricWidth.trim() !== "" && form.purchasedLength > 0 && form.layerLength > 0;
 
   async function submit() {
     if (!valid) return;
     await save.mutateAsync({
       id: bundle?.id,
-      rollNumber: form.rollNumber || null,
-      fabricWidth: width,
+      fabricWidth: form.fabricWidth,
       purchasedLength: form.purchasedLength,
-      usableLength: form.usableLength,
+      layerLength: form.layerLength,
     });
     onClose();
   }
@@ -642,64 +671,35 @@ function BundleFormDialog({
       widthClass="max-w-sm"
     >
       <div className="grid gap-3">
-        <Field
-          label="Roll Number (optional)"
-          value={form.rollNumber}
-          onChange={(v) => setForm({ ...form, rollNumber: v })}
-          placeholder="e.g. R-12"
-        />
         <label className="block">
-          <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Fabric Width</span>
-          <div className="mt-1 flex gap-2">
-            {form.useCustomWidth ? (
-              <input
-                value={form.customWidth}
-                onChange={(e) => setForm({ ...form, customWidth: e.target.value })}
-                placeholder="e.g. 58 inch"
-                className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
-              />
-            ) : (
-              <select
-                value={form.fabricWidth}
-                onChange={(e) => setForm({ ...form, fabricWidth: e.target.value })}
-                className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
-              >
-                {WIDTH_OPTIONS.map((w) => (
-                  <option key={w} value={w}>
-                    {w}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button
-              type="button"
-              onClick={() => setForm({ ...form, useCustomWidth: !form.useCustomWidth })}
-              className="rounded-xl border border-border px-3 text-xs font-bold text-muted-foreground hover:border-primary hover:text-primary"
-            >
-              {form.useCustomWidth ? "Preset" : "Custom"}
-            </button>
-          </div>
+          <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            Bundle Number (auto)
+          </span>
+          <input
+            readOnly
+            value={bundle ? `B${bundle.bundleNumber}` : "Next in sequence"}
+            className="mt-1 w-full rounded-xl border border-border bg-muted/60 px-3 py-2 font-mono text-sm font-bold text-muted-foreground"
+          />
         </label>
-        <div className="grid grid-cols-2 gap-3">
-          <NumberField
-            label={`Purchased (${unit})`}
-            value={form.purchasedLength}
-            onChange={(v) => setForm({ ...form, purchasedLength: v })}
-          />
-          <NumberField
-            label={`Usable (${unit})`}
-            value={form.usableLength}
-            onChange={(v) => setForm({ ...form, usableLength: v })}
-          />
-        </div>
-        {invalid && (
-          <p className="text-[11px] font-semibold text-destructive">
-            Usable length cannot exceed purchased length.
-          </p>
-        )}
-        {bundle && bundle.consumedLength > 0 && (
+        <NumberField
+          label={`Purchased Quantity (${unit})`}
+          value={form.purchasedLength}
+          onChange={(v) => setForm({ ...form, purchasedLength: v })}
+        />
+        <NumberField
+          label="Layer Length (cm)"
+          value={form.layerLength}
+          onChange={(v) => setForm({ ...form, layerLength: v })}
+        />
+        <Field
+          label="Fabric Width"
+          value={form.fabricWidth}
+          onChange={(v) => setForm({ ...form, fabricWidth: v })}
+          placeholder="e.g. 44 inch"
+        />
+        {bundle && (
           <p className="text-[11px] text-muted-foreground">
-            Already consumed: {bundle.consumedLength} {unit}
+            Status is set automatically ({bundle.status}) as production reserves and consumes this bundle.
           </p>
         )}
       </div>
@@ -716,6 +716,81 @@ function BundleFormDialog({
     </DialogShell>
   );
 }
+
+const BUNDLE_STATUS_STYLE: Record<string, string> = {
+  available: "bg-success/15 text-success",
+  reserved: "bg-warning/15 text-warning",
+  consumed: "bg-muted text-muted-foreground",
+};
+
+function BundleStatusBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={
+        "inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide " +
+        (BUNDLE_STATUS_STYLE[status] ?? "bg-muted text-muted-foreground")
+      }
+    >
+      {status}
+    </span>
+  );
+}
+
+/* ---------- Fabric image ---------- */
+
+function MaterialThumb({ path, className = "" }: { path: string | null; className?: string }) {
+  const { data: url } = useMaterialImageUrl(path);
+  if (!path || !url) {
+    return (
+      <div className={`grid place-items-center rounded-lg bg-muted text-muted-foreground ${className}`}>
+        <ImageIcon className="h-4 w-4" />
+      </div>
+    );
+  }
+  return <img src={url} alt="Fabric" loading="lazy" className={`rounded-lg object-cover ${className}`} />;
+}
+
+function ImageField({
+  path,
+  file,
+  onFile,
+}: {
+  path: string | null;
+  file: File | null;
+  onFile: (f: File | null) => void;
+}) {
+  const preview = file ? URL.createObjectURL(file) : null;
+  return (
+    <label className="block">
+      <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Fabric Image</span>
+      <div className="mt-1 flex items-center gap-3">
+        {preview ? (
+          <img src={preview} alt="Fabric preview" className="h-16 w-16 rounded-xl object-cover" />
+        ) : (
+          <MaterialThumb path={path} className="h-16 w-16" />
+        )}
+        <div className="flex flex-col gap-1">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+            className="text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-primary-foreground"
+          />
+          {file && (
+            <button
+              type="button"
+              onClick={() => onFile(null)}
+              className="w-fit text-[11px] font-bold text-muted-foreground hover:text-destructive"
+            >
+              Remove selection
+            </button>
+          )}
+        </div>
+      </div>
+    </label>
+  );
+}
+
 
 /* ---------- Shared shell / atoms ---------- */
 
