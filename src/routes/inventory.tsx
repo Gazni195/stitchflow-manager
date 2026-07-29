@@ -300,20 +300,21 @@ function NewMaterialDialog({ onClose, onCreated }: { onClose: () => void; onCrea
           </label>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Stock is built by adding fabric rolls (bundles) after the material is created.
+          Next step: add bundles (fabric rolls). Total stock is calculated automatically from them.
         </p>
       </div>
 
       <div className="mt-5 flex justify-end">
         <button
           onClick={save}
-          disabled={!valid || create.isPending}
+          disabled={!valid || busy || create.isPending}
           className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-60"
         >
-          {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-          Create material
+          {(busy || create.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
+          Continue to bundles
         </button>
       </div>
+
 
       {showSettings && <CodeSettingsDialog onClose={() => setShowSettings(false)} />}
     </DialogShell>
