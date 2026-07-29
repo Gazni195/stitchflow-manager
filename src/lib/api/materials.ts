@@ -257,25 +257,26 @@ type DbBundle = {
   id: string;
   material_id: string;
   bundle_number: number;
-  roll_number: string | null;
   fabric_width: string;
   purchased_length: number;
-  usable_length: number;
-  consumed_length: number;
-  remaining_length: number;
+  layer_length: number;
+  allocated_length: number;
+  status: string;
 };
+
+const BUNDLE_COLUMNS =
+  "id, material_id, bundle_number, fabric_width, purchased_length, layer_length, allocated_length, status";
 
 function mapBundle(r: DbBundle): MaterialBundle {
   return {
     id: r.id,
     materialId: r.material_id,
     bundleNumber: r.bundle_number,
-    rollNumber: r.roll_number,
     fabricWidth: r.fabric_width,
     purchasedLength: Number(r.purchased_length ?? 0),
-    usableLength: Number(r.usable_length ?? 0),
-    consumedLength: Number(r.consumed_length ?? 0),
-    remainingLength: Number(r.remaining_length ?? 0),
+    layerLength: Number(r.layer_length ?? 0),
+    allocatedLength: Number(r.allocated_length ?? 0),
+    status: (r.status as BundleStatus) ?? "available",
   };
 }
 
@@ -286,7 +287,7 @@ export function useMaterialBundles(materialId: string | undefined) {
     queryFn: async (): Promise<MaterialBundle[]> => {
       const { data, error } = await supabase
         .from("inventory_bundles")
-        .select("id, material_id, bundle_number, roll_number, fabric_width, purchased_length, usable_length, consumed_length, remaining_length")
+        .select(BUNDLE_COLUMNS)
         .eq("material_id", materialId!)
         .order("bundle_number", { ascending: true });
       if (error) throw error;
@@ -296,24 +297,21 @@ export function useMaterialBundles(materialId: string | undefined) {
 }
 
 export type BundleInput = {
-  rollNumber: string | null;
   fabricWidth: string;
   purchasedLength: number;
-  usableLength: number;
+  layerLength: number;
 };
 
 export function useUpsertBundle(materialId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: BundleInput & { id?: string }) => {
-      if (input.usableLength > input.purchasedLength) {
-        throw new Error("Usable length cannot exceed purchased length.");
-      }
+      if (input.purchasedLength <= 0) throw new Error("Purchased quantity must be greater than zero.");
+      if (input.layerLength <= 0) throw new Error("Layer length must be greater than zero.");
       const payload = {
-        roll_number: input.rollNumber?.trim() || null,
         fabric_width: input.fabricWidth.trim(),
         purchased_length: input.purchasedLength,
-        usable_length: input.usableLength,
+        layer_length: input.layerLength,
       };
       if (input.id) {
         const { error } = await supabase.from("inventory_bundles").update(payload).eq("id", input.id);
