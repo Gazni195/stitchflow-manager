@@ -497,10 +497,9 @@ function BundlesDialog({ material, onClose }: { material: Material; onClose: () 
       onClose={onClose}
       widthClass="max-w-2xl"
     >
-      <div className="mb-3 grid grid-cols-3 gap-2 text-center">
-        <Stat label="Bundles" value={String(bundles.length)} />
-        <Stat label="Total Usable" value={`${totalUsable} ${material.unit}`} />
-        <Stat label="Remaining" value={`${totalRemaining} ${material.unit}`} />
+      <div className="mb-3 grid grid-cols-2 gap-2 text-center">
+        <Stat label="Total Bundles" value={String(bundles.length)} />
+        <Stat label="Total Purchased" value={`${totalPurchased} ${material.unit}`} />
       </div>
 
       <div className="mb-3 flex justify-end">
@@ -526,12 +525,11 @@ function BundlesDialog({ material, onClose }: { material: Material; onClose: () 
           <table className="w-full min-w-[560px] text-xs">
             <thead className="bg-muted/60 uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="p-2 text-left font-semibold">#</th>
-                <th className="p-2 text-left font-semibold">Roll</th>
-                <th className="p-2 text-left font-semibold">Width</th>
+                <th className="p-2 text-left font-semibold">Bundle</th>
                 <th className="p-2 text-right font-semibold">Purchased</th>
-                <th className="p-2 text-right font-semibold">Usable</th>
-                <th className="p-2 text-right font-semibold">Remaining</th>
+                <th className="p-2 text-right font-semibold">Layer (cm)</th>
+                <th className="p-2 text-left font-semibold">Width</th>
+                <th className="p-2 text-left font-semibold">Status</th>
                 <th className="p-2" />
               </tr>
             </thead>
@@ -539,22 +537,11 @@ function BundlesDialog({ material, onClose }: { material: Material; onClose: () 
               {bundles.map((b) => (
                 <tr key={b.id} className="border-t border-border">
                   <td className="p-2 font-mono font-bold">B{b.bundleNumber}</td>
-                  <td className="p-2 text-muted-foreground">{b.rollNumber ?? "—"}</td>
+                  <td className="p-2 text-right tabular-nums font-semibold">{b.purchasedLength}</td>
+                  <td className="p-2 text-right tabular-nums">{b.layerLength}</td>
                   <td className="p-2">{b.fabricWidth}</td>
-                  <td className="p-2 text-right tabular-nums">{b.purchasedLength}</td>
-                  <td className="p-2 text-right tabular-nums font-semibold">{b.usableLength}</td>
-                  <td className="p-2 text-right tabular-nums">
-                    <span
-                      className={
-                        b.remainingLength === 0
-                          ? "text-muted-foreground"
-                          : b.remainingLength < b.usableLength
-                            ? "text-warning"
-                            : "text-success"
-                      }
-                    >
-                      {b.remainingLength}
-                    </span>
+                  <td className="p-2">
+                    <BundleStatusBadge status={b.status} />
                   </td>
                   <td className="p-2 text-right">
                     <div className="flex justify-end gap-1">
@@ -568,8 +555,8 @@ function BundlesDialog({ material, onClose }: { material: Material; onClose: () 
                       <button
                         onClick={() => remove(b)}
                         aria-label="Delete"
-                        disabled={b.consumedLength > 0}
-                        title={b.consumedLength > 0 ? "Bundle has consumed stock" : "Delete"}
+                        disabled={b.allocatedLength > 0}
+                        title={b.allocatedLength > 0 ? "Bundle is reserved or consumed" : "Delete"}
                         className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -582,6 +569,7 @@ function BundlesDialog({ material, onClose }: { material: Material; onClose: () 
           </table>
         </div>
       )}
+
 
       {(creating || editing) && (
         <BundleFormDialog
