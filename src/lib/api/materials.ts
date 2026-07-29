@@ -401,13 +401,13 @@ async function getStock(materialId: string): Promise<number> {
   return Number((data as { available_stock: number | null }).available_stock ?? 0);
 }
 
-// Deduct against the first bundle(s) with remaining length (FIFO). Restore
-// symmetrically. This keeps materials.available_stock in sync via trigger and
-// preserves bundle-level accounting for future per-bundle production picks.
+// Allocate against the first bundle(s) with free length (FIFO), release
+// symmetrically. Bundle status (available → reserved → consumed) and
+// materials.available_stock are recomputed by DB triggers from these numbers,
+// so the user never edits status or stock by hand.
 async function consumeFromBundles(materialId: string, delta: number): Promise<void> {
   if (delta === 0) return;
   if (delta > 0) {
-    // deduct
     const stock = await getStock(materialId);
     if (delta > stock) {
       throw new Error(`Not enough stock: requested ${delta} but only ${stock} available.`);
@@ -415,46 +415,47 @@ async function consumeFromBundles(materialId: string, delta: number): Promise<vo
     let remaining = delta;
     const { data, error } = await supabase
       .from("inventory_bundles")
-      .select("id, usable_length, consumed_length")
+      .select("id, purchased_length, allocated_length")
       .eq("material_id", materialId)
       .order("bundle_number", { ascending: true });
     if (error) throw error;
-    for (const b of (data ?? []) as { id: string; usable_length: number; consumed_length: number }[]) {
+    for (const b of (data ?? []) as unknown as { id: string; purchased_length: number; allocated_length: number }[]) {
       if (remaining <= 0) break;
-      const free = Number(b.usable_length) - Number(b.consumed_length);
+      const free = Number(b.purchased_length) - Number(b.allocated_length);
       if (free <= 0) continue;
       const take = Math.min(free, remaining);
       const { error: uErr } = await supabase
         .from("inventory_bundles")
-        .update({ consumed_length: Number(b.consumed_length) + take })
+        .update({ allocated_length: Number(b.allocated_length) + take })
         .eq("id", b.id);
       if (uErr) throw uErr;
       remaining -= take;
     }
     if (remaining > 0) throw new Error("Not enough bundle capacity to fulfil deduction.");
   } else {
-    // restore: refund in reverse bundle order
+    // release: refund in reverse bundle order
     let remaining = -delta;
     const { data, error } = await supabase
       .from("inventory_bundles")
-      .select("id, consumed_length")
+      .select("id, allocated_length")
       .eq("material_id", materialId)
       .order("bundle_number", { ascending: false });
     if (error) throw error;
-    for (const b of (data ?? []) as { id: string; consumed_length: number }[]) {
+    for (const b of (data ?? []) as unknown as { id: string; allocated_length: number }[]) {
       if (remaining <= 0) break;
-      const consumed = Number(b.consumed_length);
-      if (consumed <= 0) continue;
-      const give = Math.min(consumed, remaining);
+      const allocated = Number(b.allocated_length);
+      if (allocated <= 0) continue;
+      const give = Math.min(allocated, remaining);
       const { error: uErr } = await supabase
         .from("inventory_bundles")
-        .update({ consumed_length: consumed - give })
+        .update({ allocated_length: allocated - give })
         .eq("id", b.id);
       if (uErr) throw uErr;
       remaining -= give;
     }
   }
 }
+
 
 export function useAddDesignMaterial(designId: string) {
   const qc = useQueryClient();
