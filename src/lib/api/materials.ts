@@ -146,12 +146,15 @@ export function useMaterials() {
     queryFn: async (): Promise<Material[]> => {
       const { data, error } = await supabase
         .from("materials")
-        .select("id, code, name, color, unit, available_stock, cost_per_unit, status, inventory_bundles(id)")
+        .select(`${MATERIAL_COLUMNS}, inventory_bundles(id, purchased_length)`)
         .order("code", { ascending: true });
       if (error) throw error;
-      return (data as unknown as (DbMaterial & { inventory_bundles: { id: string }[] })[]).map((r) => ({
+      return (
+        data as unknown as (DbMaterial & { inventory_bundles: { id: string; purchased_length: number }[] })[]
+      ).map((r) => ({
         ...mapMaterial(r),
         bundleCount: r.inventory_bundles?.length ?? 0,
+        totalPurchased: (r.inventory_bundles ?? []).reduce((s, b) => s + Number(b.purchased_length ?? 0), 0),
       }));
     },
   });
@@ -163,6 +166,7 @@ export type MaterialCreateInput = {
   unit: string;
   costPerUnit: number;
   status: MaterialStatus;
+  imagePath?: string | null;
 };
 
 export function useCreateMaterial() {
@@ -179,15 +183,16 @@ export function useCreateMaterial() {
           name: input.name.trim(),
           color: input.color?.trim() || null,
           unit: input.unit,
+          image_path: input.imagePath ?? null,
           cost_per_unit: input.costPerUnit,
           rate: input.costPerUnit,
           status: input.status,
           available_stock: 0,
         })
-        .select("id")
+        .select("id, code")
         .single();
       if (error) throw error;
-      return data as { id: string };
+      return data as { id: string; code: string };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["materials"] });
@@ -203,28 +208,29 @@ export type MaterialUpdateInput = {
   unit: string;
   costPerUnit: number;
   status: MaterialStatus;
+  imagePath?: string | null;
 };
 
 export function useUpdateMaterial() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: MaterialUpdateInput) => {
-      const { error } = await supabase
-        .from("materials")
-        .update({
-          name: input.name.trim(),
-          color: input.color?.trim() || null,
-          unit: input.unit,
-          cost_per_unit: input.costPerUnit,
-          rate: input.costPerUnit,
-          status: input.status,
-        })
-        .eq("id", input.id);
+      const patch: Record<string, unknown> = {
+        name: input.name.trim(),
+        color: input.color?.trim() || null,
+        unit: input.unit,
+        cost_per_unit: input.costPerUnit,
+        rate: input.costPerUnit,
+        status: input.status,
+      };
+      if (input.imagePath !== undefined) patch.image_path = input.imagePath;
+      const { error } = await supabase.from("materials").update(patch).eq("id", input.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["materials"] }),
   });
 }
+
 
 export function useDeleteMaterial() {
   const qc = useQueryClient();
