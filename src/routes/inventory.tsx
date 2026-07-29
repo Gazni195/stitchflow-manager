@@ -96,11 +96,13 @@ function InventoryPage() {
             <table className="w-full min-w-[820px] text-sm">
               <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
+                  <th className="p-3 text-left font-semibold">Fabric</th>
                   <th className="p-3 text-left font-semibold">Code</th>
                   <th className="p-3 text-left font-semibold">Name</th>
                   <th className="p-3 text-left font-semibold">Color</th>
                   <th className="p-3 text-right font-semibold">Bundles</th>
-                  <th className="p-3 text-right font-semibold">Total Stock</th>
+                  <th className="p-3 text-right font-semibold">Purchased</th>
+                  <th className="p-3 text-right font-semibold">Available</th>
                   <th className="p-3 text-left font-semibold">Unit</th>
                   <th className="p-3 text-right font-semibold">Cost</th>
                   <th className="p-3 text-left font-semibold">Status</th>
@@ -114,13 +116,18 @@ function InventoryPage() {
                     onClick={() => setBundlesFor(m)}
                     className="cursor-pointer border-t border-border hover:bg-accent/40"
                   >
+                    <td className="p-3">
+                      <MaterialThumb path={m.imagePath} className="h-10 w-10" />
+                    </td>
                     <td className="p-3 font-mono text-xs font-bold">{m.code}</td>
                     <td className="p-3 font-semibold">{m.name}</td>
                     <td className="p-3 text-muted-foreground">{m.color ?? "—"}</td>
                     <td className="p-3 text-right tabular-nums">{m.bundleCount ?? 0}</td>
+                    <td className="p-3 text-right tabular-nums">{m.totalPurchased ?? 0}</td>
                     <td className="p-3 text-right tabular-nums font-semibold">{m.availableStock}</td>
                     <td className="p-3 text-muted-foreground">{m.unit}</td>
                     <td className="p-3 text-right tabular-nums">₹{m.costPerUnit.toFixed(2)}</td>
+
                     <td className="p-3">
                       <span
                         className={
