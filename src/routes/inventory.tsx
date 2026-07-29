@@ -477,8 +477,8 @@ function BundlesDialog({ material, onClose }: { material: Material; onClose: () 
   const [creating, setCreating] = useState(false);
   const del = useDeleteBundle(material.id);
 
-  const totalUsable = bundles.reduce((s, b) => s + b.usableLength, 0);
-  const totalRemaining = bundles.reduce((s, b) => s + b.remainingLength, 0);
+  const totalPurchased = bundles.reduce((s, b) => s + b.purchasedLength, 0);
+
 
   async function remove(b: MaterialBundle) {
     if (!confirm(`Delete Bundle ${b.bundleNumber}? This cannot be undone.`)) return;
