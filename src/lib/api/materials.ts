@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export type MaterialStatus = "active" | "inactive";
+export type BundleStatus = "available" | "reserved" | "consumed";
 
 export type Material = {
   id: string;
@@ -15,7 +16,11 @@ export type Material = {
   name: string;
   color: string | null;
   unit: string;
+  imagePath: string | null;
+  /** Σ(purchased − allocated) across bundles — maintained by DB trigger. */
   availableStock: number;
+  /** Σ(purchased) across bundles. */
+  totalPurchased?: number;
   costPerUnit: number;
   status: MaterialStatus;
   bundleCount?: number;
@@ -25,12 +30,11 @@ export type MaterialBundle = {
   id: string;
   materialId: string;
   bundleNumber: number;
-  rollNumber: string | null;
   fabricWidth: string;
   purchasedLength: number;
-  usableLength: number;
-  consumedLength: number;
-  remainingLength: number;
+  layerLength: number;
+  allocatedLength: number;
+  status: BundleStatus;
 };
 
 export type DesignMaterial = {
@@ -50,10 +54,13 @@ type DbMaterial = {
   name: string;
   color: string | null;
   unit: string;
+  image_path?: string | null;
   available_stock: number;
   cost_per_unit: number;
   status: string;
 };
+
+const MATERIAL_COLUMNS = "id, code, name, color, unit, image_path, available_stock, cost_per_unit, status";
 
 function mapMaterial(r: DbMaterial): Material {
   return {
@@ -62,11 +69,39 @@ function mapMaterial(r: DbMaterial): Material {
     name: r.name,
     color: r.color ?? null,
     unit: r.unit,
+    imagePath: r.image_path ?? null,
     availableStock: Number(r.available_stock ?? 0),
     costPerUnit: Number(r.cost_per_unit ?? 0),
     status: (r.status as MaterialStatus) ?? "active",
   };
 }
+
+/** Uploads a fabric image into the shared images bucket, returns its path. */
+export async function uploadMaterialImage(file: File): Promise<string> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
+  const ext = file.name.split(".").pop() ?? "jpg";
+  const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from("design-images").upload(path, file, { upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+export function useMaterialImageUrl(path: string | null | undefined) {
+  return useQuery({
+    queryKey: ["material-image", path],
+    enabled: !!path,
+    staleTime: 50 * 60 * 1000,
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = await supabase.storage.from("design-images").createSignedUrl(path!, 60 * 60);
+      if (error) throw error;
+      return data?.signedUrl ?? null;
+    },
+  });
+}
+
 
 /* ----- Material Code Settings ----- */
 
