@@ -327,6 +327,8 @@ function EditMaterialDialog({ material, onClose }: { material: Material; onClose
   const update = useUpdateMaterial();
   const del = useDeleteMaterial();
   const inPreset = material.color && COLOR_OPTIONS.includes(material.color);
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     name: material.name,
     color: inPreset ? (material.color as string) : material.color ? "__custom__" : "",
@@ -340,15 +342,22 @@ function EditMaterialDialog({ material, onClose }: { material: Material; onClose
 
   async function save() {
     if (!valid) return;
-    await update.mutateAsync({
-      id: material.id,
-      name: form.name,
-      color: color || null,
-      unit: form.unit,
-      costPerUnit: form.costPerUnit,
-      status: form.status,
-    });
-    onClose();
+    setBusy(true);
+    try {
+      const imagePath = file ? await uploadMaterialImage(file) : undefined;
+      await update.mutateAsync({
+        id: material.id,
+        name: form.name,
+        color: color || null,
+        unit: form.unit,
+        costPerUnit: form.costPerUnit,
+        status: form.status,
+        imagePath,
+      });
+      onClose();
+    } finally {
+      setBusy(false);
+    }
   }
   async function remove() {
     if (!confirm(`Delete ${material.name}? All bundles will be removed. This cannot be undone.`)) return;
@@ -359,6 +368,8 @@ function EditMaterialDialog({ material, onClose }: { material: Material; onClose
   return (
     <DialogShell title="Edit material" onClose={onClose}>
       <div className="grid gap-3">
+        <ImageField path={material.imagePath} file={file} onFile={setFile} />
+
         <label className="block">
           <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
             Material Code
