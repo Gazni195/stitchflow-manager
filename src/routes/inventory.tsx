@@ -162,10 +162,12 @@ function InventoryPage() {
 
 /* ---------- New Material ---------- */
 
-function NewMaterialDialog({ onClose }: { onClose: () => void }) {
+function NewMaterialDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (m: Material) => void }) {
   const create = useCreateMaterial();
   const { data: settings } = useMaterialCodeSettings();
   const [showSettings, setShowSettings] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     name: "",
     color: "",
@@ -181,15 +183,37 @@ function NewMaterialDialog({ onClose }: { onClose: () => void }) {
 
   async function save() {
     if (!valid) return;
-    await create.mutateAsync({
-      name: form.name,
-      color: color || null,
-      unit: form.unit,
-      costPerUnit: form.costPerUnit,
-      status: form.status,
-    });
-    onClose();
+    setBusy(true);
+    try {
+      const imagePath = file ? await uploadMaterialImage(file) : null;
+      const created = await create.mutateAsync({
+        name: form.name,
+        color: color || null,
+        unit: form.unit,
+        costPerUnit: form.costPerUnit,
+        status: form.status,
+        imagePath,
+      });
+      onClose();
+      // Step 2 — bundle entry begins right after the material exists.
+      onCreated({
+        id: created.id,
+        code: created.code,
+        name: form.name.trim(),
+        color: color || null,
+        unit: form.unit,
+        imagePath,
+        availableStock: 0,
+        totalPurchased: 0,
+        costPerUnit: form.costPerUnit,
+        status: form.status,
+        bundleCount: 0,
+      });
+    } finally {
+      setBusy(false);
+    }
   }
+
 
   return (
     <DialogShell title="New material" onClose={onClose}>
