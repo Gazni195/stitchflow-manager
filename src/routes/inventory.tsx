@@ -216,8 +216,10 @@ function NewMaterialDialog({ onClose, onCreated }: { onClose: () => void; onCrea
 
 
   return (
-    <DialogShell title="New material" onClose={onClose}>
+    <DialogShell title="Step 1 · Create material" onClose={onClose}>
       <div className="grid gap-3">
+        <ImageField path={null} file={file} onFile={setFile} />
+
         <label className="block">
           <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
             Material Code (auto)
