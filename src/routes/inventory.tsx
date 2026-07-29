@@ -153,7 +153,7 @@ function InventoryPage() {
         )}
       </div>
 
-      {creating && <NewMaterialDialog onClose={() => setCreating(false)} />}
+      {creating && <NewMaterialDialog onClose={() => setCreating(false)} onCreated={(m) => setBundlesFor(m)} />}
       {editing && <EditMaterialDialog material={editing} onClose={() => setEditing(null)} />}
       {bundlesFor && <BundlesDialog material={bundlesFor} onClose={() => setBundlesFor(null)} />}
     </AppShell>
