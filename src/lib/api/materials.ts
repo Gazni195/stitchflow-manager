@@ -215,7 +215,15 @@ export function useUpdateMaterial() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: MaterialUpdateInput) => {
-      const patch: Record<string, unknown> = {
+      const patch: {
+        name: string;
+        color: string | null;
+        unit: string;
+        cost_per_unit: number;
+        rate: number;
+        status: string;
+        image_path?: string | null;
+      } = {
         name: input.name.trim(),
         color: input.color?.trim() || null,
         unit: input.unit,
