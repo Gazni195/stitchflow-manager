@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, Search, Package, Loader2, Settings, Layers, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Package, Loader2, Settings, Layers, X, Image as ImageIcon } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import {
   useMaterials,
@@ -12,6 +12,8 @@ import {
   useMaterialBundles,
   useUpsertBundle,
   useDeleteBundle,
+  useMaterialImageUrl,
+  uploadMaterialImage,
   type Material,
   type MaterialBundle,
   type MaterialStatus,
@@ -19,7 +21,7 @@ import {
 
 const UNIT_OPTIONS = ["Meter", "Yard", "Kg", "Pcs", "Set", "Roll"];
 const COLOR_OPTIONS = ["Black", "White", "Ivory", "Beige", "Red", "Blue", "Green", "Yellow", "Pink", "Grey", "Multi"];
-const WIDTH_OPTIONS = ["36 inch", "44 inch", "56 inch", "60 inch", "150 cm"];
+
 
 export const Route = createFileRoute("/inventory")({ component: InventoryPage });
 
