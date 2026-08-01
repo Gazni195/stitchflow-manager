@@ -30,9 +30,7 @@ function DesignsList() {
     if (!q) return designs;
     return designs.filter(
       (d) =>
-        d.code.toLowerCase().includes(q) ||
-        d.name.toLowerCase().includes(q) ||
-        d.customer.toLowerCase().includes(q),
+        d.code.toLowerCase().includes(q) || d.name.toLowerCase().includes(q) || d.customer.toLowerCase().includes(q),
     );
   }, [designs, query]);
 
@@ -64,12 +62,6 @@ function DesignsList() {
           <button className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium">
             <Filter className="h-4 w-4" /> Filter
           </button>
-          <button
-            onClick={() => setWizard(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm sm:hidden"
-          >
-            <Plus className="h-4 w-4" /> New
-          </button>
         </section>
 
         {isLoading ? (
@@ -98,6 +90,18 @@ function DesignsList() {
         )}
       </div>
 
+      {/* Mobile-only floating action button, replacing the old inline
+          toolbar "New" button — matches the Dashboard's floating button
+          style. Desktop keeps the existing top-bar "New Design" action
+          (the `action` prop above) unchanged. */}
+      <button
+        type="button"
+        onClick={() => setWizard(true)}
+        className="fixed bottom-20 right-5 z-30 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-lg shadow-primary/30 hover:opacity-90 sm:hidden"
+      >
+        <Plus className="h-3.5 w-3.5" /> New Design
+      </button>
+
       <DesignWizard open={wizard} onClose={() => setWizard(false)} />
     </AppShell>
   );
@@ -124,11 +128,7 @@ function DesignCard({ design }: { design: Design }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-[11px] font-bold tracking-wider text-muted-foreground">{design.code}</p>
-          <span
-            className={
-              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold " + STATUS_TONE[design.status]
-            }
-          >
+          <span className={"shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold " + STATUS_TONE[design.status]}>
             {STATUS_LABEL[design.status]}
           </span>
         </div>
@@ -150,9 +150,7 @@ function DesignCard({ design }: { design: Design }) {
               style={{ width: `${progress}%` }}
             />
           </div>
-          <span className="w-9 shrink-0 text-right text-[11px] font-bold text-muted-foreground">
-            {progress}%
-          </span>
+          <span className="w-9 shrink-0 text-right text-[11px] font-bold text-muted-foreground">{progress}%</span>
         </div>
       </div>
       <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />

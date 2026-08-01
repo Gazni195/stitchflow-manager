@@ -1,98 +1,147 @@
-## Goal
+# Start Production Redesign — Analysis & Plan
 
-Replace the current in-memory/seeded workflow model with a real production workflow engine backed by Lovable Cloud. Each design has its own Sample Workflow, built up during sample development. Approving the sample snapshots it as the Bulk Workflow. The Bulk Workflow stays editable until bulk production begins, then locks. New designs come from a full Create Design wizard (with image upload). All demo/hardcoded design data is removed.
+## 1. Current state (findings)
 
-## Data model (Lovable Cloud / Postgres)
+**Start Production popup** (`src/routes/production.index.tsx` → `StartProductionDialog`)
+- Only 3 fields: Order Quantity, Start Date, Supervisor. No material/bundle allocation, no consumption logic.
+- Calls RPC `start_production(_design_id, _order_quantity, _start_date, _supervisor)` which just creates a `production_orders` row and seeds the 5 fixed processes (`cutting → handwork → embroidery → stitching → qc`).
+- Sets `designs.status = 'in_production'`.
 
-Tables in `public`, all with RLS + explicit GRANTs.
+**Production Order workflow** (`src/routes/production.$po.tsx`, `src/lib/api/production.ts`)
+- Stage list uses fixed `PROCESS_OPERATIONS`. Issue bundle / complete process RPCs already exist (`issue_bundle`, `complete_process`).
+- Workstation is chosen at issue-time (already wired to `workstation_config`).
 
-- **designs**
-  - `id uuid pk`, `code text unique`, `name text`, `customer text`, `category text`, `fabric text`, `color text`, `order_quantity int`, `image_path text` (storage key), `status text` — one of `draft | sampling | sample_approved | in_production | completed`, `created_by uuid`, timestamps.
-- **operations_catalog** (seeded, read-only for users)
-  - `id text pk` (e.g. `cutting`), `name`, `short`, `category`, `repeatable bool`, `sort int`.
-- **design_workflows**
-  - `id uuid pk`, `design_id uuid fk`, `kind text check in ('sample','bulk')`, `locked bool default false`, `created_at`, unique `(design_id, kind)`.
-- **workflow_steps**
-  - `id uuid pk`, `workflow_id uuid fk`, `operation_id text fk`, `sequence int`, `label text null`, `status text check in ('pending','in-progress','completed','skipped') default 'pending'`, `assigned_to text`, `input_quantity int`, `output_quantity int`, `wastage_quantity int`, `start_date date`, `end_date date`, `remarks text`, timestamps. Index `(workflow_id, sequence)`.
+**Material / Bundle allocation**
+- `production_reservations` table exists (material_id + quantity + lot_code), but the Start dialog never populates it. Reservations are added later on the PO detail page.
+- `inventory_bundles` (per material) has `purchased_length`, `layer_length`, `fabric_width`, `allocated_length`, `status` maintained by triggers `set_bundle_status` + `recompute_material_stock`.
+- No link between a reservation and a specific bundle id.
 
-Storage bucket `design-images` (public read, authenticated write).
+**Consumption reduction**
+- No "reduction %" exists anywhere in code today (grep confirms only prose mentions). The requirement is net-new — nothing to remove, but the new rule engine must be introduced.
 
-RLS: authenticated users can CRUD their org's rows (single-tenant for now → `auth.uid() = created_by` on designs, workflow rows joined via design ownership through a `has_design_access(design_id)` SECURITY DEFINER helper). Service role bypass as usual.
+**Materials**
+- `materials` table has no `fabric_type` column. Needed for rule matching.
 
-## Server functions (`src/lib/*.functions.ts`)
+**Design consumption (BOM)**
+- `design_materials` stores per-part quantity (units per piece). Required fabric per piece = Σ(quantity) per material — this feeds "Required Fabric".
 
-All go through `requireSupabaseAuth`.
+**Settings**
+- Settings shell + `/settings/workstations` exists. No production-settings section yet.
 
-- `designs.functions.ts`: `listDesigns`, `getDesign(code)`, `createDesign(input)`, `updateDesign`, `uploadDesignImage` (returns signed upload URL or accepts base64 → stores in bucket).
-- `workflows.functions.ts`:
-  - `getWorkflows(designId)` → `{ sample, bulk }`
-  - `upsertSampleStep`, `addStep(workflowId, operationId, atIndex)`, `removeStep`, `moveStep(stepId, dir)`, `reorderSteps(workflowId, orderedIds)`, `duplicateStep`, `renameStep`, `toggleSkip`, `updateStepFields` (assigned/quantities/dates/remarks/status).
-  - `approveSample(designId)` — server-side snapshot: copy sample steps → new bulk workflow, set `designs.status = 'sample_approved'`.
-  - `startBulkProduction(designId)` — locks the bulk workflow, sets status `in_production`.
-- `operations.functions.ts`: `listOperations()` from catalog table.
+---
 
-Client-side reads use TanStack Query with `ensureQueryData` in loaders.
+## 2. Database changes (single migration)
 
-## Frontend changes
+1. `materials.fabric_type text null` — free-text; suggestions in UI, no enum (nothing hardcoded).
+2. New table `consumption_reduction_rules`:
+   - `name text not null`
+   - `fabric_type text not null`
+   - `width_min numeric, width_max numeric` (inches)
+   - `layer_min numeric, layer_max numeric` (cm)
+   - `reduction_pct numeric not null` (0–100)
+   - `status text not null default 'active'` check in (`active`,`inactive`)
+   - timestamps + `updated_at` trigger
+   - GRANTs (`authenticated` full CRUD via `has_permission('settings.edit')`; SELECT for all authenticated for lookup)
+   - RLS: read = authenticated; write = `has_permission(auth.uid(),'settings.edit')`.
+3. Extend `production_reservations` with `bundle_id uuid null references inventory_bundles(id)` so a reservation targets a specific roll. Keep `material_id` for aggregation.
+4. New RPC `start_production_v2(_design_id, _order_quantity, _start_date, _supervisor, _bundle_ids uuid[])`:
+   - Locks each bundle row, sets `allocated_length = purchased_length` (trigger flips status to `consumed`… but we want `reserved` — so instead insert a `production_reservations` row per bundle with `quantity = layer_length_effective` and increment `allocated_length` by effective consumption). Actual per-piece consumption stays server-side, not user-editable.
+   - Creates PO + seeds fixed 5 processes (unchanged behavior).
+   - Marks design `in_production`.
+   - Bundle status transitions handled by existing trigger via `allocated_length` updates.
 
-### 1. Remove demo data
-- Delete seeded designs from `src/lib/designs.ts` and the seed block in `src/lib/design-workflow.ts`. Keep the operation catalog as a fallback until the DB catalog loads (single source of truth: DB, but the static list mirrors it for icon/route lookup).
-- `SAMPLE_ORDERS` in `production/ui.tsx` becomes a live query for in-production designs (or is removed from module screens in favor of an actual design picker driven by DB rows).
+---
 
-### 2. New Design wizard (`/designs/new`)
-Multi-step form:
-1. Basics — code (auto-suggested), name, customer, category.
-2. Specs — fabric, color, order quantity.
-3. Image upload — drop zone → uploads to `design-images` bucket.
-4. Sample workflow starter — optional; user can add first few operations now or later.
-Submit → `createDesign` → redirect to `/designs/<code>`.
+## 3. Settings changes
 
-### 3. Design Details (`/designs/$code`)
-- Two-tab "Workflow" section: **Sample Workflow** and **Bulk Workflow**.
-- Sample tab: always editable while `status !== 'sample_approved'`. Big "Approve Sample & Generate Bulk Workflow" CTA.
-- Bulk tab: appears after approval; editable while `status === 'sample_approved'`; shows "Start Bulk Production" CTA that locks it. After lock, read-only with progress.
-- Both tabs render the shared **Workflow Configurator** component.
+New route **`/settings/production`** (index) with a sub-page **`/settings/production/reduction-rules`**:
+- Table: Name · Fabric Type · Width range · Layer range · Reduction % · Status · actions.
+- Create / Edit dialog (reuse existing form primitives in `src/components/settings/shared.tsx`).
+- Enable/Disable toggle, Delete confirm, Preview (shows a sample calc).
+- Sidebar link added under Settings.
 
-### 4. Workflow Configurator (`src/components/workflow/Configurator.tsx`)
-Uses `@dnd-kit/core` + `@dnd-kit/sortable`.
-- Vertical sortable list of step cards (drag handle, sequence #, operation name, status pill, quantities summary).
-- Per card: edit label, duplicate, skip toggle, delete, expand to edit assigned/quantities/dates/remarks.
-- Bottom "Add Operation" palette (chips grouped by category) → inserts at end or at a chosen "+" slot between existing cards.
-- All mutations optimistic via TanStack Query + `invalidateQueries`.
-- Disabled when workflow is `locked`.
+API module: `src/lib/api/reduction-rules.ts` (list/create/update/delete/toggle).
 
-### 5. Production modules
-Each module screen (`cutting`, `handwork`, `stitching`, `qc`, `packing`, `barcode`, `stock`) keeps the `useStageChrome` hook but sources the workflow from DB via `getWorkflows(designId).bulk`. Saving a step calls `updateStepFields`. "Next" navigation reads the DB sequence.
+---
 
-### 6. Dashboard & list
-- `/designs` lists rows from DB, empty state → "Create your first design" CTA.
-- Dashboard KPIs become live counts (designs in each status).
+## 4. Production calculation
 
-## Files touched
+New pure helper `src/lib/production-calc.ts`:
+```
+requiredPerPiece = Σ design_materials.quantity for the selected fabric material
+requiredTotal    = requiredPerPiece × orderQuantity
+for each selected bundle:
+  rule = findRule({ fabricType, width, layerLength }) // status=active, ranges inclusive
+  if !rule → return { error: "No matching rule…" }
+  effectiveLength = purchasedLength × (1 - rule.reductionPct/100)
+  piecesFromBundle = floor(effectiveLength / requiredPerPiece)
+allocatedFabric   = Σ effectiveLength
+balanceFabric     = requiredTotal - allocatedFabric
+maxPossiblePieces = Σ piecesFromBundle
+```
+UI shows the rule name + % actually applied per bundle, and a summary row.
 
-New:
-- Migration files for tables + storage bucket + RLS + GRANTs + operation catalog seed.
-- `src/lib/designs.functions.ts`, `src/lib/workflows.functions.ts`, `src/lib/operations.functions.ts`.
-- `src/routes/designs.new.tsx` (wizard).
-- `src/components/workflow/Configurator.tsx`, `StepCard.tsx`, `AddOperationPalette.tsx`.
+Start button disabled while any selected bundle has no matching active rule; inline warning references Settings link.
 
-Rewritten:
-- `src/lib/designs.ts` → thin types + query hooks (no mock data).
-- `src/lib/design-workflow.ts` → server-backed helpers + query hooks (no seed).
-- `src/routes/designs.index.tsx`, `src/routes/designs.$code.tsx`, `src/routes/designs.$code.workflow.tsx` (becomes redirect into the details tab, or removed).
-- `src/routes/index.tsx` (live KPIs).
-- `src/components/production/ui.tsx` (drop `SAMPLE_ORDERS`).
-- All production module routes (DB-backed step reads/writes).
+---
 
-Dependency: `bun add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities`.
+## 5. UI — 2-step wizard (reuses existing Dialog + Field primitives)
 
-## Out of scope for this pass
-- Multi-tenant orgs / role-based permissions (Production Manager vs operator). All authenticated users can edit for now; noted in a follow-up.
-- Real-time collaboration on the configurator (single-user optimistic updates only).
-- ERPNext sync.
+**Progress header:** `1 Production Order → 2 Workflow Configuration`
 
-## Technical notes
-- `approveSample` runs in a single SQL transaction (RPC) so the snapshot is atomic.
-- `locked` on bulk workflows is enforced by both an RLS/CHECK trigger and the client (disabled UI). Modules can still write step **execution** fields (status/quantities/dates/remarks) on a locked workflow — the lock only blocks structural changes (add/remove/reorder/rename/skip).
-- Step identity remains UUID so deep links (`?step=<uuid>`) keep working.
-- Image upload goes through a signed-URL flow to keep the service role out of the client.
+**Step 1 — Production Order**
+- Read-only header: PO#(auto), Design Code + Name, Customer.
+- Supervisor (optional).
+- **Raw Material Allocation** table: pick fabric material → list its `available` bundles (Bundle#, Available Qty, Layer Length, Width) with checkbox multi-select.
+- **Production Summary** card: Required / Allocated / Balance / Max Pieces / Applied Rules list.
+
+**Step 2 — Workflow Configuration**
+- Reuses existing process list (Cutting / Handwork / Embroidery / Stitching / QC) with per-process default Workstation + Supervisor selectors (persist to `production_processes.assigned_to` / preset workstation stored in `notes` JSON for now, no schema change).
+
+**Footer:** Back · Start Production.
+
+Responsive: `sm:` centered modal (max-w-2xl), `md:` wider (max-w-4xl), mobile full-screen sheet.
+
+---
+
+## 6. Migration plan
+
+1. Apply DB migration (fabric_type, rules table, bundle_id on reservations, RPC).
+2. Add API modules + calc helper.
+3. Build Settings pages.
+4. Refactor `StartProductionDialog` into the 2-step wizard component (new file `src/components/production/StartProductionWizard.tsx`).
+5. Wire wizard into `production.index.tsx`; delete old dialog.
+6. Add `fabric_type` field to Inventory create/edit forms (`src/routes/inventory.tsx`) — optional but needed for rule matching.
+
+Backward compatibility: old `start_production` RPC left in place; page switches to v2.
+
+---
+
+## 7. Files to modify / create
+
+**New**
+- `supabase` migration (schema + RPC + grants + RLS)
+- `src/lib/api/reduction-rules.ts`
+- `src/lib/production-calc.ts`
+- `src/components/production/StartProductionWizard.tsx`
+- `src/routes/settings.production.tsx` (index)
+- `src/routes/settings.production.reduction-rules.tsx`
+
+**Modified**
+- `src/routes/production.index.tsx` — swap dialog for wizard
+- `src/lib/api/production.ts` — add `useStartProductionV2`
+- `src/lib/api/production-reservations.ts` — accept `bundleId`
+- `src/lib/api/materials.ts` + `src/routes/inventory.tsx` — add `fabric_type` field
+- `src/routes/settings.tsx` (sidebar) — add Production section link
+- `src/integrations/supabase/types.ts` — regenerated post-migration
+
+**Untouched**
+- `production.$po.tsx`, workstations, approvals, workflow engine — no functional changes.
+
+---
+
+## 8. Guarantees
+- No hardcoded fabric types, widths, lengths or percentages anywhere.
+- Users cannot enter reduction % during production.
+- Bundle status transitions remain trigger-driven.
+- Existing components (Dialog Field, DesignImage, workstation selector) reused.

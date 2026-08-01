@@ -1,8 +1,8 @@
 import { Check, Circle, SkipForward, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import type { DesignWorkflow } from "@/lib/design-workflow";
-import { stepLabel } from "@/lib/design-workflow";
+import type { DesignWorkflow } from "@/lib/production-workflow";
+import { stepLabel } from "@/lib/production-workflow";
 import { getOperation } from "@/lib/operations";
 
 export function SectionHeader({

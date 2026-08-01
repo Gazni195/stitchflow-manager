@@ -11,11 +11,24 @@ export const Route = createFileRoute("/login")({
       { name: "description", content: "Sign in to Fawri Lifestyle production." },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" && s.next.startsWith("/") && !s.next.startsWith("//")
+      ? s.next
+      : undefined,
+  }),
   component: LoginPage,
 });
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
+  const goNext = () => {
+    if (next) {
+      window.location.assign(next);
+    } else {
+      navigate({ to: "/" });
+    }
+  };
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [showPw, setShowPw] = useState(false);
   const [email, setEmail] = useState("");
@@ -25,9 +38,10 @@ function LoginPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/" });
+      if (data.session) goNext();
     });
-  }, [navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,7 +49,7 @@ function LoginPage() {
     setError(null);
     try {
       if (mode === "signup") {
-        const emailRedirectTo = `${window.location.origin}/`;
+        const emailRedirectTo = `${window.location.origin}${next ?? "/"}`;
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -46,7 +60,7 @@ function LoginPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
-      navigate({ to: "/" });
+      goNext();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -59,14 +73,14 @@ function LoginPage() {
     setError(null);
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+        redirect_uri: `${window.location.origin}${next ?? "/"}`,
       });
       if (result.error) {
         setError(result.error.message ?? "Google sign-in failed");
         return;
       }
       if (result.redirected) return;
-      navigate({ to: "/" });
+      goNext();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google sign-in failed");
     } finally {

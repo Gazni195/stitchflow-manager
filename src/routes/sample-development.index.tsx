@@ -12,8 +12,7 @@ export const Route = createFileRoute("/sample-development/")({
       { title: "Sample Development — Fawri Lifestyle" },
       {
         name: "description",
-        content:
-          "Every sample belongs to a design. Pick a design to open its sample lifecycle.",
+        content: "Every sample belongs to a design. Pick a design to open its sample lifecycle.",
       },
     ],
   }),
@@ -22,13 +21,15 @@ export const Route = createFileRoute("/sample-development/")({
 
 function SampleDevelopmentIndex() {
   useRequireAuth();
-  const { data: designs = [], isLoading } = useDesigns();
+  const { data: allDesigns = [], isLoading } = useDesigns();
+  // Samples only ever covers approved designs — a design becomes eligible
+  // the moment its Design Approval flips status away from "draft" (see
+  // useApproveDesign in lib/api/designs.ts). No separate "approved" flag or
+  // workflow: this reuses the same status column Designs already has.
+  const designs = allDesigns.filter((d) => d.status !== "draft");
 
   return (
-    <AppShell
-      title="Sample Development"
-      subtitle="Samples now live inside each design"
-    >
+    <AppShell title="Sample Development" subtitle="Samples now live inside each design">
       <div className="grid gap-5">
         <section className="rounded-3xl border border-primary/20 bg-primary-soft p-5">
           <div className="flex items-start gap-3">
@@ -38,9 +39,9 @@ function SampleDevelopmentIndex() {
             <div>
               <p className="text-sm font-bold">Every sample belongs to a design</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Open a design and tap <span className="font-semibold">Start Sample Development</span> to
-                begin its sample lifecycle. Materials, costing and approvals auto-fill from the
-                design's parts, fabrics, colors and order quantity.
+                Open a design and tap <span className="font-semibold">Start Sample Development</span> to begin its
+                sample lifecycle. Materials, costing and approvals auto-fill from the design's parts, fabrics, colors
+                and order quantity.
               </p>
             </div>
           </div>
@@ -53,7 +54,9 @@ function SampleDevelopmentIndex() {
         ) : designs.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-border bg-card p-10 text-center">
             <p className="text-sm text-muted-foreground">
-              No designs yet. Create a design to start sample development.
+              {allDesigns.length === 0
+                ? "No designs yet. Create a design to start sample development."
+                : "No approved designs yet. Approve a design from its Design Details page to start its sample lifecycle."}
             </p>
             <Link
               to="/designs"
@@ -75,15 +78,12 @@ function SampleDevelopmentIndex() {
                     <DesignImage path={d.imagePath} alt={d.name} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[11px] font-bold tracking-wider text-muted-foreground">
-                      {d.code}
-                    </p>
+                    <p className="truncate text-[11px] font-bold tracking-wider text-muted-foreground">{d.code}</p>
                     <p className="truncate text-sm font-bold">{d.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{d.customer}</p>
                     <span
                       className={
-                        "mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold " +
-                        STATUS_TONE[d.status]
+                        "mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold " + STATUS_TONE[d.status]
                       }
                     >
                       {STATUS_LABEL[d.status]}

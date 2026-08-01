@@ -11,23 +11,53 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StockRouteImport } from './routes/stock'
 import { Route as StitchingRouteImport } from './routes/stitching'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SamplesRouteImport } from './routes/samples'
 import { Route as SampleMakingRouteImport } from './routes/sample-making'
 import { Route as QcRouteImport } from './routes/qc'
 import { Route as PackingRouteImport } from './routes/packing'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as HandworkRouteImport } from './routes/handwork'
 import { Route as CuttingRouteImport } from './routes/cutting'
 import { Route as CostingRouteImport } from './routes/costing'
 import { Route as BarcodeRouteImport } from './routes/barcode'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WorkstationsIndexRouteImport } from './routes/workstations.index'
+import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SampleDevelopmentIndexRouteImport } from './routes/sample-development.index'
+import { Route as ProductionIndexRouteImport } from './routes/production.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as WorkstationsCodeRouteImport } from './routes/workstations.$code'
+import { Route as SettingsWorkstationsRouteImport } from './routes/settings.workstations'
+import { Route as SettingsUsersRouteImport } from './routes/settings.users'
+import { Route as SettingsThemeRouteImport } from './routes/settings.theme'
+import { Route as SettingsSystemRouteImport } from './routes/settings.system'
+import { Route as SettingsStructureRouteImport } from './routes/settings.structure'
+import { Route as SettingsRolesRouteImport } from './routes/settings.roles'
+import { Route as SettingsProfileRouteImport } from './routes/settings.profile'
+import { Route as SettingsPhotoRouteImport } from './routes/settings.photo'
+import { Route as SettingsPasswordRouteImport } from './routes/settings.password'
+import { Route as SettingsNotificationsRouteImport } from './routes/settings.notifications'
+import { Route as SettingsIntegrationsRouteImport } from './routes/settings.integrations'
+import { Route as SettingsCompanyRouteImport } from './routes/settings.company'
 import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
+import { Route as ProductionPoRouteImport } from './routes/production.$po'
 import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as AdminRolesRouteImport } from './routes/admin.roles'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
+import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
+import { Route as SettingsProductionIndexRouteImport } from './routes/settings.production.index'
+import { Route as SettingsProductionReductionRulesRouteImport } from './routes/settings.production.reduction-rules'
 import { Route as DesignsCodeWorkflowRouteImport } from './routes/designs.$code.workflow'
+import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
+import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 
 const StockRoute = StockRouteImport.update({
   id: '/stock',
@@ -37,6 +67,11 @@ const StockRoute = StockRouteImport.update({
 const StitchingRoute = StitchingRouteImport.update({
   id: '/stitching',
   path: '/stitching',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SamplesRoute = SamplesRouteImport.update({
@@ -59,6 +94,11 @@ const PackingRoute = PackingRouteImport.update({
   path: '/packing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MaterialsRoute = MaterialsRouteImport.update({
   id: '/materials',
   path: '/materials',
@@ -67,6 +107,11 @@ const MaterialsRoute = MaterialsRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InventoryRoute = InventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HandworkRoute = HandworkRouteImport.update({
@@ -94,14 +139,34 @@ const ApprovalsRoute = ApprovalsRouteImport.update({
   path: '/approvals',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkstationsIndexRoute = WorkstationsIndexRouteImport.update({
+  id: '/workstations/',
+  path: '/workstations/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SampleDevelopmentIndexRoute = SampleDevelopmentIndexRouteImport.update({
   id: '/sample-development/',
   path: '/sample-development/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductionIndexRoute = ProductionIndexRouteImport.update({
+  id: '/production/',
+  path: '/production/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DesignsIndexRoute = DesignsIndexRouteImport.update({
@@ -109,9 +174,84 @@ const DesignsIndexRoute = DesignsIndexRouteImport.update({
   path: '/designs/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const WorkstationsCodeRoute = WorkstationsCodeRouteImport.update({
+  id: '/workstations/$code',
+  path: '/workstations/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsWorkstationsRoute = SettingsWorkstationsRouteImport.update({
+  id: '/workstations',
+  path: '/workstations',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsUsersRoute = SettingsUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsThemeRoute = SettingsThemeRouteImport.update({
+  id: '/theme',
+  path: '/theme',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsSystemRoute = SettingsSystemRouteImport.update({
+  id: '/system',
+  path: '/system',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsStructureRoute = SettingsStructureRouteImport.update({
+  id: '/structure',
+  path: '/structure',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsRolesRoute = SettingsRolesRouteImport.update({
+  id: '/roles',
+  path: '/roles',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsProfileRoute = SettingsProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsPhotoRoute = SettingsPhotoRouteImport.update({
+  id: '/photo',
+  path: '/photo',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsPasswordRoute = SettingsPasswordRouteImport.update({
+  id: '/password',
+  path: '/password',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsNotificationsRoute = SettingsNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsIntegrationsRoute = SettingsIntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsCompanyRoute = SettingsCompanyRouteImport.update({
+  id: '/company',
+  path: '/company',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SampleDevelopmentCodeRoute = SampleDevelopmentCodeRouteImport.update({
   id: '/sample-development/$code',
   path: '/sample-development/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductionPoRoute = ProductionPoRouteImport.update({
+  id: '/production/$po',
+  path: '/production/$po',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DesignsCodeRoute = DesignsCodeRouteImport.update({
@@ -119,32 +259,106 @@ const DesignsCodeRoute = DesignsCodeRouteImport.update({
   path: '/designs/$code',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRolesRoute = AdminRolesRouteImport.update({
+  id: '/roles',
+  path: '/roles',
+  getParentRoute: () => AdminRoute,
+} as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char91DotmcpChar93ListToolsRoute =
+  Char91DotmcpChar93ListToolsRouteImport.update({
+    id: '/.mcp/list-tools',
+    path: '/.mcp/list-tools',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const SettingsProductionIndexRoute = SettingsProductionIndexRouteImport.update({
+  id: '/production/',
+  path: '/production/',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsProductionReductionRulesRoute =
+  SettingsProductionReductionRulesRouteImport.update({
+    id: '/production/reduction-rules',
+    path: '/production/reduction-rules',
+    getParentRoute: () => SettingsRoute,
+  } as any)
 const DesignsCodeWorkflowRoute = DesignsCodeWorkflowRouteImport.update({
   id: '/workflow',
   path: '/workflow',
   getParentRoute: () => DesignsCodeRoute,
 } as any)
+const Char91DotmcpChar93InvokeToolToolRoute =
+  Char91DotmcpChar93InvokeToolToolRouteImport.update({
+    id: '/.mcp/invoke-tool/$tool',
+    path: '/.mcp/invoke-tool/$tool',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/approvals': typeof ApprovalsRoute
   '/barcode': typeof BarcodeRoute
   '/costing': typeof CostingRoute
   '/cutting': typeof CuttingRoute
   '/handwork': typeof HandworkRoute
+  '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/materials': typeof MaterialsRoute
+  '/mcp': typeof McpRoute
   '/packing': typeof PackingRoute
   '/qc': typeof QcRoute
   '/sample-making': typeof SampleMakingRoute
   '/samples': typeof SamplesRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/admin/roles': typeof AdminRolesRoute
+  '/admin/users': typeof AdminUsersRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
+  '/settings/company': typeof SettingsCompanyRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/password': typeof SettingsPasswordRoute
+  '/settings/photo': typeof SettingsPhotoRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/roles': typeof SettingsRolesRoute
+  '/settings/structure': typeof SettingsStructureRoute
+  '/settings/system': typeof SettingsSystemRoute
+  '/settings/theme': typeof SettingsThemeRoute
+  '/settings/users': typeof SettingsUsersRoute
+  '/settings/workstations': typeof SettingsWorkstationsRoute
+  '/workstations/$code': typeof WorkstationsCodeRoute
+  '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
+  '/production/': typeof ProductionIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/workstations/': typeof WorkstationsIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
+  '/settings/production/reduction-rules': typeof SettingsProductionReductionRulesRoute
+  '/settings/production/': typeof SettingsProductionIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -153,64 +367,152 @@ export interface FileRoutesByTo {
   '/costing': typeof CostingRoute
   '/cutting': typeof CuttingRoute
   '/handwork': typeof HandworkRoute
+  '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/materials': typeof MaterialsRoute
+  '/mcp': typeof McpRoute
   '/packing': typeof PackingRoute
   '/qc': typeof QcRoute
   '/sample-making': typeof SampleMakingRoute
   '/samples': typeof SamplesRoute
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/admin/roles': typeof AdminRolesRoute
+  '/admin/users': typeof AdminUsersRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
+  '/settings/company': typeof SettingsCompanyRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/password': typeof SettingsPasswordRoute
+  '/settings/photo': typeof SettingsPhotoRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/roles': typeof SettingsRolesRoute
+  '/settings/structure': typeof SettingsStructureRoute
+  '/settings/system': typeof SettingsSystemRoute
+  '/settings/theme': typeof SettingsThemeRoute
+  '/settings/users': typeof SettingsUsersRoute
+  '/settings/workstations': typeof SettingsWorkstationsRoute
+  '/workstations/$code': typeof WorkstationsCodeRoute
+  '/admin': typeof AdminIndexRoute
   '/designs': typeof DesignsIndexRoute
+  '/production': typeof ProductionIndexRoute
   '/sample-development': typeof SampleDevelopmentIndexRoute
+  '/settings': typeof SettingsIndexRoute
+  '/workstations': typeof WorkstationsIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
+  '/settings/production/reduction-rules': typeof SettingsProductionReductionRulesRoute
+  '/settings/production': typeof SettingsProductionIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/approvals': typeof ApprovalsRoute
   '/barcode': typeof BarcodeRoute
   '/costing': typeof CostingRoute
   '/cutting': typeof CuttingRoute
   '/handwork': typeof HandworkRoute
+  '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/materials': typeof MaterialsRoute
+  '/mcp': typeof McpRoute
   '/packing': typeof PackingRoute
   '/qc': typeof QcRoute
   '/sample-making': typeof SampleMakingRoute
   '/samples': typeof SamplesRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/stitching': typeof StitchingRoute
   '/stock': typeof StockRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/admin/roles': typeof AdminRolesRoute
+  '/admin/users': typeof AdminUsersRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
+  '/production/$po': typeof ProductionPoRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
+  '/settings/company': typeof SettingsCompanyRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/password': typeof SettingsPasswordRoute
+  '/settings/photo': typeof SettingsPhotoRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/roles': typeof SettingsRolesRoute
+  '/settings/structure': typeof SettingsStructureRoute
+  '/settings/system': typeof SettingsSystemRoute
+  '/settings/theme': typeof SettingsThemeRoute
+  '/settings/users': typeof SettingsUsersRoute
+  '/settings/workstations': typeof SettingsWorkstationsRoute
+  '/workstations/$code': typeof WorkstationsCodeRoute
+  '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
+  '/production/': typeof ProductionIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/workstations/': typeof WorkstationsIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/designs/$code/workflow': typeof DesignsCodeWorkflowRoute
+  '/settings/production/reduction-rules': typeof SettingsProductionReductionRulesRoute
+  '/settings/production/': typeof SettingsProductionIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/approvals'
     | '/barcode'
     | '/costing'
     | '/cutting'
     | '/handwork'
+    | '/inventory'
     | '/login'
     | '/materials'
+    | '/mcp'
     | '/packing'
     | '/qc'
     | '/sample-making'
     | '/samples'
+    | '/settings'
     | '/stitching'
     | '/stock'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
+    | '/admin/roles'
+    | '/admin/users'
     | '/designs/$code'
+    | '/production/$po'
     | '/sample-development/$code'
+    | '/settings/company'
+    | '/settings/integrations'
+    | '/settings/notifications'
+    | '/settings/password'
+    | '/settings/photo'
+    | '/settings/profile'
+    | '/settings/roles'
+    | '/settings/structure'
+    | '/settings/system'
+    | '/settings/theme'
+    | '/settings/users'
+    | '/settings/workstations'
+    | '/workstations/$code'
+    | '/admin/'
     | '/designs/'
+    | '/production/'
     | '/sample-development/'
+    | '/settings/'
+    | '/workstations/'
+    | '/.lovable/oauth/consent'
+    | '/.mcp/invoke-tool/$tool'
     | '/designs/$code/workflow'
+    | '/settings/production/reduction-rules'
+    | '/settings/production/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -219,61 +521,131 @@ export interface FileRouteTypes {
     | '/costing'
     | '/cutting'
     | '/handwork'
+    | '/inventory'
     | '/login'
     | '/materials'
+    | '/mcp'
     | '/packing'
     | '/qc'
     | '/sample-making'
     | '/samples'
     | '/stitching'
     | '/stock'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
+    | '/admin/roles'
+    | '/admin/users'
     | '/designs/$code'
+    | '/production/$po'
     | '/sample-development/$code'
+    | '/settings/company'
+    | '/settings/integrations'
+    | '/settings/notifications'
+    | '/settings/password'
+    | '/settings/photo'
+    | '/settings/profile'
+    | '/settings/roles'
+    | '/settings/structure'
+    | '/settings/system'
+    | '/settings/theme'
+    | '/settings/users'
+    | '/settings/workstations'
+    | '/workstations/$code'
+    | '/admin'
     | '/designs'
+    | '/production'
     | '/sample-development'
+    | '/settings'
+    | '/workstations'
+    | '/.lovable/oauth/consent'
+    | '/.mcp/invoke-tool/$tool'
     | '/designs/$code/workflow'
+    | '/settings/production/reduction-rules'
+    | '/settings/production'
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/approvals'
     | '/barcode'
     | '/costing'
     | '/cutting'
     | '/handwork'
+    | '/inventory'
     | '/login'
     | '/materials'
+    | '/mcp'
     | '/packing'
     | '/qc'
     | '/sample-making'
     | '/samples'
+    | '/settings'
     | '/stitching'
     | '/stock'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
+    | '/admin/roles'
+    | '/admin/users'
     | '/designs/$code'
+    | '/production/$po'
     | '/sample-development/$code'
+    | '/settings/company'
+    | '/settings/integrations'
+    | '/settings/notifications'
+    | '/settings/password'
+    | '/settings/photo'
+    | '/settings/profile'
+    | '/settings/roles'
+    | '/settings/structure'
+    | '/settings/system'
+    | '/settings/theme'
+    | '/settings/users'
+    | '/settings/workstations'
+    | '/workstations/$code'
+    | '/admin/'
     | '/designs/'
+    | '/production/'
     | '/sample-development/'
+    | '/settings/'
+    | '/workstations/'
+    | '/.lovable/oauth/consent'
+    | '/.mcp/invoke-tool/$tool'
     | '/designs/$code/workflow'
+    | '/settings/production/reduction-rules'
+    | '/settings/production/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
   ApprovalsRoute: typeof ApprovalsRoute
   BarcodeRoute: typeof BarcodeRoute
   CostingRoute: typeof CostingRoute
   CuttingRoute: typeof CuttingRoute
   HandworkRoute: typeof HandworkRoute
+  InventoryRoute: typeof InventoryRoute
   LoginRoute: typeof LoginRoute
   MaterialsRoute: typeof MaterialsRoute
+  McpRoute: typeof McpRoute
   PackingRoute: typeof PackingRoute
   QcRoute: typeof QcRoute
   SampleMakingRoute: typeof SampleMakingRoute
   SamplesRoute: typeof SamplesRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   StitchingRoute: typeof StitchingRoute
   StockRoute: typeof StockRoute
+  Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
+  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   DesignsCodeRoute: typeof DesignsCodeRouteWithChildren
+  ProductionPoRoute: typeof ProductionPoRoute
   SampleDevelopmentCodeRoute: typeof SampleDevelopmentCodeRoute
+  WorkstationsCodeRoute: typeof WorkstationsCodeRoute
   DesignsIndexRoute: typeof DesignsIndexRoute
+  ProductionIndexRoute: typeof ProductionIndexRoute
   SampleDevelopmentIndexRoute: typeof SampleDevelopmentIndexRoute
+  WorkstationsIndexRoute: typeof WorkstationsIndexRoute
+  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
+  Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -290,6 +662,13 @@ declare module '@tanstack/react-router' {
       path: '/stitching'
       fullPath: '/stitching'
       preLoaderRoute: typeof StitchingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/samples': {
@@ -320,6 +699,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PackingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/materials': {
       id: '/materials'
       path: '/materials'
@@ -332,6 +718,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inventory': {
+      id: '/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof InventoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/handwork': {
@@ -369,6 +762,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApprovalsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -376,11 +776,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/workstations/': {
+      id: '/workstations/'
+      path: '/workstations'
+      fullPath: '/workstations/'
+      preLoaderRoute: typeof WorkstationsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/sample-development/': {
       id: '/sample-development/'
       path: '/sample-development'
       fullPath: '/sample-development/'
       preLoaderRoute: typeof SampleDevelopmentIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/production/': {
+      id: '/production/'
+      path: '/production'
+      fullPath: '/production/'
+      preLoaderRoute: typeof ProductionIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/designs/': {
@@ -390,11 +811,116 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/workstations/$code': {
+      id: '/workstations/$code'
+      path: '/workstations/$code'
+      fullPath: '/workstations/$code'
+      preLoaderRoute: typeof WorkstationsCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/workstations': {
+      id: '/settings/workstations'
+      path: '/workstations'
+      fullPath: '/settings/workstations'
+      preLoaderRoute: typeof SettingsWorkstationsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/users': {
+      id: '/settings/users'
+      path: '/users'
+      fullPath: '/settings/users'
+      preLoaderRoute: typeof SettingsUsersRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/theme': {
+      id: '/settings/theme'
+      path: '/theme'
+      fullPath: '/settings/theme'
+      preLoaderRoute: typeof SettingsThemeRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/system': {
+      id: '/settings/system'
+      path: '/system'
+      fullPath: '/settings/system'
+      preLoaderRoute: typeof SettingsSystemRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/structure': {
+      id: '/settings/structure'
+      path: '/structure'
+      fullPath: '/settings/structure'
+      preLoaderRoute: typeof SettingsStructureRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/roles': {
+      id: '/settings/roles'
+      path: '/roles'
+      fullPath: '/settings/roles'
+      preLoaderRoute: typeof SettingsRolesRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/profile': {
+      id: '/settings/profile'
+      path: '/profile'
+      fullPath: '/settings/profile'
+      preLoaderRoute: typeof SettingsProfileRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/photo': {
+      id: '/settings/photo'
+      path: '/photo'
+      fullPath: '/settings/photo'
+      preLoaderRoute: typeof SettingsPhotoRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/password': {
+      id: '/settings/password'
+      path: '/password'
+      fullPath: '/settings/password'
+      preLoaderRoute: typeof SettingsPasswordRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/notifications': {
+      id: '/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof SettingsNotificationsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/integrations': {
+      id: '/settings/integrations'
+      path: '/integrations'
+      fullPath: '/settings/integrations'
+      preLoaderRoute: typeof SettingsIntegrationsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/company': {
+      id: '/settings/company'
+      path: '/company'
+      fullPath: '/settings/company'
+      preLoaderRoute: typeof SettingsCompanyRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/sample-development/$code': {
       id: '/sample-development/$code'
       path: '/sample-development/$code'
       fullPath: '/sample-development/$code'
       preLoaderRoute: typeof SampleDevelopmentCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/production/$po': {
+      id: '/production/$po'
+      path: '/production/$po'
+      fullPath: '/production/$po'
+      preLoaderRoute: typeof ProductionPoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/designs/$code': {
@@ -404,6 +930,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignsCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/roles': {
+      id: '/admin/roles'
+      path: '/roles'
+      fullPath: '/admin/roles'
+      preLoaderRoute: typeof AdminRolesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/list-tools': {
+      id: '/.mcp/list-tools'
+      path: '/.mcp/list-tools'
+      fullPath: '/.mcp/list-tools'
+      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/production/': {
+      id: '/settings/production/'
+      path: '/production'
+      fullPath: '/settings/production/'
+      preLoaderRoute: typeof SettingsProductionIndexRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/production/reduction-rules': {
+      id: '/settings/production/reduction-rules'
+      path: '/production/reduction-rules'
+      fullPath: '/settings/production/reduction-rules'
+      preLoaderRoute: typeof SettingsProductionReductionRulesRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/designs/$code/workflow': {
       id: '/designs/$code/workflow'
       path: '/workflow'
@@ -411,8 +979,76 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignsCodeWorkflowRouteImport
       parentRoute: typeof DesignsCodeRoute
     }
+    '/.mcp/invoke-tool/$tool': {
+      id: '/.mcp/invoke-tool/$tool'
+      path: '/.mcp/invoke-tool/$tool'
+      fullPath: '/.mcp/invoke-tool/$tool'
+      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
+
+interface AdminRouteChildren {
+  AdminRolesRoute: typeof AdminRolesRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminRolesRoute: AdminRolesRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface SettingsRouteChildren {
+  SettingsCompanyRoute: typeof SettingsCompanyRoute
+  SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute
+  SettingsNotificationsRoute: typeof SettingsNotificationsRoute
+  SettingsPasswordRoute: typeof SettingsPasswordRoute
+  SettingsPhotoRoute: typeof SettingsPhotoRoute
+  SettingsProfileRoute: typeof SettingsProfileRoute
+  SettingsRolesRoute: typeof SettingsRolesRoute
+  SettingsStructureRoute: typeof SettingsStructureRoute
+  SettingsSystemRoute: typeof SettingsSystemRoute
+  SettingsThemeRoute: typeof SettingsThemeRoute
+  SettingsUsersRoute: typeof SettingsUsersRoute
+  SettingsWorkstationsRoute: typeof SettingsWorkstationsRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+  SettingsProductionReductionRulesRoute: typeof SettingsProductionReductionRulesRoute
+  SettingsProductionIndexRoute: typeof SettingsProductionIndexRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsCompanyRoute: SettingsCompanyRoute,
+  SettingsIntegrationsRoute: SettingsIntegrationsRoute,
+  SettingsNotificationsRoute: SettingsNotificationsRoute,
+  SettingsPasswordRoute: SettingsPasswordRoute,
+  SettingsPhotoRoute: SettingsPhotoRoute,
+  SettingsProfileRoute: SettingsProfileRoute,
+  SettingsRolesRoute: SettingsRolesRoute,
+  SettingsStructureRoute: SettingsStructureRoute,
+  SettingsSystemRoute: SettingsSystemRoute,
+  SettingsThemeRoute: SettingsThemeRoute,
+  SettingsUsersRoute: SettingsUsersRoute,
+  SettingsWorkstationsRoute: SettingsWorkstationsRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+  SettingsProductionReductionRulesRoute: SettingsProductionReductionRulesRoute,
+  SettingsProductionIndexRoute: SettingsProductionIndexRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
 
 interface DesignsCodeRouteChildren {
   DesignsCodeWorkflowRoute: typeof DesignsCodeWorkflowRoute
@@ -428,23 +1064,36 @@ const DesignsCodeRouteWithChildren = DesignsCodeRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
   ApprovalsRoute: ApprovalsRoute,
   BarcodeRoute: BarcodeRoute,
   CostingRoute: CostingRoute,
   CuttingRoute: CuttingRoute,
   HandworkRoute: HandworkRoute,
+  InventoryRoute: InventoryRoute,
   LoginRoute: LoginRoute,
   MaterialsRoute: MaterialsRoute,
+  McpRoute: McpRoute,
   PackingRoute: PackingRoute,
   QcRoute: QcRoute,
   SampleMakingRoute: SampleMakingRoute,
   SamplesRoute: SamplesRoute,
+  SettingsRoute: SettingsRouteWithChildren,
   StitchingRoute: StitchingRoute,
   StockRoute: StockRoute,
+  Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
+  Char91DotwellKnownChar93OauthProtectedResourceRoute:
+    Char91DotwellKnownChar93OauthProtectedResourceRoute,
   DesignsCodeRoute: DesignsCodeRouteWithChildren,
+  ProductionPoRoute: ProductionPoRoute,
   SampleDevelopmentCodeRoute: SampleDevelopmentCodeRoute,
+  WorkstationsCodeRoute: WorkstationsCodeRoute,
   DesignsIndexRoute: DesignsIndexRoute,
+  ProductionIndexRoute: ProductionIndexRoute,
   SampleDevelopmentIndexRoute: SampleDevelopmentIndexRoute,
+  WorkstationsIndexRoute: WorkstationsIndexRoute,
+  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
+  Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

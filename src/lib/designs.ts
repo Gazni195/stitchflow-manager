@@ -1,12 +1,7 @@
 // Types + status styling for the designs domain.
 // All data lives in Supabase (see src/lib/api/designs.ts).
 
-export type DesignStatus =
-  | "draft"
-  | "sampling"
-  | "sample_approved"
-  | "in_production"
-  | "completed";
+export type DesignStatus = "draft" | "sampling" | "sample_approved" | "in_production" | "completed" | "design_rejected";
 
 export type DesignPart = {
   id: string;
@@ -39,6 +34,7 @@ export const STATUS_LABEL: Record<DesignStatus, string> = {
   sample_approved: "Sample Approved",
   in_production: "In Production",
   completed: "Completed",
+  design_rejected: "Design Rejected",
 };
 
 export const STATUS_TONE: Record<DesignStatus, string> = {
@@ -47,4 +43,5 @@ export const STATUS_TONE: Record<DesignStatus, string> = {
   sample_approved: "bg-primary-soft text-primary",
   in_production: "bg-primary/15 text-primary",
   completed: "bg-success/15 text-success",
+  design_rejected: "bg-destructive/15 text-destructive",
 };

@@ -1,0 +1,2 @@
+DROP POLICY IF EXISTS "design-images owner read" ON storage.objects;
+CREATE POLICY "design-images authenticated read" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'design-images');

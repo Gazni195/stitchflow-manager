@@ -1,0 +1,1 @@
+CREATE POLICY "operations_catalog insertable by authenticated" ON public.operations_catalog FOR INSERT TO authenticated WITH CHECK (true);

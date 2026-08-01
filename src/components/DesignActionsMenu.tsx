@@ -1,20 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  AlertTriangle,
-  ImagePlus,
-  Loader2,
-  MoreVertical,
-  Pencil,
-  Trash2,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Loader2, MoreVertical, Pencil, Trash2, X } from "lucide-react";
 import type { Design, DesignPart } from "@/lib/designs";
 import { STATUS_LABEL } from "@/lib/designs";
 import { useDeleteDesign, useDesignImageUrl, useUpdateDesign } from "@/lib/api/designs";
-import { cn } from "@/lib/utils";
-
-const CATEGORIES = ["Women's Wear", "Men's Wear", "Kids Wear", "Accessories"];
+import { Step1Fields, choiceToQuantity, quantityToChoice } from "@/components/DesignWizard";
 
 export function DesignActionsMenu({ design }: { design: Design }) {
   const [open, setOpen] = useState(false);
@@ -35,44 +25,44 @@ export function DesignActionsMenu({ design }: { design: Design }) {
 
   return (
     <>
-      <div className="flex items-center gap-2">
+      {/* Single entry point now — no more standalone Edit button duplicating
+          the "Edit design" item already in this menu. */}
+      <div ref={wrapRef} className="relative">
         <button
-          onClick={() => setEdit(true)}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold hover:bg-accent"
+          aria-label="More actions"
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
         >
-          <Pencil className="h-4 w-4" /> Edit
+          <MoreVertical className="h-5 w-5" />
         </button>
-        <div ref={wrapRef} className="relative">
-          <button
-            aria-label="More actions"
-            onClick={() => setOpen((v) => !v)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
-            <MoreVertical className="h-5 w-5" />
-          </button>
-          {open && (
-            <div className="absolute right-0 top-12 z-40 w-60 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
-              <button
-                onClick={() => { setOpen(false); setEdit(true); }}
-                className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-semibold hover:bg-accent"
-              >
-                <Pencil className="h-4 w-4 text-primary" /> Edit design
-              </button>
-              <button
-                disabled={!canDelete}
-                onClick={() => { setOpen(false); setConfirm(true); }}
-                className="flex w-full items-center gap-2.5 border-t border-border px-4 py-3 text-left text-sm font-semibold text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent"
-              >
-                <Trash2 className="h-4 w-4" /> Delete design
-              </button>
-              {!canDelete && (
-                <p className="border-t border-border bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground">
-                  Deletion is only available while the design is in Draft (currently {STATUS_LABEL[design.status]}).
-                </p>
-              )}
-            </div>
-          )}
-        </div>
+        {open && (
+          <div className="absolute right-0 top-12 z-40 w-60 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+            <button
+              onClick={() => {
+                setOpen(false);
+                setEdit(true);
+              }}
+              className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-semibold hover:bg-accent"
+            >
+              <Pencil className="h-4 w-4 text-primary" /> Edit design
+            </button>
+            <button
+              disabled={!canDelete}
+              onClick={() => {
+                setOpen(false);
+                setConfirm(true);
+              }}
+              className="flex w-full items-center gap-2.5 border-t border-border px-4 py-3 text-left text-sm font-semibold text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent"
+            >
+              <Trash2 className="h-4 w-4" /> Delete design
+            </button>
+            {!canDelete && (
+              <p className="border-t border-border bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground">
+                Deletion is only available while the design is in Draft (currently {STATUS_LABEL[design.status]}).
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {edit && <EditDesignDialog design={design} onClose={() => setEdit(false)} />}
@@ -81,26 +71,32 @@ export function DesignActionsMenu({ design }: { design: Design }) {
   );
 }
 
-function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => void }) {
+// Exported so other approval/status-scoped menus (e.g. the Design Approval
+// card on the Design Details page) can trigger the exact same edit flow
+// instead of building a second one.
+export function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => void }) {
   const update = useUpdateDesign();
   const { data: currentImageUrl } = useDesignImageUrl(design.imagePath);
   const [error, setError] = useState<string | null>(null);
   const [imageAction, setImageAction] = useState<"keep" | "clear" | File>("keep");
   const [preview, setPreview] = useState<string | null>(null);
 
+  // category/color are no longer edited here — they carry through
+  // unchanged from the existing design, matching how New Design treats
+  // category (silent) and color (per-part only, no top-level field).
   const [d, setD] = useState({
     code: design.code,
     name: design.name,
     customer: design.customer,
-    category: design.category || CATEGORIES[0],
-    color: design.color,
-    orderQuantity: design.orderQuantity,
+    ...quantityToChoice(design.orderQuantity),
     notes: design.notes ?? "",
     parts: design.parts.map((p) => ({ ...p })) as DesignPart[],
   });
 
   useEffect(() => {
-    return () => { if (preview) URL.revokeObjectURL(preview); };
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
   }, [preview]);
 
   function pickImage(f: File | null) {
@@ -118,17 +114,8 @@ function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => 
     setD({ ...d, parts: d.parts.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
   }
 
-  const partsValid = d.parts.every(
-    (p) => p.name.trim() && p.fabric.trim() && p.color.trim(),
-  );
-  const valid =
-    d.code.trim() &&
-    d.name.trim() &&
-    d.customer.trim() &&
-    d.category.trim() &&
-    d.color.trim() &&
-    d.orderQuantity > 0 &&
-    partsValid;
+  const partsValid = d.parts.every((p) => p.name.trim() && p.fabric.trim() && p.color.trim());
+  const valid = d.code.trim().length > 0 && partsValid;
 
   async function submit() {
     setError(null);
@@ -138,7 +125,7 @@ function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => 
         code: d.code.trim(),
         name: d.name.trim(),
         customer: d.customer.trim(),
-        category: d.category.trim(),
+        category: design.category,
         productType: design.productType,
         parts: d.parts.map((p) => ({
           id: p.id,
@@ -146,8 +133,8 @@ function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => 
           fabric: p.fabric.trim(),
           color: p.color.trim(),
         })),
-        color: d.color.trim(),
-        orderQuantity: d.orderQuantity,
+        color: design.color,
+        orderQuantity: choiceToQuantity(d.quantityChoice, d.customQuantity),
         notes: d.notes,
         image: imageAction,
         currentImagePath: design.imagePath,
@@ -158,7 +145,7 @@ function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => 
     }
   }
 
-  const shownImage = preview ?? (imageAction === "clear" ? null : currentImageUrl ?? null);
+  const shownImage = preview ?? (imageAction === "clear" ? null : (currentImageUrl ?? null));
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/40 p-0 sm:items-center sm:p-4">
@@ -179,71 +166,18 @@ function EditDesignDialog({ design, onClose }: { design: Design; onClose: () => 
 
         <div className="max-h-[70vh] overflow-y-auto px-5 py-5">
           <div className="grid gap-4">
-            <div>
-              <Label>Design Image</Label>
-              <label className="mt-1.5 grid cursor-pointer place-items-center rounded-3xl border-2 border-dashed border-border bg-muted/40 py-6 hover:border-primary hover:bg-primary-soft">
-                {shownImage ? (
-                  <img src={shownImage} alt="Design" className="max-h-40 rounded-2xl object-contain" />
-                ) : (
-                  <div className="text-center">
-                    <ImagePlus className="mx-auto h-8 w-8 text-primary" />
-                    <p className="mt-1 text-sm font-semibold">Tap to upload image</p>
-                    <p className="text-[11px] text-muted-foreground">PNG or JPG</p>
-                  </div>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => pickImage(e.target.files?.[0] ?? null)}
-                />
-              </label>
-              {shownImage && (
-                <button
-                  onClick={() => pickImage(null)}
-                  className="mt-2 text-xs font-semibold text-muted-foreground hover:text-destructive"
-                >
-                  Remove image
-                </button>
-              )}
-            </div>
-
-            <Text label="Design Name" value={d.name} onChange={(v) => setD({ ...d, name: v })} />
-            <Text label="Customer" value={d.customer} onChange={(v) => setD({ ...d, customer: v })} />
-
-            <div>
-              <Label>Category</Label>
-              <div className="mt-1.5 flex flex-wrap gap-2">
-                {CATEGORIES.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setD({ ...d, category: c })}
-                    className={cn(
-                      "rounded-xl border px-3 py-2 text-sm font-semibold",
-                      d.category === c
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-card hover:border-primary/40",
-                    )}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <Text label="Color" value={d.color} onChange={(v) => setD({ ...d, color: v })} />
-
-            <div>
-              <Label>Order Quantity</Label>
-              <input
-                type="number"
-                min={1}
-                value={d.orderQuantity || ""}
-                onChange={(e) => setD({ ...d, orderQuantity: Math.max(0, Number(e.target.value) || 0) })}
-                className="mt-1.5 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:border-primary"
-              />
-            </div>
+            <Step1Fields
+              value={{
+                code: d.code,
+                name: d.name,
+                customer: d.customer,
+                quantityChoice: d.quantityChoice,
+                customQuantity: d.customQuantity,
+              }}
+              onChange={(patch) => setD((prev) => ({ ...prev, ...patch }))}
+              imagePreviewUrl={shownImage}
+              onPickImage={pickImage}
+            />
 
             <div>
               <Label>Fabric (per garment part)</Label>
@@ -370,19 +304,6 @@ function DeleteConfirmDialog({ design, onClose }: { design: Design; onClose: () 
 
 function Label({ children }: { children: React.ReactNode }) {
   return <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{children}</label>;
-}
-
-function Text({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <div>
-      <Label>{label}</Label>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1.5 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold outline-none focus:border-primary"
-      />
-    </div>
-  );
 }
 
 function PartField({
