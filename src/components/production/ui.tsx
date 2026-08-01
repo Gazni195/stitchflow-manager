@@ -1,9 +1,8 @@
 import { Check, Circle, SkipForward, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import type { DesignWorkflow } from "@/lib/design-workflow";
-import { stepLabel } from "@/lib/design-workflow";
-import { getOperation } from "@/lib/operations";
+import { stepLabel, type WorkflowStep } from "@/lib/api/workflows";
+import type { CatalogOperation } from "@/lib/api/operations";
 
 export function SectionHeader({
   icon,
@@ -276,12 +275,13 @@ export function ProductionTimeline({
 }
 
 export function buildTimelineFromWorkflow(
-  wf: DesignWorkflow,
+  steps: WorkflowStep[],
+  catalog: CatalogOperation[],
   currentStepId?: string,
 ): TimelineStep[] {
-  return wf.steps.map((s) => {
+  return steps.map((s) => {
     const isCurrent = currentStepId
-      ? s.stepId === currentStepId
+      ? s.id === currentStepId
       : s.status === "in-progress";
     const state: TimelineStep["state"] = isCurrent
       ? "current"
@@ -290,15 +290,14 @@ export function buildTimelineFromWorkflow(
         : s.status === "skipped"
           ? "skipped"
           : "pending";
+    const op = catalog.find((o) => o.id === s.operationId);
     return {
-      key: s.stepId,
-      label: `${s.sequence}. ${stepLabel(s, wf)}`,
+      key: s.id,
+      label: `${s.sequence}. ${stepLabel(s, steps, op?.name ?? s.operationId)}`,
       state,
     };
   });
 }
-// Keep `getOperation` importable for consumers even if unused here.
-void getOperation;
 
 export function OrderPicker<T extends { code: string; customer: string; quantity: number; progress: number }>({
   orders,
