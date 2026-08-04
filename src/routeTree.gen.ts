@@ -30,6 +30,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as WorkstationsIndexRouteImport } from './routes/workstations.index'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SampleDevelopmentIndexRouteImport } from './routes/sample-development.index'
+import { Route as ReportsIndexRouteImport } from './routes/reports.index'
 import { Route as ProductionIndexRouteImport } from './routes/production.index'
 import { Route as DesignsIndexRouteImport } from './routes/designs.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
@@ -47,6 +48,7 @@ import { Route as SettingsNotificationsRouteImport } from './routes/settings.not
 import { Route as SettingsIntegrationsRouteImport } from './routes/settings.integrations'
 import { Route as SettingsCompanyRouteImport } from './routes/settings.company'
 import { Route as SampleDevelopmentCodeRouteImport } from './routes/sample-development.$code'
+import { Route as ReportsReportIdRouteImport } from './routes/reports.$reportId'
 import { Route as ProductionPoRouteImport } from './routes/production.$po'
 import { Route as DesignsCodeRouteImport } from './routes/designs.$code'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
@@ -164,6 +166,11 @@ const SampleDevelopmentIndexRoute = SampleDevelopmentIndexRouteImport.update({
   path: '/sample-development/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReportsIndexRoute = ReportsIndexRouteImport.update({
+  id: '/reports/',
+  path: '/reports/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProductionIndexRoute = ProductionIndexRouteImport.update({
   id: '/production/',
   path: '/production/',
@@ -247,6 +254,11 @@ const SettingsCompanyRoute = SettingsCompanyRouteImport.update({
 const SampleDevelopmentCodeRoute = SampleDevelopmentCodeRouteImport.update({
   id: '/sample-development/$code',
   path: '/sample-development/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsReportIdRoute = ReportsReportIdRouteImport.update({
+  id: '/reports/$reportId',
+  path: '/reports/$reportId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProductionPoRoute = ProductionPoRouteImport.update({
@@ -334,6 +346,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
   '/production/$po': typeof ProductionPoRoute
+  '/reports/$reportId': typeof ReportsReportIdRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/settings/company': typeof SettingsCompanyRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
@@ -351,6 +364,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
   '/production/': typeof ProductionIndexRoute
+  '/reports/': typeof ReportsIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/workstations/': typeof WorkstationsIndexRoute
@@ -383,6 +397,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
   '/production/$po': typeof ProductionPoRoute
+  '/reports/$reportId': typeof ReportsReportIdRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/settings/company': typeof SettingsCompanyRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
@@ -400,6 +415,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/designs': typeof DesignsIndexRoute
   '/production': typeof ProductionIndexRoute
+  '/reports': typeof ReportsIndexRoute
   '/sample-development': typeof SampleDevelopmentIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/workstations': typeof WorkstationsIndexRoute
@@ -435,6 +451,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/designs/$code': typeof DesignsCodeRouteWithChildren
   '/production/$po': typeof ProductionPoRoute
+  '/reports/$reportId': typeof ReportsReportIdRoute
   '/sample-development/$code': typeof SampleDevelopmentCodeRoute
   '/settings/company': typeof SettingsCompanyRoute
   '/settings/integrations': typeof SettingsIntegrationsRoute
@@ -452,6 +469,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/designs/': typeof DesignsIndexRoute
   '/production/': typeof ProductionIndexRoute
+  '/reports/': typeof ReportsIndexRoute
   '/sample-development/': typeof SampleDevelopmentIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/workstations/': typeof WorkstationsIndexRoute
@@ -488,6 +506,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/designs/$code'
     | '/production/$po'
+    | '/reports/$reportId'
     | '/sample-development/$code'
     | '/settings/company'
     | '/settings/integrations'
@@ -505,6 +524,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/designs/'
     | '/production/'
+    | '/reports/'
     | '/sample-development/'
     | '/settings/'
     | '/workstations/'
@@ -537,6 +557,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/designs/$code'
     | '/production/$po'
+    | '/reports/$reportId'
     | '/sample-development/$code'
     | '/settings/company'
     | '/settings/integrations'
@@ -554,6 +575,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/designs'
     | '/production'
+    | '/reports'
     | '/sample-development'
     | '/settings'
     | '/workstations'
@@ -588,6 +610,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/designs/$code'
     | '/production/$po'
+    | '/reports/$reportId'
     | '/sample-development/$code'
     | '/settings/company'
     | '/settings/integrations'
@@ -605,6 +628,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/designs/'
     | '/production/'
+    | '/reports/'
     | '/sample-development/'
     | '/settings/'
     | '/workstations/'
@@ -638,10 +662,12 @@ export interface RootRouteChildren {
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   DesignsCodeRoute: typeof DesignsCodeRouteWithChildren
   ProductionPoRoute: typeof ProductionPoRoute
+  ReportsReportIdRoute: typeof ReportsReportIdRoute
   SampleDevelopmentCodeRoute: typeof SampleDevelopmentCodeRoute
   WorkstationsCodeRoute: typeof WorkstationsCodeRoute
   DesignsIndexRoute: typeof DesignsIndexRoute
   ProductionIndexRoute: typeof ProductionIndexRoute
+  ReportsIndexRoute: typeof ReportsIndexRoute
   SampleDevelopmentIndexRoute: typeof SampleDevelopmentIndexRoute
   WorkstationsIndexRoute: typeof WorkstationsIndexRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
@@ -797,6 +823,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SampleDevelopmentIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reports/': {
+      id: '/reports/'
+      path: '/reports'
+      fullPath: '/reports/'
+      preLoaderRoute: typeof ReportsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/production/': {
       id: '/production/'
       path: '/production'
@@ -914,6 +947,13 @@ declare module '@tanstack/react-router' {
       path: '/sample-development/$code'
       fullPath: '/sample-development/$code'
       preLoaderRoute: typeof SampleDevelopmentCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports/$reportId': {
+      id: '/reports/$reportId'
+      path: '/reports/$reportId'
+      fullPath: '/reports/$reportId'
+      preLoaderRoute: typeof ReportsReportIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/production/$po': {
@@ -1086,10 +1126,12 @@ const rootRouteChildren: RootRouteChildren = {
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   DesignsCodeRoute: DesignsCodeRouteWithChildren,
   ProductionPoRoute: ProductionPoRoute,
+  ReportsReportIdRoute: ReportsReportIdRoute,
   SampleDevelopmentCodeRoute: SampleDevelopmentCodeRoute,
   WorkstationsCodeRoute: WorkstationsCodeRoute,
   DesignsIndexRoute: DesignsIndexRoute,
   ProductionIndexRoute: ProductionIndexRoute,
+  ReportsIndexRoute: ReportsIndexRoute,
   SampleDevelopmentIndexRoute: SampleDevelopmentIndexRoute,
   WorkstationsIndexRoute: WorkstationsIndexRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,

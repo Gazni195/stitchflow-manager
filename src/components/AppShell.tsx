@@ -12,6 +12,7 @@ import {
   X,
   PlayCircle,
   ShieldCheck,
+  BarChart3,
   Settings as SettingsIcon,
   Plus,
   MoreHorizontal,
@@ -36,6 +37,7 @@ const PRIMARY_NAV = [
   { to: "/inventory", label: "Inventory", icon: Package },
   { to: "/workstations", label: "Workstations", icon: Factory },
   { to: "/stock", label: "Stock", icon: Warehouse },
+  { to: "/reports", label: "Reports", icon: BarChart3 },
 ] as const;
 
 const ADMIN_NAV = { to: "/admin", label: "Admin", icon: ShieldCheck } as const;
@@ -55,14 +57,13 @@ const BOTTOM_NAV_ITEMS = [
 // Everything that used to be a bottom-nav icon but no longer fits, plus
 // Settings — surfaced from the new "More" sheet instead. Admin is added
 // conditionally alongside this list (permission-gated, same as the
-// desktop sidebar). Reports has no route yet, so it's left out entirely
-// rather than linking somewhere that doesn't exist — add it here once
-// a Reports page exists.
+// desktop sidebar).
 const MORE_MENU_ITEMS = [
   { to: "/designs", label: "Designs", icon: Shirt },
   { to: "/inventory", label: "Inventory", icon: Package },
   { to: "/workstations", label: "Workstations", icon: Factory },
   { to: "/stock", label: "Stock", icon: Warehouse },
+  { to: "/reports", label: "Reports", icon: BarChart3 },
 ] as const;
 
 export function AppShell({
@@ -323,7 +324,6 @@ export function AppShell({
                   </li>
                 );
               })}
-              {/* Reports has no route yet — add it here once one exists. */}
               <li>
                 <Link
                   to={SETTINGS_NAV.to}
