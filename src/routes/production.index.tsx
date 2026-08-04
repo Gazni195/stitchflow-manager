@@ -1,6 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { ArrowRight, CheckCircle2, Factory, Loader2, PlayCircle, Clock } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Factory,
+  Loader2,
+  PlayCircle,
+  Clock,
+  RefreshCw,
+  Search,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
 import { useRequireAuth } from "@/hooks/use-auth";
@@ -27,40 +37,101 @@ function ProductionHome() {
   const running = useProductionOrders("running");
   const completed = useProductionOrders("completed");
   const [startFor, setStartFor] = useState<PendingDesign | null>(null);
+  const [search, setSearch] = useState("");
+
+  const q = search.trim().toLowerCase();
+  const filteredPending = useMemo(
+    () =>
+      q
+        ? (pending.data ?? []).filter(
+            (d) => d.code.toLowerCase().includes(q) || d.name.toLowerCase().includes(q) || d.customer.toLowerCase().includes(q),
+          )
+        : (pending.data ?? []),
+    [pending.data, q],
+  );
+  const matchesOrder = (o: ProductionOrder) =>
+    o.code.toLowerCase().includes(q) ||
+    (o.designCode ?? "").toLowerCase().includes(q) ||
+    (o.designName ?? "").toLowerCase().includes(q) ||
+    (o.customer ?? "").toLowerCase().includes(q);
+  const filteredRunning = useMemo(
+    () => (q ? (running.data ?? []).filter(matchesOrder) : (running.data ?? [])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [running.data, q],
+  );
+  const filteredCompleted = useMemo(
+    () => (q ? (completed.data ?? []).filter(matchesOrder) : (completed.data ?? [])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [completed.data, q],
+  );
+
+  const isFetching = pending.isFetching || running.isFetching || completed.isFetching;
+  function refreshAll() {
+    pending.refetch();
+    running.refetch();
+    completed.refetch();
+  }
 
   return (
     <AppShell title="Production" subtitle="Pending, Running & Completed orders">
-      <div className="grid gap-8">
-        <Section
-          title="Pending Production"
-          count={pending.data?.length ?? 0}
-          empty="No approved samples awaiting production."
-          loading={pending.isLoading}
-        >
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {(pending.data ?? []).map((d) => (
-              <PendingCard key={d.id} d={d} onStart={() => setStartFor(d)} />
-            ))}
-          </ul>
-        </Section>
+      <div className="grid gap-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="relative min-w-[220px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by PO, design, or customer…"
+              className="w-full rounded-xl border border-border bg-background py-2.5 pl-9 pr-3 text-sm"
+            />
+          </label>
+          <button
+            onClick={refreshAll}
+            title="Refresh"
+            className="rounded-xl border border-border bg-background p-2.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <RefreshCw className={"h-4 w-4 " + (isFetching ? "animate-spin" : "")} />
+          </button>
+        </div>
 
-        <Section
-          title="Running Production"
-          count={running.data?.length ?? 0}
-          empty="No production orders are running."
-          loading={running.isLoading}
-        >
-          <OrdersTable orders={running.data ?? []} />
-        </Section>
+        <div className="grid gap-8">
+          <Section
+            title="Pending Production"
+            count={filteredPending.length}
+            empty={q ? "No pending designs match your search." : "No approved samples awaiting production."}
+            loading={pending.isLoading}
+            error={pending.error}
+            onRetry={() => pending.refetch()}
+          >
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredPending.map((d) => (
+                <PendingCard key={d.id} d={d} onStart={() => setStartFor(d)} />
+              ))}
+            </ul>
+          </Section>
 
-        <Section
-          title="Completed Production"
-          count={completed.data?.length ?? 0}
-          empty="No completed production orders yet."
-          loading={completed.isLoading}
-        >
-          <OrdersTable orders={completed.data ?? []} completed />
-        </Section>
+          <Section
+            title="Running Production"
+            count={filteredRunning.length}
+            empty={q ? "No running orders match your search." : "No production orders are running."}
+            loading={running.isLoading}
+            error={running.error}
+            onRetry={() => running.refetch()}
+          >
+            <OrdersTable orders={filteredRunning} />
+          </Section>
+
+          <Section
+            title="Completed Production"
+            count={filteredCompleted.length}
+            empty={q ? "No completed orders match your search." : "No completed production orders yet."}
+            loading={completed.isLoading}
+            error={completed.error}
+            onRetry={() => completed.refetch()}
+          >
+            <OrdersTable orders={filteredCompleted} completed />
+          </Section>
+        </div>
       </div>
 
       {startFor && <StartProductionWizard design={startFor} onClose={() => setStartFor(null)} />}
@@ -73,12 +144,16 @@ function Section({
   count,
   empty,
   loading,
+  error,
+  onRetry,
   children,
 }: {
   title: string;
   count: number;
   empty: string;
   loading: boolean;
+  error?: unknown;
+  onRetry?: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -90,6 +165,21 @@ function Section({
       {loading ? (
         <div className="grid place-items-center rounded-2xl border border-border bg-card p-10">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : error ? (
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-8 text-center">
+          <AlertTriangle className="mx-auto h-6 w-6 text-destructive" />
+          <p className="mt-2 text-sm text-destructive">
+            Failed to load. {error instanceof Error ? error.message : "Please try again."}
+          </p>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2 text-xs font-bold hover:bg-accent"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Retry
+            </button>
+          )}
         </div>
       ) : count === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
@@ -166,7 +256,10 @@ function OrdersTable({ orders, completed = false }: { orders: ProductionOrder[];
           </thead>
           <tbody className="divide-y divide-border">
             {orders.map((o) => {
-              const pct = computeProgress(o.processes);
+              // A completed order is always 100% regardless of what the
+              // (unused-by-the-live-workflow) production_processes.status
+              // rows happen to say.
+              const pct = o.status === "completed" ? 100 : computeProgress(o.processes);
               const stage = currentStage(o.processes);
               return (
                 <tr key={o.id} className="hover:bg-accent/30">

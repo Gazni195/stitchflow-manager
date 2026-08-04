@@ -2,8 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Loader2, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useAssignUserRole, useCan, useUsersWithRoles } from "@/lib/rbac/use-rbac";
-import { ALL_ROLES, ROLE_LABELS, type AppRole } from "@/lib/rbac/roles";
+import { useAssignUserRole, useCan, useRoles, useUsersWithRoles } from "@/lib/rbac/use-rbac";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/users")({
@@ -13,15 +12,18 @@ export const Route = createFileRoute("/admin/users")({
 function UsersPage() {
   const canManage = useCan("users.edit");
   const users = useUsersWithRoles();
+  const roles = useRoles();
   const assign = useAssignUserRole();
   const [q, setQ] = useState("");
+
+  const activeRoles = useMemo(() => (roles.data ?? []).filter((r) => r.isActive), [roles.data]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return (users.data ?? []).filter((u) => !term || u.email.toLowerCase().includes(term));
   }, [users.data, q]);
 
-  if (users.isLoading) {
+  if (users.isLoading || roles.isLoading) {
     return (
       <div className="grid place-items-center py-16 text-muted-foreground">
         <Loader2 className="h-6 w-6 animate-spin" />
@@ -60,28 +62,28 @@ function UsersPage() {
                 )}
                 {u.roles.map((r) => (
                   <span
-                    key={r}
+                    key={r.id}
                     className="rounded-full bg-primary-soft px-2.5 py-1 text-[11px] font-semibold text-accent-foreground"
                   >
-                    {ROLE_LABELS[r]}
+                    {r.label}
                   </span>
                 ))}
               </div>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-              {ALL_ROLES.map((r) => {
-                const on = u.roles.includes(r);
+              {activeRoles.map((r) => {
+                const on = u.roles.some((ur) => ur.id === r.id);
                 return (
                   <label
-                    key={r}
+                    key={r.id}
                     className={cn(
                       "flex items-center justify-between gap-2 rounded-xl border border-border px-3 py-2 text-xs font-medium transition",
                       on ? "bg-primary-soft/40" : "bg-background",
                       !canManage.allowed && "opacity-60",
                     )}
                   >
-                    <span>{ROLE_LABELS[r]}</span>
+                    <span>{r.label}</span>
                     <input
                       type="checkbox"
                       className="h-4 w-4 accent-primary"
@@ -89,7 +91,7 @@ function UsersPage() {
                       disabled={!canManage.allowed || assign.isPending}
                       onChange={(e) => {
                         assign.mutate(
-                          { userId: u.user_id, role: r as AppRole, enabled: e.target.checked },
+                          { userId: u.user_id, roleId: r.id, enabled: e.target.checked },
                           {
                             onError: (err) =>
                               toast.error(err instanceof Error ? err.message : "Failed"),

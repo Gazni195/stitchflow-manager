@@ -77,15 +77,30 @@ function WorkstationRow({ type }: { type: WorkstationType }) {
             {ids.length} workstation{ids.length === 1 ? "" : "s"}
           </p>
         </div>
-        <Button size="sm" onClick={onSave} disabled={!dirty || !valid || update.isPending}>
-          {update.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <>
-              <Save className="mr-1.5 h-4 w-4" /> Save
-            </>
+        <div className="flex items-center gap-2">
+          {dirty && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setPrefix(type.prefix);
+                setCount(type.count);
+              }}
+              disabled={update.isPending}
+            >
+              Cancel
+            </Button>
           )}
-        </Button>
+          <Button size="sm" onClick={onSave} disabled={!dirty || !valid || update.isPending}>
+            {update.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Save className="mr-1.5 h-4 w-4" /> Save
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-[120px_160px]">

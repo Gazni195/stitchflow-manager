@@ -32,7 +32,11 @@ export const ACTIVITY_OP_NAME: Record<ActivityOperationId, string> = Object.from
   ACTIVITY_OPERATIONS.map((o) => [o.id, o.name]),
 ) as Record<ActivityOperationId, string>;
 
-export type ActivityStatus = "running" | "completed" | "cancelled";
+// pending  = assigned to a workstation/employee, operator hasn't started it
+// running  = operator's clock is ticking
+// paused   = operator paused mid-work; elapsed/effective time stop accruing
+// completed / cancelled = terminal
+export type ActivityStatus = "pending" | "running" | "paused" | "completed" | "cancelled";
 
 export type SizeCode = "S" | "M" | "L" | "XL" | "XXL" | "XXXL" | "4XL" | "5XL";
 export const STANDARD_SIZES: SizeCode[] = ["M", "L", "XL", "XXL"];
@@ -56,8 +60,15 @@ export type ProductionActivity = {
   returnedQty: number | null;
   notes: string | null;
   status: ActivityStatus;
-  startedAt: string;
+  /** When a supervisor assigned this job to a workstation/employee. Always set. */
+  assignedAt: string;
+  /** When the operator actually started the clock. Null while status='pending'. */
+  startedAt: string | null;
   completedAt: string | null;
+  /** When the current pause began. Null unless status='paused'. */
+  pausedAt: string | null;
+  /** Total accumulated pause time (closed intervals only — see pausedAt for any open one). */
+  pausedSeconds: number;
   elapsedSeconds: number | null;
   effectiveSeconds: number | null;
   sizeBreakdown: SizeBreakdown | null;
@@ -66,7 +77,10 @@ export type ProductionActivity = {
   varianceReason: string | null;
 };
 
-type DbRow = {
+// Exported so lib/api/workstations.ts (which queries this same table
+// across production orders for the Workstation Queue) can share the row
+// shape and mapActivityRow instead of duplicating them.
+export type DbActivityRow = {
   id: string;
   production_order_id: string;
   workstation_id: string | null;
@@ -76,8 +90,11 @@ type DbRow = {
   returned_qty: number | null;
   notes: string | null;
   status: ActivityStatus;
-  started_at: string;
+  assigned_at: string;
+  started_at: string | null;
   completed_at: string | null;
+  paused_at: string | null;
+  paused_seconds: number;
   elapsed_seconds: number | null;
   effective_seconds: number | null;
   size_breakdown: SizeBreakdown | null;
@@ -86,7 +103,15 @@ type DbRow = {
   variance_reason: string | null;
 };
 
-function mapRow(r: DbRow): ProductionActivity {
+export const ACTIVITY_COLUMNS =
+  "id, production_order_id, workstation_id, operation_id, assigned_to, issued_qty, returned_qty, notes, status, " +
+  "assigned_at, started_at, completed_at, paused_at, paused_seconds, elapsed_seconds, effective_seconds, " +
+  "size_breakdown, issued_sizes, completed_sizes, variance_reason";
+
+// Exported so the Workstation Queue page (lib/api/workstations.ts), which
+// reads this same table across production orders, maps rows the same way
+// instead of duplicating the shape.
+export function mapActivityRow(r: DbActivityRow): ProductionActivity {
   return {
     id: r.id,
     productionOrderId: r.production_order_id,
@@ -97,8 +122,11 @@ function mapRow(r: DbRow): ProductionActivity {
     returnedQty: r.returned_qty,
     notes: r.notes,
     status: r.status,
+    assignedAt: r.assigned_at,
     startedAt: r.started_at,
     completedAt: r.completed_at,
+    pausedAt: r.paused_at,
+    pausedSeconds: r.paused_seconds ?? 0,
     elapsedSeconds: r.elapsed_seconds,
     effectiveSeconds: r.effective_seconds,
     sizeBreakdown: r.size_breakdown ?? null,
@@ -168,16 +196,26 @@ export function useProductionActivities(productionOrderId: string | undefined) {
     queryFn: async (): Promise<ProductionActivity[]> => {
       const { data, error } = await supabase
         .from("production_activities")
-        .select("*")
+        .select(ACTIVITY_COLUMNS)
         .eq("production_order_id", productionOrderId!)
-        .order("started_at", { ascending: false });
+        .order("assigned_at", { ascending: false });
       if (error) throw error;
-      return (data as unknown as DbRow[]).map(mapRow);
+      return (data as unknown as DbActivityRow[]).map(mapActivityRow);
     },
   });
 }
 
-export function useStartActivity(productionOrderId: string) {
+function invalidateActivity(qc: ReturnType<typeof useQueryClient>, productionOrderId: string) {
+  qc.invalidateQueries({ queryKey: ["production-activities", productionOrderId] });
+  qc.invalidateQueries({ queryKey: ["workstation-cards"] });
+  qc.invalidateQueries({ predicate: (query) => query.queryKey[0] === "workstation-history" });
+}
+
+// Books a job onto a workstation/employee without starting the clock —
+// STEP 1 (Assign) of the Workstation Queue flow. Creates a 'pending' row;
+// the operator promotes it to 'running' from the Workstation Queue page
+// (useBeginActivity below).
+export function useAssignActivity(productionOrderId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (v: {
@@ -186,10 +224,6 @@ export function useStartActivity(productionOrderId: string) {
       issuedQty: number;
       issuedSizes?: SizeBreakdown | null;
       notes?: string;
-      /** Workstation ID (e.g. "T3") doing this work — see
-       *  WORKSTATION_TYPE_OPERATION in lib/api/workstations.ts for which
-       *  operations map to a workstation type. null for operations with no
-       *  workstation concept (printing, washing, qc, packing). */
       workstationId?: string | null;
     }) => {
       const { data: userRes } = await supabase.auth.getUser();
@@ -201,21 +235,108 @@ export function useStartActivity(productionOrderId: string) {
         issued_qty: v.issuedQty,
         issued_sizes: v.issuedSizes ?? null,
         notes: v.notes?.trim() || null,
-        status: "running",
-        started_at: new Date().toISOString(),
+        status: "pending",
+        assigned_at: new Date().toISOString(),
+        started_at: null,
         created_by: userRes.user?.id ?? null,
       });
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["production-activities", productionOrderId] });
-      qc.invalidateQueries({ queryKey: ["workstation-cards"] });
-      qc.invalidateQueries({ predicate: (query) => query.queryKey[0] === "workstation-history" });
-    },
+    onSuccess: () => invalidateActivity(qc, productionOrderId),
   });
 }
 
-export function useCompleteActivity(productionOrderId: string) {
+// Operations with no workstation concept (printing, washing, qc, packing —
+// see WORKSTATION_TYPE_OPERATION in lib/api/workstations.ts) have no queue
+// to sit in, so they keep the old immediate-start behavior: this creates an
+// already-'running' row directly, same as before the Workstation Queue.
+export function useStartActivity(productionOrderId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: {
+      operationId: ActivityOperationId;
+      assignedTo: string;
+      issuedQty: number;
+      issuedSizes?: SizeBreakdown | null;
+      notes?: string;
+      workstationId?: string | null;
+    }) => {
+      const { data: userRes } = await supabase.auth.getUser();
+      const now = new Date().toISOString();
+      const { error } = await supabase.from("production_activities").insert({
+        production_order_id: productionOrderId,
+        workstation_id: v.workstationId ?? null,
+        operation_id: v.operationId,
+        assigned_to: v.assignedTo,
+        issued_qty: v.issuedQty,
+        issued_sizes: v.issuedSizes ?? null,
+        notes: v.notes?.trim() || null,
+        status: "running",
+        assigned_at: now,
+        started_at: now,
+        created_by: userRes.user?.id ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateActivity(qc, productionOrderId),
+  });
+}
+
+// STEP 3 (Start Work): operator promotes a pending assignment to running
+// from the Workstation Queue page. This is the only place started_at is
+// ever set for a workstation-bound job — the timer reflects real work
+// time, not assignment time.
+export function useBeginActivity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (activity: ProductionActivity) => {
+      const { error } = await supabase
+        .from("production_activities")
+        .update({ status: "running", started_at: new Date().toISOString() })
+        .eq("id", activity.id)
+        .eq("status", "pending");
+      if (error) throw error;
+    },
+    onSuccess: (_data, activity) => invalidateActivity(qc, activity.productionOrderId),
+  });
+}
+
+export function usePauseActivity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (activity: ProductionActivity) => {
+      const { error } = await supabase
+        .from("production_activities")
+        .update({ status: "paused", paused_at: new Date().toISOString() })
+        .eq("id", activity.id)
+        .eq("status", "running");
+      if (error) throw error;
+    },
+    onSuccess: (_data, activity) => invalidateActivity(qc, activity.productionOrderId),
+  });
+}
+
+export function useResumeActivity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (activity: ProductionActivity) => {
+      const pausedSince = activity.pausedAt ? elapsedSeconds(new Date(activity.pausedAt), new Date()) : 0;
+      const { error } = await supabase
+        .from("production_activities")
+        .update({
+          status: "running",
+          paused_at: null,
+          paused_seconds: activity.pausedSeconds + pausedSince,
+        })
+        .eq("id", activity.id)
+        .eq("status", "paused");
+      if (error) throw error;
+    },
+    onSuccess: (_data, activity) => invalidateActivity(qc, activity.productionOrderId),
+  });
+}
+
+export function useCompleteActivity() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (v: {
@@ -226,15 +347,24 @@ export function useCompleteActivity(productionOrderId: string) {
       varianceReason?: string | null;
     }) => {
       const end = new Date();
-      const start = new Date(v.activity.startedAt);
-      const elapsed = elapsedSeconds(start, end);
-      const effective = effectiveWorkingSeconds(start, end, DEFAULT_FACTORY_CALENDAR);
+      const start = new Date(v.activity.startedAt ?? v.activity.assignedAt);
+      // Completing while paused is allowed (operator forgot to resume) —
+      // fold the still-open pause interval in before subtracting it out.
+      const openPause =
+        v.activity.status === "paused" && v.activity.pausedAt
+          ? elapsedSeconds(new Date(v.activity.pausedAt), end)
+          : 0;
+      const totalPaused = v.activity.pausedSeconds + openPause;
+      const rawElapsed = elapsedSeconds(start, end);
+      const rawEffective = effectiveWorkingSeconds(start, end, DEFAULT_FACTORY_CALENDAR);
       const patch = {
         status: "completed" as const,
         completed_at: end.toISOString(),
         returned_qty: v.returnedQty,
-        elapsed_seconds: elapsed,
-        effective_seconds: effective,
+        elapsed_seconds: Math.max(0, rawElapsed - totalPaused),
+        effective_seconds: Math.max(0, rawEffective - totalPaused),
+        paused_seconds: totalPaused,
+        paused_at: null,
         ...(v.sizeBreakdown !== undefined ? { size_breakdown: v.sizeBreakdown as SizeBreakdown | null } : {}),
         ...(v.completedSizes !== undefined ? { completed_sizes: v.completedSizes as SizeBreakdown | null } : {}),
         ...(v.varianceReason !== undefined ? { variance_reason: v.varianceReason?.trim() || null } : {}),
@@ -242,74 +372,74 @@ export function useCompleteActivity(productionOrderId: string) {
       const { error } = await supabase.from("production_activities").update(patch).eq("id", v.activity.id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["production-activities", productionOrderId] });
-      qc.invalidateQueries({ queryKey: ["workstation-cards"] });
-      qc.invalidateQueries({ predicate: (query) => query.queryKey[0] === "workstation-history" });
-    },
+    onSuccess: (_data, v) => invalidateActivity(qc, v.activity.productionOrderId),
   });
 }
 
-export function useCancelActivity(productionOrderId: string) {
+// Cancels a pending, running, or paused activity. For a still-pending job
+// this simply removes it from the workstation's queue.
+export function useCancelActivity() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (activityId: string) => {
+    mutationFn: async (activity: ProductionActivity) => {
       const { error } = await supabase
         .from("production_activities")
         .update({ status: "cancelled", completed_at: new Date().toISOString() })
-        .eq("id", activityId);
+        .eq("id", activity.id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["production-activities", productionOrderId] });
-      qc.invalidateQueries({ queryKey: ["workstation-cards"] });
-      qc.invalidateQueries({ predicate: (query) => query.queryKey[0] === "workstation-history" });
-    },
+    onSuccess: (_data, activity) => invalidateActivity(qc, activity.productionOrderId),
   });
 }
 
-// Highest operation that has any completed activity → the "current" stage.
-export function currentProductionStage(activities: ProductionActivity[] | undefined): {
+// Highest operation (in the order's own configured workflow — see
+// production_processes / nextConfiguredOperation below) that has any
+// completed activity → the "current" stage. Falls back to the most
+// recently completed activity if it's on an operation outside the
+// configured workflow (e.g. one logged via "Add Additional Operation").
+export function currentProductionStage(
+  activities: ProductionActivity[] | undefined,
+  configuredOperationIds: ActivityOperationId[] = [],
+): {
   operationId: ActivityOperationId | null;
   label: string;
 } {
   if (!activities?.length) return { operationId: null, label: "Not started" };
-  const running = activities.find((a) => a.status === "running");
-  if (running) return { operationId: running.operationId, label: ACTIVITY_OP_NAME[running.operationId] };
+  const active = activities.find((a) => a.status === "running" || a.status === "paused");
+  if (active) return { operationId: active.operationId, label: ACTIVITY_OP_NAME[active.operationId] };
+  const pending = activities.find((a) => a.status === "pending");
+  if (pending) return { operationId: pending.operationId, label: `${ACTIVITY_OP_NAME[pending.operationId]} (Pending)` };
   const completed = activities.filter((a) => a.status === "completed");
   if (!completed.length) return { operationId: null, label: "Not started" };
-  const seqOf = (id: ActivityOperationId) => ACTIVITY_OPERATIONS.find((o) => o.id === id)?.sequence ?? 0;
-  const top = completed.reduce((best, a) => (seqOf(a.operationId) > seqOf(best.operationId) ? a : best));
-  return { operationId: top.operationId, label: ACTIVITY_OP_NAME[top.operationId] };
+  const completedIds = new Set(completed.map((a) => a.operationId));
+  let last: ActivityOperationId | null = null;
+  for (const op of configuredOperationIds) {
+    if (completedIds.has(op)) last = op;
+  }
+  if (!last) last = completed[completed.length - 1].operationId;
+  return { operationId: last, label: ACTIVITY_OP_NAME[last] };
 }
 
-/* ---------------- Sequential workflow helpers ---------------- */
+/* ---------------- Configured-workflow helpers ---------------- */
+// The operation order is never assumed here — callers always pass the
+// production order's own configured workflow (production_processes,
+// seeded from the ordered list built in Start Production → Step 2; see
+// start_production_v2 and src/lib/api/production.ts). There is no
+// default/fallback sequence.
 
-// Canonical factory sequence. Embroidery is optional (skippable in UI).
-export const PRODUCTION_SEQUENCE: ActivityOperationId[] = [
-  "cutting",
-  "handwork",
-  "embroidery",
-  "stitching",
-  "qc",
-  "packing",
-];
-export const OPTIONAL_OPERATIONS: Set<ActivityOperationId> = new Set(["embroidery"]);
-export const ADDITIONAL_OPERATIONS: ActivityOperationId[] = ACTIVITY_OPERATIONS.map((o) => o.id).filter(
-  (id) => !PRODUCTION_SEQUENCE.includes(id),
-);
-
-// Next operation the operator should be prompted for. null = sequence done
-// OR an activity is still running (must complete/cancel first).
-export function nextSequentialOperation(
+// Next operation the operator should be prompted for, walking the given
+// configured operation order. null = workflow done, or an operation is
+// already assigned/running/paused (must be completed or cancelled first —
+// only one configured operation is ever in flight at a time, whether or
+// not the operator has actually started its clock yet).
+export function nextConfiguredOperation(
+  configuredOperationIds: ActivityOperationId[],
   activities: ProductionActivity[] | undefined,
-  skipped: Set<ActivityOperationId> = new Set(),
 ): ActivityOperationId | null {
-  if (activities?.some((a) => a.status === "running")) return null;
+  if (activities?.some((a) => a.status === "pending" || a.status === "running" || a.status === "paused")) return null;
   const doneOps = new Set((activities ?? []).filter((a) => a.status === "completed").map((a) => a.operationId));
-  for (const op of PRODUCTION_SEQUENCE) {
+  for (const op of configuredOperationIds) {
     if (doneOps.has(op)) continue;
-    if (skipped.has(op)) continue;
     return op;
   }
   return null;

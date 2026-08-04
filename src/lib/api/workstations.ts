@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { ActivityOperationId } from "@/lib/api/production-activities";
+import {
+  mapActivityRow,
+  ACTIVITY_COLUMNS,
+  type ActivityOperationId,
+  type DbActivityRow,
+  type ProductionActivity,
+} from "@/lib/api/production-activities";
 
 export type WorkstationType = {
   id: string;
@@ -73,36 +79,30 @@ export function workstationTypeKeyForOperation(operationId: ActivityOperationId)
   return entry ? entry[0] : null;
 }
 
-export type WorkstationStatus = "idle" | "running" | "completed";
+// idle    = no job at all right now
+// pending = one or more jobs queued, none started yet
+// running / paused = the featured job's own state (only one can ever be
+//                     running/paused per workstation, enforced by the
+//                     Workstation Queue UI, not the database)
+export type WorkstationStatus = "idle" | "pending" | "running" | "paused";
+
+export type WorkstationJobRef = ProductionActivity & {
+  productionOrderCode: string | null;
+  designCode: string | null;
+  designName: string | null;
+};
 
 export type WorkstationCard = {
   workstationId: string;
   typeKey: string;
   typeLabel: string;
   status: WorkstationStatus;
-  employee: string | null;
-  productionOrderId: string | null;
-  productionOrderCode: string | null;
-  designCode: string | null;
-  designName: string | null;
-  operationId: ActivityOperationId | null;
-  assignedQty: number;
-  completedQty: number;
-  pendingQty: number;
+  /** The running/paused job, if any — this is "today's featured job" for the card. */
+  current: WorkstationJobRef | null;
+  pendingCount: number;
+  completedTodayCount: number;
 };
 
-type DbActivityRow = {
-  id: string;
-  production_order_id: string;
-  workstation_id: string | null;
-  operation_id: ActivityOperationId;
-  assigned_to: string;
-  issued_qty: number;
-  returned_qty: number | null;
-  status: "running" | "completed" | "cancelled";
-  started_at: string;
-  completed_at: string | null;
-};
 type DbOrderRow = { id: string; code: string; designs?: { code: string; name: string } | null };
 
 async function resolveOrders(orderIds: string[]): Promise<Map<string, DbOrderRow>> {
@@ -115,21 +115,18 @@ async function resolveOrders(orderIds: string[]): Promise<Map<string, DbOrderRow
   return new Map((data as unknown as DbOrderRow[]).map((o) => [o.id, o]));
 }
 
-function idleCard(workstationId: string, typeKey: string, typeLabel: string): WorkstationCard {
+function isToday(iso: string | null): boolean {
+  if (!iso) return false;
+  return iso.slice(0, 10) === new Date().toISOString().slice(0, 10);
+}
+
+function withOrderRefs(a: ProductionActivity, ordersById: Map<string, DbOrderRow>): WorkstationJobRef {
+  const order = ordersById.get(a.productionOrderId);
   return {
-    workstationId,
-    typeKey,
-    typeLabel,
-    status: "idle",
-    employee: null,
-    productionOrderId: null,
-    productionOrderCode: null,
-    designCode: null,
-    designName: null,
-    operationId: null,
-    assignedQty: 0,
-    completedQty: 0,
-    pendingQty: 0,
+    ...a,
+    productionOrderCode: order?.code ?? null,
+    designCode: order?.designs?.code ?? null,
+    designName: order?.designs?.name ?? null,
   };
 }
 
@@ -162,64 +159,61 @@ export function useWorkstationCards() {
       const ids = stations.map((s) => s.workstationId);
       const { data: actData, error: actErr } = await supabase
         .from("production_activities")
-        .select("*")
+        .select(ACTIVITY_COLUMNS)
         .in("workstation_id", ids)
-        .order("started_at", { ascending: false });
+        .order("assigned_at", { ascending: false });
       if (actErr) throw actErr;
-      const activities = (actData as DbActivityRow[]) ?? [];
+      const activities = ((actData as unknown as DbActivityRow[]) ?? []).map(mapActivityRow);
 
-      // Activities are already newest-first, so the first one seen per
-      // workstation is its current job.
-      const latestByStation = new Map<string, DbActivityRow>();
+      const byStation = new Map<string, ProductionActivity[]>();
       for (const a of activities) {
-        if (a.workstation_id && !latestByStation.has(a.workstation_id)) {
-          latestByStation.set(a.workstation_id, a);
-        }
+        if (!a.workstationId) continue;
+        byStation.set(a.workstationId, [...(byStation.get(a.workstationId) ?? []), a]);
       }
 
-      const ordersById = await resolveOrders(
-        Array.from(new Set(Array.from(latestByStation.values()).map((a) => a.production_order_id))),
-      );
+      const ordersById = await resolveOrders(Array.from(new Set(activities.map((a) => a.productionOrderId))));
 
       return stations.map((s) => {
-        const a = latestByStation.get(s.workstationId);
-        if (!a) return idleCard(s.workstationId, s.typeKey, s.typeLabel);
-
-        const order = ordersById.get(a.production_order_id);
-        const status: WorkstationStatus =
-          a.status === "running" ? "running" : a.status === "completed" ? "completed" : "idle";
-        const assignedQty = a.issued_qty;
-        const completedQty = status === "completed" ? (a.returned_qty ?? a.issued_qty) : 0;
-        const pendingQty = Math.max(0, assignedQty - completedQty);
+        const jobs = byStation.get(s.workstationId) ?? [];
+        const active = jobs.find((a) => a.status === "running" || a.status === "paused") ?? null;
+        const pendingCount = jobs.filter((a) => a.status === "pending").length;
+        const completedTodayCount = jobs.filter((a) => a.status === "completed" && isToday(a.completedAt)).length;
+        const status: WorkstationStatus = active
+          ? (active.status as "running" | "paused")
+          : pendingCount > 0
+            ? "pending"
+            : "idle";
 
         return {
           workstationId: s.workstationId,
           typeKey: s.typeKey,
           typeLabel: s.typeLabel,
           status,
-          employee: a.assigned_to,
-          productionOrderId: a.production_order_id,
-          productionOrderCode: order?.code ?? null,
-          designCode: order?.designs?.code ?? null,
-          designName: order?.designs?.name ?? null,
-          operationId: a.operation_id,
-          assignedQty,
-          completedQty,
-          pendingQty,
+          current: active ? withOrderRefs(active, ordersById) : null,
+          pendingCount,
+          completedTodayCount,
         };
       });
     },
   });
 }
 
-// Idle stations of a given operation type — the only ones an operator can
-// pick when starting new work, so a station can never be double-booked.
-// Derives from the same useWorkstationCards() data rather than a second
-// query, so there is exactly one source of truth for "what's idle."
-export function useIdleWorkstationIds(typeKey: string | null): { data: string[]; isLoading: boolean } {
+// All stations of a given operation type, with their current queue depth —
+// used by the "Assign" dialog's workstation picker. Unlike the old
+// idle-only picker, any workstation can take a new assignment: it just
+// queues behind whatever's already pending/running there.
+export function useWorkstationOptions(
+  typeKey: string | null,
+): { data: { workstationId: string; running: boolean; pendingCount: number }[]; isLoading: boolean } {
   const cards = useWorkstationCards();
   const data = typeKey
-    ? (cards.data ?? []).filter((c) => c.typeKey === typeKey && c.status === "idle").map((c) => c.workstationId)
+    ? (cards.data ?? [])
+        .filter((c) => c.typeKey === typeKey)
+        .map((c) => ({
+          workstationId: c.workstationId,
+          running: c.status === "running" || c.status === "paused",
+          pendingCount: c.pendingCount,
+        }))
     : [];
   return { data, isLoading: cards.isLoading };
 }
@@ -228,28 +222,18 @@ export function useWorkstationHistory(workstationId: string | undefined) {
   return useQuery({
     queryKey: ["workstation-history", workstationId],
     enabled: !!workstationId,
-    queryFn: async (): Promise<
-      (DbActivityRow & { productionOrderCode: string | null; designCode: string | null; designName: string | null })[]
-    > => {
+    queryFn: async (): Promise<WorkstationJobRef[]> => {
       const { data: actData, error: actErr } = await supabase
         .from("production_activities")
-        .select("*")
+        .select(ACTIVITY_COLUMNS)
         .eq("workstation_id", workstationId!)
-        .order("started_at", { ascending: false });
+        .order("assigned_at", { ascending: false });
       if (actErr) throw actErr;
-      const activities = (actData as DbActivityRow[]) ?? [];
+      const activities = ((actData as unknown as DbActivityRow[]) ?? []).map(mapActivityRow);
 
-      const ordersById = await resolveOrders(Array.from(new Set(activities.map((a) => a.production_order_id))));
+      const ordersById = await resolveOrders(Array.from(new Set(activities.map((a) => a.productionOrderId))));
 
-      return activities.map((a) => {
-        const order = ordersById.get(a.production_order_id);
-        return {
-          ...a,
-          productionOrderCode: order?.code ?? null,
-          designCode: order?.designs?.code ?? null,
-          designName: order?.designs?.name ?? null,
-        };
-      });
+      return activities.map((a) => withOrderRefs(a, ordersById));
     },
   });
 }
