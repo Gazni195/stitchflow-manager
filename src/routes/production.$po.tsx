@@ -8,18 +8,41 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock,
   Factory,
   FileCheck2,
+  GripVertical,
   Layers,
   Loader2,
+  PauseCircle,
   PlayCircle,
+  Printer,
+  Save,
+  Settings2,
   StopCircle,
   Timer,
   X,
@@ -29,29 +52,39 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { DesignImage } from "@/components/DesignImage";
 import { useRequireAuth } from "@/hooks/use-auth";
-import { useProductionOrder, computeProgress } from "@/lib/api/production";
-import { useIdleWorkstationIds, workstationTypeKeyForOperation, useWorkstationTypes } from "@/lib/api/workstations";
+import {
+  useProductionOrder,
+  computeProgress,
+  useUpdateProductionWorkflow,
+  useCompleteProductionOrder,
+  PROCESS_OPERATIONS,
+  OP_NAME,
+  type ProcessOperationId,
+  type ProductionProcess,
+} from "@/lib/api/production";
+import { useWorkstationOptions, workstationTypeKeyForOperation, useWorkstationTypes } from "@/lib/api/workstations";
 import {
   ACTIVITY_OPERATIONS,
   ACTIVITY_OP_NAME,
-  ADDITIONAL_OPERATIONS,
   availableInputForOperation,
   computeSizeSets,
   currentProductionQuantity,
   currentProductionStage,
   DEFAULT_SET_TEMPLATE,
   findCuttingBundle,
-  nextSequentialOperation,
-  OPTIONAL_OPERATIONS,
-  PRODUCTION_SEQUENCE,
+  nextConfiguredOperation,
   SET_TEMPLATES,
   STANDARD_SIZES,
   SMALL_SIZES,
   PLUS_SIZES,
   sumSizeBreakdown,
+  useAssignActivity,
+  useBeginActivity,
   useCancelActivity,
   useCompleteActivity,
+  usePauseActivity,
   useProductionActivities,
+  useResumeActivity,
   useStartActivity,
   type ActivityOperationId,
   type ProductionActivity,
@@ -84,12 +117,6 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "summary", label: "Production Summary", icon: BarChart3 },
 ];
 
-const PRODUCTION_STAGES = [
-  { id: "material", label: "Material Selection" },
-  { id: "bulk", label: "Bulk Production" },
-  { id: "summary", label: "Production Summary" },
-];
-
 function ProductionDetails() {
   useRequireAuth();
   const { po } = Route.useParams();
@@ -118,8 +145,6 @@ function ProductionDetails() {
     );
   }
 
-  const stageIndex = tab === "materials" ? 0 : tab === "bulk" ? 1 : 2;
-
   return (
     <AppShell
       title={order.code}
@@ -136,7 +161,7 @@ function ProductionDetails() {
       }
     >
       <div className="grid gap-5">
-        <ProductionHeader order={order} stageIndex={stageIndex} />
+        <ProductionHeader order={order} />
 
         <section>
           <div className="flex gap-2 overflow-x-auto border-b border-border">
@@ -174,6 +199,9 @@ function ProductionDetails() {
               <BulkProductionPanel
                 productionOrderId={order.id}
                 orderQuantity={order.orderQuantity}
+                processes={order.processes ?? []}
+                orderStatus={order.status}
+                completedAt={order.completedAt}
                 onContinue={() => setTab("summary")}
               />
             )}
@@ -187,18 +215,30 @@ function ProductionDetails() {
 
 /* ---------- Header (image + facts + workflow progress) ---------- */
 
-function ProductionHeader({
-  order,
-  stageIndex,
-}: {
-  order: NonNullable<ReturnType<typeof useProductionOrder>["data"]>;
-  stageIndex: number;
-}) {
+// Workflow Progress here is never a fixed set of tabs — it always walks the
+// production order's own configured operations (production_processes,
+// sequence-ordered, seeded from Start Production → Step 2 / edited via
+// "Edit Workflow" on the Bulk Production tab).
+function ProductionHeader({ order }: { order: NonNullable<ReturnType<typeof useProductionOrder>["data"]> }) {
   const { data: activities = [] } = useProductionActivities(order.id);
-  const stage = currentProductionStage(activities);
-  const pct = computeProgress(order.processes);
+  const steps = useMemo(() => [...(order.processes ?? [])].sort((a, b) => a.sequence - b.sequence), [order.processes]);
+  const configuredOps = useMemo(() => steps.map((s) => s.operationId), [steps]);
+  const stage = currentProductionStage(activities, configuredOps);
   const cuttingBundle = findCuttingBundle(activities);
   const currentQty = currentProductionQuantity(order.orderQuantity, activities);
+
+  // Done/current here always come from the operator's real activity log
+  // (production_activities), the same source Running/Completed Activities
+  // and the workflow list on the Bulk Production tab use — never from
+  // production_processes.status, which this screen doesn't advance.
+  const completedOpIds = useMemo(
+    () => new Set(activities.filter((a) => a.status === "completed").map((a) => a.operationId)),
+    [activities],
+  );
+  const pct = steps.length
+    ? Math.round((steps.filter((s) => completedOpIds.has(s.operationId)).length / steps.length) * 100)
+    : 0;
+  const currentIdx = steps.findIndex((s) => !completedOpIds.has(s.operationId));
 
   return (
     <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
@@ -216,60 +256,82 @@ function ProductionHeader({
           </p>
         </div>
 
-        <div className={cn("grid grid-cols-2 gap-2", cuttingBundle ? "sm:grid-cols-5" : "sm:grid-cols-4")}>
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-2",
+            cuttingBundle
+              ? order.status === "completed"
+                ? "sm:grid-cols-6"
+                : "sm:grid-cols-5"
+              : order.status === "completed"
+                ? "sm:grid-cols-5"
+                : "sm:grid-cols-4",
+          )}
+        >
           <Fact label="Planned Qty" value={`${order.orderQuantity.toLocaleString()} Pcs`} />
           {cuttingBundle && <Fact label="Current Prod. Qty" value={`${currentQty.toLocaleString()} Pcs`} />}
-          <Fact label="Current Stage" value={stage.label} />
+          <Fact label="Current Stage" value={order.status === "completed" ? "Completed" : stage.label} />
           <Fact label="Progress" value={`${pct}%`} />
+          {order.status === "completed" && order.completedAt && (
+            <Fact label="Completed Date" value={new Date(order.completedAt).toLocaleDateString()} />
+          )}
           <FactoryStatusFact />
         </div>
 
         <div className="min-w-0 rounded-2xl border border-border bg-background p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate text-sm font-bold">Workflow Progress</p>
-            <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-1 text-[11px] font-bold text-primary">
-              {PRODUCTION_STAGES[stageIndex].label}
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold",
+                order.status === "completed" ? "bg-success/15 text-success" : "bg-primary/15 text-primary",
+              )}
+            >
+              {order.status === "completed" ? "Completed" : stage.label}
             </span>
           </div>
-          <ol className="mt-3 flex items-start gap-1 sm:gap-1.5">
-            {PRODUCTION_STAGES.map((step, i) => {
-              const n = i + 1;
-              const done = i < stageIndex;
-              const current = i === stageIndex;
-              return (
-                <li key={step.id} className="flex min-w-0 flex-1 flex-col items-center gap-1 sm:gap-1.5">
-                  <div className="flex w-full items-center gap-1 sm:gap-1.5">
+          {steps.length === 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground">No workflow configured for this production order.</p>
+          ) : (
+            <ol className="mt-3 flex items-start gap-1 sm:gap-1.5">
+              {steps.map((step, i) => {
+                const n = i + 1;
+                const done = completedOpIds.has(step.operationId);
+                const current = i === currentIdx;
+                const label = OP_NAME[step.operationId] ?? step.operationId;
+                return (
+                  <li key={step.id} className="flex min-w-0 flex-1 flex-col items-center gap-1 sm:gap-1.5">
+                    <div className="flex w-full items-center gap-1 sm:gap-1.5">
+                      <span
+                        className={
+                          "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold transition sm:h-8 sm:w-8 sm:text-[11px] " +
+                          (done
+                            ? "bg-primary text-primary-foreground"
+                            : current
+                              ? "bg-primary text-primary-foreground ring-[3px] ring-primary/30 sm:ring-[5px]"
+                              : "bg-muted text-muted-foreground")
+                        }
+                      >
+                        {done ? "✓" : n}
+                      </span>
+                      {i < steps.length - 1 && (
+                        <span className={"h-0.5 min-w-0 flex-1 rounded-full " + (done ? "bg-primary" : "bg-muted")} />
+                      )}
+                    </div>
                     <span
                       className={
-                        "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold transition sm:h-8 sm:w-8 sm:text-[11px] " +
-                        (done
-                          ? "bg-primary text-primary-foreground"
-                          : current
-                            ? "bg-primary text-primary-foreground ring-[3px] ring-primary/30 sm:ring-[5px]"
-                            : "bg-muted text-muted-foreground")
+                        "hidden w-full truncate text-center text-[9px] font-semibold leading-tight sm:block " +
+                        (current ? "text-primary" : done ? "text-foreground" : "text-muted-foreground")
                       }
+                      title={label}
                     >
-                      {done ? "✓" : n}
+                      {label}
                     </span>
-                    {i < PRODUCTION_STAGES.length - 1 && (
-                      <span
-                        className={"h-0.5 min-w-0 flex-1 rounded-full " + (i < stageIndex ? "bg-primary" : "bg-muted")}
-                      />
-                    )}
-                  </div>
-                  <span
-                    className={
-                      "hidden w-full truncate text-center text-[9px] font-semibold leading-tight sm:block " +
-                      (current ? "text-primary" : done ? "text-foreground" : "text-muted-foreground")
-                    }
-                    title={step.label}
-                  >
-                    {step.label}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
         </div>
       </div>
     </section>
@@ -898,10 +960,16 @@ function ReserveDialog({
 function BulkProductionPanel({
   productionOrderId,
   orderQuantity,
+  processes,
+  orderStatus,
+  completedAt,
   onContinue,
 }: {
   productionOrderId: string;
   orderQuantity: number;
+  processes: ProductionProcess[];
+  orderStatus: "running" | "completed";
+  completedAt: string | null;
   onContinue: () => void;
 }) {
   const { data: activities = [], isLoading } = useProductionActivities(productionOrderId);
@@ -911,75 +979,227 @@ function BulkProductionPanel({
   } | null>(null);
   const [additionalOpen, setAdditionalOpen] = useState(false);
   const [completeFor, setCompleteFor] = useState<ProductionActivity | null>(null);
-  const [skipped, setSkipped] = useState<Set<ActivityOperationId>>(new Set());
+  const [editWorkflowOpen, setEditWorkflowOpen] = useState(false);
+  const [confirmComplete, setConfirmComplete] = useState(false);
+  const completeOrder = useCompleteProductionOrder();
   const [, tick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => tick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
 
-  const running = activities.filter((a) => a.status === "running");
+  const running = activities.filter((a) => a.status === "running" || a.status === "paused");
+  const pending = activities.filter((a) => a.status === "pending");
   const completed = activities.filter((a) => a.status === "completed");
   const cuttingBundle = findCuttingBundle(activities);
   const currentQty = currentProductionQuantity(orderQuantity, activities);
-  const nextOp = nextSequentialOperation(activities, skipped);
-  const isNextOptional = nextOp ? OPTIONAL_OPERATIONS.has(nextOp) : false;
+  const cancelPending = useCancelActivity();
+
+  // The configured workflow, in the exact order saved by Start Production →
+  // Step 2 (or since edited via "Edit Workflow" below) — never a hardcoded
+  // sequence. This is the single source of truth for the list, the Next
+  // Operation gating, and what "Add Additional Operation" is allowed to add.
+  const sortedProcesses = useMemo(() => [...processes].sort((a, b) => a.sequence - b.sequence), [processes]);
+  const configuredOps = useMemo(
+    () => sortedProcesses.map((p) => p.operationId as ActivityOperationId),
+    [sortedProcesses],
+  );
+  const nextOp = nextConfiguredOperation(configuredOps, activities);
+  const completedOpIds = useMemo(() => new Set(completed.map((a) => a.operationId)), [completed]);
+  const runningByOp = useMemo(() => new Map(running.map((a) => [a.operationId, a])), [running]);
+  const pendingByOp = useMemo(() => new Map(pending.map((a) => [a.operationId, a])), [pending]);
+  const additionalOperations = useMemo(
+    () => ACTIVITY_OPERATIONS.map((o) => o.id).filter((id) => !configuredOps.includes(id)),
+    [configuredOps],
+  );
+
+  // Every operation in the order's own configured workflow — never the
+  // optional ones added via "Add Additional Operation" — is done, and none
+  // of them has a pending/assigned/running/paused activity in flight. This
+  // is the only gate for showing "Complete Production" below.
+  const allConfiguredCompleted =
+    sortedProcesses.length > 0 &&
+    sortedProcesses.every((p) => completedOpIds.has(p.operationId as ActivityOperationId)) &&
+    !sortedProcesses.some((p) => {
+      const opId = p.operationId as ActivityOperationId;
+      return pendingByOp.has(opId) || runningByOp.has(opId);
+    });
 
   return (
     <div className="grid gap-4">
-      {/* Sequential Next-Step Action */}
+      {/* Configured workflow — compact operation list */}
       <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Next Operation</p>
-        {running.length > 0 ? (
-          <div className="mt-2 grid gap-2">
-            <p className="text-sm font-semibold text-foreground">
-              Finish the running {ACTIVITY_OP_NAME[running[0].operationId]} activity before the next one opens.
-            </p>
-          </div>
-        ) : nextOp ? (
-          <div className="mt-2 grid gap-2 sm:flex sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="truncate text-xl font-extrabold tracking-tight text-foreground">
-                {ACTIVITY_OP_NAME[nextOp]}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Step {PRODUCTION_SEQUENCE.indexOf(nextOp) + 1} of {PRODUCTION_SEQUENCE.length}
-                {isNextOptional ? " · Optional" : ""}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {isNextOptional && (
-                <button
-                  onClick={() => setSkipped((s) => new Set(s).add(nextOp))}
-                  className="rounded-xl border border-border bg-background px-3 py-2.5 text-xs font-bold hover:bg-accent"
-                >
-                  Skip {ACTIVITY_OP_NAME[nextOp]}
-                </button>
-              )}
-              <button
-                onClick={() => setStartFor({ operationId: nextOp, source: "sequence" })}
-                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
-              >
-                <PlayCircle className="h-4 w-4" /> Start {ACTIVITY_OP_NAME[nextOp]}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-success">
-            <CheckCircle2 className="h-4 w-4" /> All production operations completed.
-          </div>
-        )}
-        <div className="mt-3 flex items-center justify-between border-t border-border pt-2">
-          <p className="text-[11px] text-muted-foreground">
-            The workflow advances automatically as each operation is completed.
-          </p>
-          <button
-            onClick={() => setAdditionalOpen(true)}
-            className="text-[11px] font-bold text-primary hover:underline"
-          >
-            + Add Additional Operation
-          </button>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Production Workflow</p>
+          {orderStatus === "completed" ? (
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-success/15 px-2.5 py-1.5 text-[11px] font-bold text-success">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Completed
+            </span>
+          ) : (
+            <button
+              onClick={() => setEditWorkflowOpen(true)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-[11px] font-bold text-foreground hover:bg-accent"
+            >
+              <Settings2 className="h-3.5 w-3.5" /> Edit Workflow
+            </button>
+          )}
         </div>
+
+        {sortedProcesses.length === 0 ? (
+          <p className="mt-3 rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+            No workflow configured for this production order.
+          </p>
+        ) : (
+          <ul className="mt-3 grid gap-1.5">
+            {sortedProcesses.map((p, i) => {
+              const opId = p.operationId as ActivityOperationId;
+              const isCompleted = completedOpIds.has(opId);
+              const runningActivity = runningByOp.get(opId);
+              const isRunning = !!runningActivity;
+              const pendingActivity = pendingByOp.get(opId);
+              const isPending = !!pendingActivity;
+              const isNext = !isCompleted && !isRunning && !isPending && opId === nextOp;
+              const usesQueueForRow = !!workstationTypeKeyForOperation(opId);
+              const statusLabel = isCompleted
+                ? "Completed"
+                : isRunning
+                  ? runningActivity?.status === "paused"
+                    ? "Paused"
+                    : "Running"
+                  : isPending
+                    ? "Pending"
+                    : "Not Started";
+              return (
+                <li
+                  key={p.id}
+                  className={cn(
+                    "flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5",
+                    isRunning
+                      ? "border-primary bg-primary-soft/40"
+                      : isPending
+                        ? "border-warning/30 bg-warning/5"
+                        : isCompleted
+                          ? "border-success/30 bg-success/5"
+                          : "border-border bg-background",
+                  )}
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span
+                      className={cn(
+                        "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-bold",
+                        isCompleted
+                          ? "bg-success text-white"
+                          : isRunning
+                            ? "bg-primary text-primary-foreground"
+                            : isPending
+                              ? "bg-warning text-warning-foreground"
+                              : "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {isCompleted ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold">{ACTIVITY_OP_NAME[opId] ?? opId}</p>
+                      <p
+                        className={cn(
+                          "text-[10px] font-semibold uppercase tracking-wide",
+                          isCompleted
+                            ? "text-success"
+                            : isRunning
+                              ? "text-primary"
+                              : isPending
+                                ? "text-warning-foreground"
+                                : "text-muted-foreground",
+                        )}
+                      >
+                        {statusLabel}
+                        {isPending && pendingActivity?.workstationId ? ` · ${pendingActivity.workstationId}` : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  {isCompleted ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-success">
+                      <Check className="h-3.5 w-3.5" /> Completed
+                    </span>
+                  ) : isRunning ? (
+                    <button
+                      onClick={() => setCompleteFor(runningActivity)}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground shadow-sm hover:opacity-90"
+                    >
+                      Resume
+                    </button>
+                  ) : isPending ? (
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {pendingActivity?.workstationId && (
+                        <Link
+                          to="/workstations/$code"
+                          params={{ code: pendingActivity.workstationId }}
+                          className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-[11px] font-bold text-foreground hover:bg-accent"
+                        >
+                          View Queue
+                        </Link>
+                      )}
+                      <button
+                        onClick={() => {
+                          if (pendingActivity && window.confirm("Remove this pending assignment?")) {
+                            cancelPending.mutate(pendingActivity);
+                          }
+                        }}
+                        disabled={cancelPending.isPending}
+                        className="rounded-lg border border-border bg-background p-1.5 text-muted-foreground hover:bg-accent"
+                        aria-label="Remove pending assignment"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => isNext && setStartFor({ operationId: opId, source: "sequence" })}
+                      disabled={!isNext}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+                    >
+                      <PlayCircle className="h-3.5 w-3.5" /> {usesQueueForRow ? "Assign" : "Start"}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2">
+          <p className="text-[11px] text-muted-foreground">
+            {orderStatus === "completed"
+              ? `Production order completed${completedAt ? ` on ${new Date(completedAt).toLocaleDateString()}` : ""}.`
+              : running.length > 0
+                ? "Finish the running activity before the next one opens."
+                : pending.length > 0
+                  ? "Waiting for the operator to start the pending assignment."
+                  : nextOp
+                    ? "The workflow advances automatically as each operation is completed."
+                    : sortedProcesses.length > 0
+                      ? "All production operations completed."
+                      : "Use Edit Workflow to configure this order's operations."}
+          </p>
+          {orderStatus !== "completed" && (
+            <button
+              onClick={() => setAdditionalOpen(true)}
+              className="shrink-0 text-[11px] font-bold text-primary hover:underline"
+            >
+              + Add Additional Operation
+            </button>
+          )}
+        </div>
+
+        {orderStatus === "running" && allConfiguredCompleted && (
+          <button
+            onClick={() => setConfirmComplete(true)}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
+          >
+            <CheckCircle2 className="h-4 w-4" /> Complete Production
+          </button>
+        )}
       </div>
 
       {cuttingBundle && <CuttingSummaryCard cuttingBundle={cuttingBundle} currentQty={currentQty} />}
@@ -1001,12 +1221,7 @@ function BulkProductionPanel({
         ) : (
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {running.map((a) => (
-              <RunningActivityCard
-                key={a.id}
-                activity={a}
-                productionOrderId={productionOrderId}
-                onComplete={() => setCompleteFor(a)}
-              />
+              <RunningActivityCard key={a.id} activity={a} onComplete={() => setCompleteFor(a)} />
             ))}
           </div>
         )}
@@ -1047,13 +1262,14 @@ function BulkProductionPanel({
           currentQty={currentQty}
           preselectedOperation={startFor.operationId}
           allowOperationChange={startFor.source === "additional"}
-          allowedOperations={startFor.source === "additional" ? ADDITIONAL_OPERATIONS : undefined}
+          allowedOperations={startFor.source === "additional" ? additionalOperations : undefined}
           activities={activities}
           onClose={() => setStartFor(null)}
         />
       )}
       {additionalOpen && (
         <PickAdditionalOperationDialog
+          operations={additionalOperations}
           onPick={(op) => {
             setAdditionalOpen(false);
             setStartFor({ operationId: op, source: "additional" });
@@ -1061,33 +1277,74 @@ function BulkProductionPanel({
           onClose={() => setAdditionalOpen(false)}
         />
       )}
-      {completeFor && (
-        <CompleteActivityDialog
-          activity={completeFor}
+      {completeFor && <CompleteActivityDialog activity={completeFor} onClose={() => setCompleteFor(null)} />}
+      {editWorkflowOpen && (
+        <EditWorkflowDialog
           productionOrderId={productionOrderId}
-          onClose={() => setCompleteFor(null)}
+          processes={processes}
+          activities={activities}
+          onClose={() => setEditWorkflowOpen(false)}
+        />
+      )}
+      {confirmComplete && (
+        <CompleteProductionDialog
+          busy={completeOrder.isPending}
+          onClose={() => setConfirmComplete(false)}
+          onConfirm={async () => {
+            await completeOrder.mutateAsync(productionOrderId);
+            setConfirmComplete(false);
+          }}
         />
       )}
     </div>
   );
 }
 
+function CompleteProductionDialog({
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <DialogShell title="Complete Production Order?" onClose={onClose}>
+      <div className="px-5 py-4 text-sm text-muted-foreground">
+        All production operations are completed. Do you want to complete this Production Order?
+      </div>
+      <DialogFooter onCancel={onClose}>
+        <button
+          onClick={onConfirm}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-60"
+        >
+          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Complete Production
+        </button>
+      </DialogFooter>
+    </DialogShell>
+  );
+}
+
 function PickAdditionalOperationDialog({
+  operations,
   onPick,
   onClose,
 }: {
+  operations: ActivityOperationId[];
   onPick: (op: ActivityOperationId) => void;
   onClose: () => void;
 }) {
   return (
     <DialogShell
       title="Add Additional Operation"
-      subtitle="For exceptional steps outside the standard flow"
+      subtitle="For exceptional steps outside this order's configured workflow"
       onClose={onClose}
     >
       <div className="grid gap-2 p-5">
         <div className="grid grid-cols-2 gap-2">
-          {ADDITIONAL_OPERATIONS.map((id) => (
+          {operations.map((id) => (
             <button
               key={id}
               onClick={() => onPick(id)}
@@ -1096,7 +1353,7 @@ function PickAdditionalOperationDialog({
               {ACTIVITY_OP_NAME[id]}
             </button>
           ))}
-          {ADDITIONAL_OPERATIONS.length === 0 && (
+          {operations.length === 0 && (
             <p className="text-xs text-muted-foreground">No additional operations available.</p>
           )}
         </div>
@@ -1105,6 +1362,215 @@ function PickAdditionalOperationDialog({
         <span />
       </DialogFooter>
     </DialogShell>
+  );
+}
+
+// Reuses the same "reorder + toggle" workflow-editing pattern as Start
+// Production → Step 2 (see StartProductionWizard.tsx), but scoped to an
+// already-started order: any operation that's pending, running, paused, or
+// completed is locked in place (can't be removed or reordered) so history
+// and in-flight workstation queue assignments are never corrupted; only
+// the untouched, upcoming operations can be reordered, added, or removed.
+function EditWorkflowDialog({
+  productionOrderId,
+  processes,
+  activities,
+  onClose,
+}: {
+  productionOrderId: string;
+  processes: ProductionProcess[];
+  activities: ProductionActivity[];
+  onClose: () => void;
+}) {
+  const touchedOpIds = useMemo(
+    () =>
+      new Set(
+        activities
+          .filter(
+            (a) =>
+              a.status === "pending" || a.status === "running" || a.status === "paused" || a.status === "completed",
+          )
+          .map((a) => a.operationId),
+      ),
+    [activities],
+  );
+  const sortedExisting = useMemo(() => [...processes].sort((a, b) => a.sequence - b.sequence), [processes]);
+  const touchedSteps = useMemo(
+    () => sortedExisting.filter((p) => touchedOpIds.has(p.operationId as ActivityOperationId)),
+    [sortedExisting, touchedOpIds],
+  );
+  // Seeded once from the order's current untouched processes; never
+  // recomputed after that, so the user's own reordering/toggling in this
+  // dialog is never overwritten by a background refetch while it's open.
+  const [editableIds, setEditableIds] = useState<ProcessOperationId[]>(() =>
+    sortedExisting.filter((p) => !touchedOpIds.has(p.operationId as ActivityOperationId)).map((p) => p.operationId),
+  );
+  const [enabled, setEnabled] = useState<Set<ProcessOperationId>>(
+    () =>
+      new Set(
+        sortedExisting.filter((p) => !touchedOpIds.has(p.operationId as ActivityOperationId)).map((p) => p.operationId),
+      ),
+  );
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setEditableIds((prev) => {
+      const oldIdx = prev.indexOf(active.id as ProcessOperationId);
+      const newIdx = prev.indexOf(over.id as ProcessOperationId);
+      if (oldIdx < 0 || newIdx < 0) return prev;
+      return arrayMove(prev, oldIdx, newIdx);
+    });
+  }
+
+  function toggleOperation(id: ProcessOperationId) {
+    if (touchedOpIds.has(id)) return;
+    setEnabled((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        setEditableIds((ids) => ids.filter((x) => x !== id));
+      } else {
+        next.add(id);
+        setEditableIds((ids) => [...ids, id]);
+      }
+      return next;
+    });
+  }
+
+  const save = useUpdateProductionWorkflow(productionOrderId);
+  const finalOrder = [...touchedSteps.map((p) => p.operationId), ...editableIds];
+
+  function submit() {
+    save.mutate({ operationIds: finalOrder, existing: processes }, { onSuccess: onClose });
+  }
+
+  return (
+    <DialogShell
+      title="Edit Workflow"
+      subtitle="Reorder, add, or remove this order's upcoming operations"
+      onClose={onClose}
+    >
+      <div className="grid gap-4 p-5">
+        {touchedSteps.length > 0 && (
+          <div>
+            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Already Started — locked
+            </p>
+            <ul className="grid gap-1.5">
+              {touchedSteps.map((p, i) => (
+                <li
+                  key={p.id}
+                  className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm"
+                >
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
+                    {i + 1}
+                  </span>
+                  <span className="font-semibold text-muted-foreground">{OP_NAME[p.operationId]}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div>
+          <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Upcoming Operations
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {PROCESS_OPERATIONS.map((op) => {
+              const locked = touchedOpIds.has(op.id);
+              const on = enabled.has(op.id);
+              return (
+                <button
+                  key={op.id}
+                  type="button"
+                  disabled={locked}
+                  onClick={() => toggleOperation(op.id)}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-bold",
+                    on
+                      ? "border-primary bg-primary-soft text-primary"
+                      : "border-border bg-background text-muted-foreground hover:bg-accent",
+                    locked && "cursor-not-allowed opacity-50",
+                  )}
+                >
+                  {locked ? "✓" : on ? "✓" : "+"} {op.name}
+                </button>
+              );
+            })}
+          </div>
+
+          {editableIds.length === 0 ? (
+            <p className="mt-2 rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+              No upcoming operations selected.
+            </p>
+          ) : (
+            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <SortableContext items={editableIds} strategy={verticalListSortingStrategy}>
+                <ul className="mt-2 grid gap-2">
+                  {editableIds.map((id, i) => (
+                    <EditWorkflowRow key={id} operationId={id} index={touchedSteps.length + i} />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
+          )}
+        </div>
+
+        {save.error && (
+          <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-2 text-xs font-semibold text-destructive">
+            {(save.error as Error).message}
+          </p>
+        )}
+      </div>
+      <DialogFooter onCancel={onClose}>
+        <button
+          onClick={submit}
+          disabled={save.isPending || finalOrder.length === 0}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-60"
+        >
+          {save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          Save Workflow
+        </button>
+      </DialogFooter>
+    </DialogShell>
+  );
+}
+
+function EditWorkflowRow({ operationId, index }: { operationId: ProcessOperationId; index: number }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: operationId });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={cn("rounded-xl border border-border bg-background p-2.5", isDragging && "shadow-lg")}
+    >
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder"
+          className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:bg-accent active:cursor-grabbing"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">
+          {index + 1}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{OP_NAME[operationId]}</span>
+      </div>
+    </li>
   );
 }
 
@@ -1220,31 +1686,58 @@ function CuttingSummaryCard({
 // pausing through a break and resuming after it ends, since it's
 // recomputed from the factory calendar on every tick rather than just
 // counted up.
-function RunningActivityCard({
+// Exported so the Workstation Queue page (routes/workstations.$code.tsx)
+// can reuse it for a station's currently running/paused job instead of
+// duplicating the pause/resume/complete/cancel wiring.
+export function RunningActivityCard({
   activity,
-  productionOrderId,
   onComplete,
 }: {
   activity: ProductionActivity;
-  productionOrderId: string;
   onComplete: () => void;
 }) {
+  const isPaused = activity.status === "paused";
   const now = new Date();
-  const start = new Date(activity.startedAt);
-  const effective = effectiveWorkingSeconds(start, now);
-  const cancel = useCancelActivity(productionOrderId);
+  const start = new Date(activity.startedAt ?? activity.assignedAt);
+  // While paused the clock is frozen at the moment it was paused, not "now" —
+  // Live Timer never ticks during a pause. Accumulated pause time is always
+  // subtracted so this reflects real work time either way.
+  const end = isPaused && activity.pausedAt ? new Date(activity.pausedAt) : now;
+  const rawEffective = effectiveWorkingSeconds(start, end);
+  const effective = Math.max(0, rawEffective - activity.pausedSeconds);
+  const cancel = useCancelActivity();
+  const pause = usePauseActivity();
+  const resume = useResumeActivity();
 
   return (
-    <div className="rounded-2xl border border-primary/30 bg-primary-soft/30 p-4">
+    <div
+      className={cn(
+        "rounded-2xl border p-4",
+        isPaused ? "border-warning/30 bg-warning/10" : "border-primary/30 bg-primary-soft/30",
+      )}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
+          <p
+            className={cn(
+              "text-[11px] font-bold uppercase tracking-wider",
+              isPaused ? "text-warning-foreground" : "text-primary",
+            )}
+          >
             {ACTIVITY_OP_NAME[activity.operationId]}
           </p>
           <p className="mt-0.5 truncate text-sm font-bold">{activity.assignedTo}</p>
+          {activity.workstationId && (
+            <p className="text-[11px] text-muted-foreground">Workstation: {activity.workstationId}</p>
+          )}
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
-          🟢 Running
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold",
+            isPaused ? "bg-warning text-warning-foreground" : "bg-primary text-primary-foreground",
+          )}
+        >
+          {isPaused ? "⏸ Paused" : "🟢 Running"}
         </span>
       </div>
 
@@ -1253,11 +1746,24 @@ function RunningActivityCard({
         <span className="font-bold text-foreground">{formatClock(start)}</span>
       </p>
 
-      <div className="mt-2 rounded-xl border border-primary/20 bg-background/70 p-3 text-center">
+      <div
+        className={cn(
+          "mt-2 rounded-xl border p-3 text-center",
+          isPaused ? "border-warning/20 bg-background/70" : "border-primary/20 bg-background/70",
+        )}
+      >
         <p className="flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-          <Timer className="h-3 w-3" /> Live Timer · Effective Working Time
+          <Timer className="h-3 w-3" />{" "}
+          {isPaused ? "Paused · Effective Working Time" : "Live Timer · Effective Working Time"}
         </p>
-        <p className="mt-1 font-mono text-2xl font-extrabold tabular-nums text-primary">{formatHMS(effective)}</p>
+        <p
+          className={cn(
+            "mt-1 font-mono text-2xl font-extrabold tabular-nums",
+            isPaused ? "text-warning-foreground" : "text-primary",
+          )}
+        >
+          {formatHMS(effective)}
+        </p>
       </div>
 
       <p className="mt-2 text-xs text-muted-foreground">
@@ -1268,6 +1774,23 @@ function RunningActivityCard({
         <p className="mt-2 rounded-lg bg-background/60 px-2 py-1.5 text-xs text-muted-foreground">{activity.notes}</p>
       )}
       <div className="mt-3 flex gap-2">
+        {isPaused ? (
+          <button
+            onClick={() => resume.mutate(activity)}
+            disabled={resume.isPending}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-warning px-3 py-2 text-xs font-bold text-warning-foreground hover:opacity-90 disabled:opacity-60"
+          >
+            <PlayCircle className="h-3.5 w-3.5" /> Resume
+          </button>
+        ) : (
+          <button
+            onClick={() => pause.mutate(activity)}
+            disabled={pause.isPending}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-accent disabled:opacity-60"
+          >
+            <PauseCircle className="h-3.5 w-3.5" /> Pause
+          </button>
+        )}
         <button
           onClick={onComplete}
           className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-success px-3 py-2 text-xs font-bold text-success-foreground hover:opacity-90"
@@ -1276,7 +1799,7 @@ function RunningActivityCard({
         </button>
         <button
           onClick={() => {
-            if (window.confirm("Cancel this activity? Time is not counted.")) cancel.mutate(activity.id);
+            if (window.confirm("Cancel this activity? Time is not counted.")) cancel.mutate(activity);
           }}
           disabled={cancel.isPending}
           className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-muted-foreground hover:bg-accent"
@@ -1302,7 +1825,10 @@ function CompletedActivityRow({ activity }: { activity: ProductionActivity }) {
         </div>
         <div className="mt-1.5 grid gap-0.5 text-[11px] text-muted-foreground">
           <p>
-            Started: <span className="font-bold text-foreground">{formatClock(new Date(activity.startedAt))}</span>
+            Started:{" "}
+            <span className="font-bold text-foreground">
+              {formatClock(new Date(activity.startedAt ?? activity.assignedAt))}
+            </span>
           </p>
           {activity.completedAt && (
             <p>
@@ -1359,6 +1885,15 @@ function SummaryPanel({ productionOrderId, orderQuantity }: { productionOrderId:
 
   return (
     <div className="grid gap-4">
+      <div className="flex justify-end">
+        <button
+          onClick={() => window.print()}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold text-foreground hover:bg-accent"
+        >
+          <Printer className="h-3.5 w-3.5" /> Print Summary
+        </button>
+      </div>
+
       <div className={cn("grid gap-3", cuttingBundle ? "sm:grid-cols-5" : "sm:grid-cols-4")}>
         <SummaryCard label="Planned Qty" value={`${orderQuantity} pcs`} />
         {cuttingBundle && (
@@ -1431,7 +1966,7 @@ function SummaryPanel({ productionOrderId, orderQuantity }: { productionOrderId:
                 <span className="text-muted-foreground">· 📦 {a.issuedQty}</span>
                 {a.returnedQty != null && <span className="text-muted-foreground">→ 📥 {a.returnedQty}</span>}
                 <span className="ml-auto text-muted-foreground">
-                  {formatClock(new Date(a.startedAt))}
+                  {formatClock(new Date(a.startedAt ?? a.assignedAt))}
                   {a.completedAt ? ` – ${formatClock(new Date(a.completedAt))}` : ""}
                   {a.effectiveSeconds != null ? ` · ⏱ ${formatDuration(a.effectiveSeconds)}` : ""}
                 </span>
@@ -1489,17 +2024,22 @@ function StartActivityDialog({
   const [assignedTo, setAssignedTo] = useState("");
   const [notes, setNotes] = useState("");
   const start = useStartActivity(productionOrderId);
+  const assign = useAssignActivity(productionOrderId);
 
   // Cutting/Hand Work/Embroidery/Stitching each map to exactly one
   // workstation type (see WORKSTATION_TYPE_OPERATION in
   // lib/api/workstations.ts); every other operation (printing, washing,
   // qc, packing) has no workstation concept, so workstationTypeKey is null
-  // and no picker/requirement applies.
+  // and no picker/requirement applies. Workstation-bound operations go
+  // through the Workstation Queue (Assign → Pending → operator starts the
+  // clock); everything else keeps the old immediate-start behavior since
+  // there's no queue for it to sit in.
   const { data: workstationTypes = [] } = useWorkstationTypes();
   const workstationTypeKey = workstationTypeKeyForOperation(operationId);
   const workstationTypeLabel = workstationTypes.find((t) => t.typeKey === workstationTypeKey)?.label ?? "";
+  const usesQueue = !!workstationTypeKey;
   const [workstationId, setWorkstationId] = useState<string | null>(null);
-  const idleWorkstations = useIdleWorkstationIds(workstationTypeKey);
+  const workstationOptions = useWorkstationOptions(workstationTypeKey);
 
   // Cutting uses a single Issue Qty; every other op after Cutting is
   // size-allocated from the Cutting bundle (bundle allocation UI).
@@ -1535,10 +2075,11 @@ function StartActivityDialog({
 
   async function submit() {
     if (!canSubmit) return;
+    const mutation = usesQueue ? assign : start;
     if (hasSizeAllocation) {
       const bundle: SizeBreakdown = {};
       for (const [k, v] of Object.entries(sizes)) if ((v ?? 0) > 0) bundle[k as SizeCode] = v as number;
-      await start.mutateAsync({
+      await mutation.mutateAsync({
         operationId,
         assignedTo: assignedTo.trim(),
         issuedQty: sizeTotal,
@@ -1547,7 +2088,7 @@ function StartActivityDialog({
         notes,
       });
     } else {
-      await start.mutateAsync({
+      await mutation.mutateAsync({
         operationId,
         assignedTo: assignedTo.trim(),
         issuedQty,
@@ -1560,12 +2101,15 @@ function StartActivityDialog({
 
   const opChoices = allowedOperations ?? [];
 
+  const dialogVerb = usesQueue ? "Assign" : "Start";
+  const dialogSubtitle = usesQueue
+    ? "Book this job onto a workstation — the operator starts the clock from the queue"
+    : hasSizeAllocation
+      ? "Assign worker and allocate bundle by size"
+      : "Assign worker and issue quantity";
+
   return (
-    <DialogShell
-      title={`Start ${ACTIVITY_OP_NAME[operationId]}`}
-      subtitle={hasSizeAllocation ? "Assign worker and allocate bundle by size" : "Assign worker and issue quantity"}
-      onClose={onClose}
-    >
+    <DialogShell title={`${dialogVerb} ${ACTIVITY_OP_NAME[operationId]}`} subtitle={dialogSubtitle} onClose={onClose}>
       <div className="grid gap-4 p-5">
         {allowOperationChange && opChoices.length > 0 && (
           <Field label="Additional Operation">
@@ -1606,17 +2150,22 @@ function StartActivityDialog({
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
             >
               <option value="">Select a workstation…</option>
-              {(idleWorkstations.data ?? []).map((id) => (
-                <option key={id} value={id}>
-                  {id}
+              {(workstationOptions.data ?? []).map((w) => (
+                <option key={w.workstationId} value={w.workstationId}>
+                  {w.workstationId}
+                  {w.running ? " — running" : ""}
+                  {w.pendingCount > 0 ? ` — ${w.pendingCount} pending` : ""}
                 </option>
               ))}
             </select>
-            {!idleWorkstations.isLoading && (idleWorkstations.data ?? []).length === 0 && (
+            {!workstationOptions.isLoading && (workstationOptions.data ?? []).length === 0 && (
               <p className="mt-1 text-[11px] font-semibold text-destructive">
-                No idle {workstationTypeLabel || "matching"} workstations available right now.
+                No {workstationTypeLabel || "matching"} workstations configured.
               </p>
             )}
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              A busy workstation just queues this job behind what's already there.
+            </p>
           </Field>
         )}
 
@@ -1687,31 +2236,32 @@ function StartActivityDialog({
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
           />
         </Field>
-        {start.error && <p className="text-xs text-destructive">{(start.error as Error).message}</p>}
+        {(usesQueue ? assign : start).error && (
+          <p className="text-xs text-destructive">{((usesQueue ? assign : start).error as Error).message}</p>
+        )}
       </div>
       <DialogFooter onCancel={onClose}>
         <button
           onClick={submit}
-          disabled={start.isPending || !canSubmit}
+          disabled={(usesQueue ? assign : start).isPending || !canSubmit}
           className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-60"
         >
-          {start.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlayCircle className="h-3.5 w-3.5" />}
-          Start {ACTIVITY_OP_NAME[operationId]}
+          {(usesQueue ? assign : start).isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <PlayCircle className="h-3.5 w-3.5" />
+          )}
+          {dialogVerb} {ACTIVITY_OP_NAME[operationId]}
         </button>
       </DialogFooter>
     </DialogShell>
   );
 }
 
-function CompleteActivityDialog({
-  activity,
-  productionOrderId,
-  onClose,
-}: {
-  activity: ProductionActivity;
-  productionOrderId: string;
-  onClose: () => void;
-}) {
+// Exported so the Workstation Queue page can reuse the same Complete popup
+// (Cutting size grid / issued-size allocation / plain qty) rather than a
+// second implementation of the same branching logic.
+export function CompleteActivityDialog({ activity, onClose }: { activity: ProductionActivity; onClose: () => void }) {
   const isCutting = activity.operationId === "cutting";
   const issuedSizes = activity.issuedSizes ?? null;
   const hasIssuedSizes = !isCutting && !!issuedSizes && sumSizeBreakdown(issuedSizes) > 0;
@@ -1726,7 +2276,7 @@ function CompleteActivityDialog({
   const [showSmall, setShowSmall] = useState(false);
   const [showPlus, setShowPlus] = useState(false);
   const [setTemplate, setSetTemplate] = useState<SetTemplateId>(DEFAULT_SET_TEMPLATE);
-  const complete = useCompleteActivity(productionOrderId);
+  const complete = useCompleteActivity();
 
   const completedTotal = sumSizeBreakdown(completed);
   const issuedTotal = hasIssuedSizes ? sumSizeBreakdown(issuedSizes as SizeBreakdown) : activity.issuedQty;

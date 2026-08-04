@@ -314,6 +314,78 @@ export function useCompleteProcess(poCode: string) {
   });
 }
 
+// Lets "Edit Workflow" (on the Bulk Production screen) reorder, add, or
+// remove upcoming operations after production has already started — the
+// same production_processes rows Start Production → Step 2 seeds, just
+// edited in place. Callers are responsible for keeping every operation
+// that already has activity logged in the new list (in its existing
+// relative order); this only reconciles rows against whatever final
+// ordered list it's given.
+export function useUpdateProductionWorkflow(productionOrderId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { operationIds: ProcessOperationId[]; existing: ProductionProcess[] }) => {
+      const byOp = new Map(v.existing.map((p) => [p.operationId, p]));
+      const keep = new Set(v.operationIds);
+
+      const toDelete = v.existing.filter((p) => !keep.has(p.operationId));
+      if (toDelete.length) {
+        const { error } = await supabase
+          .from("production_processes")
+          .delete()
+          .in(
+            "id",
+            toDelete.map((p) => p.id),
+          );
+        if (error) throw error;
+      }
+
+      for (let i = 0; i < v.operationIds.length; i++) {
+        const operationId = v.operationIds[i];
+        const sequence = i + 1;
+        const existing = byOp.get(operationId);
+        if (existing) {
+          if (existing.sequence === sequence) continue;
+          const { error } = await supabase.from("production_processes").update({ sequence }).eq("id", existing.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("production_processes").insert({
+            production_order_id: productionOrderId,
+            operation_id: operationId,
+            sequence,
+            status: sequence === 1 ? "pending" : "locked",
+          });
+          if (error) throw error;
+        }
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["production"] });
+    },
+  });
+}
+
+// Marks a Production Order Completed once every configured workflow
+// operation is done (see BulkProductionPanel's allConfiguredCompleted in
+// production.$po.tsx, which gates when this is callable). Guarded to only
+// ever move running → completed.
+export function useCompleteProductionOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (productionOrderId: string) => {
+      const { error } = await supabase
+        .from("production_orders")
+        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .eq("id", productionOrderId)
+        .eq("status", "running");
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["production"] });
+    },
+  });
+}
+
 export function computeProgress(processes: ProductionProcess[] | undefined): number {
   if (!processes?.length) return 0;
   const done = processes.filter((p) => p.status === "completed").length;

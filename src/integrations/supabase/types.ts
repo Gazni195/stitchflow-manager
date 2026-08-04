@@ -402,36 +402,87 @@ export type Database = {
       }
       permissions: {
         Row: {
-          action: string
+          action: string | null
+          button: string | null
+          card: string | null
+          category: string | null
           created_at: string
           description: string | null
+          display_order: number
+          feature: string | null
           id: string
+          is_active: boolean
           key: string
           label: string
+          linked_backend_ref: string | null
           module: string
+          node_type: string
+          page: string | null
+          parent_id: string | null
+          popup: string | null
+          requires_backend: boolean
+          section: string | null
+          tab: string | null
         }
         Insert: {
-          action: string
+          action?: string | null
+          button?: string | null
+          card?: string | null
+          category?: string | null
           created_at?: string
           description?: string | null
+          display_order?: number
+          feature?: string | null
           id?: string
+          is_active?: boolean
           key: string
           label: string
+          linked_backend_ref?: string | null
           module: string
+          node_type?: string
+          page?: string | null
+          parent_id?: string | null
+          popup?: string | null
+          requires_backend?: boolean
+          section?: string | null
+          tab?: string | null
         }
         Update: {
-          action?: string
+          action?: string | null
+          button?: string | null
+          card?: string | null
+          category?: string | null
           created_at?: string
           description?: string | null
+          display_order?: number
+          feature?: string | null
           id?: string
+          is_active?: boolean
           key?: string
           label?: string
+          linked_backend_ref?: string | null
           module?: string
+          node_type?: string
+          page?: string | null
+          parent_id?: string | null
+          popup?: string | null
+          requires_backend?: boolean
+          section?: string | null
+          tab?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "permissions_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       production_activities: {
         Row: {
+          assigned_at: string
           assigned_to: string
           completed_at: string | null
           completed_sizes: Json | null
@@ -444,16 +495,19 @@ export type Database = {
           issued_sizes: Json | null
           notes: string | null
           operation_id: string
+          paused_at: string | null
+          paused_seconds: number
           production_order_id: string
           returned_qty: number | null
           size_breakdown: Json | null
-          started_at: string
+          started_at: string | null
           status: string
           updated_at: string
           variance_reason: string | null
           workstation_id: string | null
         }
         Insert: {
+          assigned_at?: string
           assigned_to: string
           completed_at?: string | null
           completed_sizes?: Json | null
@@ -466,16 +520,19 @@ export type Database = {
           issued_sizes?: Json | null
           notes?: string | null
           operation_id: string
+          paused_at?: string | null
+          paused_seconds?: number
           production_order_id: string
           returned_qty?: number | null
           size_breakdown?: Json | null
-          started_at?: string
+          started_at?: string | null
           status?: string
           updated_at?: string
           variance_reason?: string | null
           workstation_id?: string | null
         }
         Update: {
+          assigned_at?: string
           assigned_to?: string
           completed_at?: string | null
           completed_sizes?: Json | null
@@ -488,10 +545,12 @@ export type Database = {
           issued_sizes?: Json | null
           notes?: string | null
           operation_id?: string
+          paused_at?: string | null
+          paused_seconds?: number
           production_order_id?: string
           returned_qty?: number | null
           size_breakdown?: Json | null
-          started_at?: string
+          started_at?: string | null
           status?: string
           updated_at?: string
           variance_reason?: string | null
@@ -686,18 +745,24 @@ export type Database = {
       role_permissions: {
         Row: {
           created_at: string
+          id: string
           permission_id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: Database["public"]["Enums"]["app_role"] | null
+          role_id: string
         }
         Insert: {
           created_at?: string
+          id?: string
           permission_id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role?: Database["public"]["Enums"]["app_role"] | null
+          role_id: string
         }
         Update: {
           created_at?: string
+          id?: string
           permission_id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: Database["public"]["Enums"]["app_role"] | null
+          role_id?: string
         }
         Relationships: [
           {
@@ -707,7 +772,50 @@ export type Database = {
             referencedRelation: "permissions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "role_permissions_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      roles: {
+        Row: {
+          created_at: string
+          description: string | null
+          grants_all: boolean
+          id: string
+          is_active: boolean
+          is_system: boolean
+          key: string
+          label: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          grants_all?: boolean
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          key: string
+          label: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          grants_all?: boolean
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          key?: string
+          label?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       sample_approval_audit: {
         Row: {
@@ -798,22 +906,33 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: Database["public"]["Enums"]["app_role"] | null
+          role_id: string
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
-          role: Database["public"]["Enums"]["app_role"]
+          role?: Database["public"]["Enums"]["app_role"] | null
+          role_id: string
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: Database["public"]["Enums"]["app_role"] | null
+          role_id?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workflow_steps: {
         Row: {
@@ -944,6 +1063,15 @@ export type Database = {
     }
     Functions: {
       approve_sample: { Args: { _design_id: string }; Returns: string }
+      clone_role: {
+        Args: {
+          _new_description: string
+          _new_key: string
+          _new_label: string
+          _source_role_id: string
+        }
+        Returns: string
+      }
       complete_process: {
         Args: { _process_id: string; _returned_qty: number }
         Returns: undefined
@@ -965,10 +1093,7 @@ export type Database = {
         Returns: boolean
       }
       has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
+        Args: { _role_key: string; _user_id: string }
         Returns: boolean
       }
       has_workflow_access: { Args: { _workflow_id: string }; Returns: boolean }
@@ -986,7 +1111,7 @@ export type Database = {
         Args: never
         Returns: {
           email: string
-          roles: Database["public"]["Enums"]["app_role"][]
+          roles: Json
           user_id: string
         }[]
       }

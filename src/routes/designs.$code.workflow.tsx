@@ -86,7 +86,9 @@ function WorkflowConfigurator() {
   if (!design) {
     return (
       <AppShell title="Design not found">
-        <Link to="/designs" className="text-sm font-semibold text-primary">Back to designs</Link>
+        <Link to="/designs" className="text-sm font-semibold text-primary">
+          Back to designs
+        </Link>
       </AppShell>
     );
   }
@@ -97,7 +99,8 @@ function WorkflowConfigurator() {
       subtitle={`${design.code} · ${design.name}`}
       action={
         <Link
-          to="/designs/$code" params={{ code: design.code }}
+          to="/designs/$code"
+          params={{ code: design.code }}
           className="hidden items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs font-semibold hover:bg-accent sm:inline-flex"
         >
           <ArrowLeft className="h-4 w-4" /> Back to design
@@ -105,8 +108,11 @@ function WorkflowConfigurator() {
       }
     >
       <div className="grid gap-5">
-        <Link to="/designs/$code" params={{ code: design.code }}
-          className="inline-flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium text-muted-foreground hover:text-foreground sm:hidden">
+        <Link
+          to="/designs/$code"
+          params={{ code: design.code }}
+          className="inline-flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium text-muted-foreground hover:text-foreground sm:hidden"
+        >
           <ArrowLeft className="h-4 w-4" /> Back to design
         </Link>
 
@@ -124,7 +130,9 @@ function WorkflowConfigurator() {
                 }}
                 className={cn(
                   "rounded-xl px-4 py-2 text-sm font-semibold transition",
-                  active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  active
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                   !exists && "opacity-40",
                 )}
               >
@@ -136,9 +144,7 @@ function WorkflowConfigurator() {
 
         {!wf ? (
           <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            {kind === "bulk"
-              ? "Bulk workflow is generated when the sample is approved."
-              : "No workflow yet."}
+            {kind === "bulk" ? "Bulk workflow is generated when the sample is approved." : "No workflow yet."}
           </p>
         ) : (
           <>
@@ -151,7 +157,13 @@ function WorkflowConfigurator() {
 
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
               <StepsColumn designId={design.id} kind={wf.kind} steps={wf.steps} locked={wf.locked} catalog={catalog} />
-              <OperationPalette designId={design.id} workflowId={wf.id} nextSequence={wf.steps.length + 1} locked={wf.locked} catalog={catalog} />
+              <OperationPalette
+                designId={design.id}
+                workflowId={wf.id}
+                nextSequence={wf.steps.length + 1}
+                locked={wf.locked}
+                catalog={catalog}
+              />
             </div>
           </>
         )}
@@ -209,7 +221,14 @@ function StepsColumn({
           <SortableContext items={ids} strategy={verticalListSortingStrategy}>
             <ul className="mt-4 grid gap-3">
               {steps.map((step) => (
-                <StepRow key={step.id} designId={designId} step={step} allSteps={steps} locked={locked} catalog={catalog} />
+                <StepRow
+                  key={step.id}
+                  designId={designId}
+                  step={step}
+                  allSteps={steps}
+                  locked={locked}
+                  catalog={catalog}
+                />
               ))}
             </ul>
           </SortableContext>
@@ -337,34 +356,79 @@ function StepRow({
 
       {expand && (
         <div className="grid gap-3 border-t border-border p-3 sm:grid-cols-2">
-          <Text label="Custom Label" placeholder={op?.name ?? ""} value={draft.label}
-            onChange={(v) => setDraft({ ...draft, label: v })} />
-          <Text icon={<User className="h-3.5 w-3.5" />} label="Assigned Team / Worker" value={draft.assignedTo}
-            onChange={(v) => setDraft({ ...draft, assignedTo: v })} />
-          <Num label="Input Qty" value={draft.inputQuantity} onChange={(v) => setDraft({ ...draft, inputQuantity: v })} />
-          <Num label="Output Qty" value={draft.outputQuantity} onChange={(v) => setDraft({ ...draft, outputQuantity: v })} />
-          <Num label="Wastage / Rework" value={draft.wastageQuantity} onChange={(v) => setDraft({ ...draft, wastageQuantity: v })} />
-          <Text icon={<Calendar className="h-3.5 w-3.5" />} label="Start Date" type="date"
-            value={draft.startDate} onChange={(v) => setDraft({ ...draft, startDate: v })} />
-          <Text icon={<Calendar className="h-3.5 w-3.5" />} label="End Date" type="date"
-            value={draft.endDate} onChange={(v) => setDraft({ ...draft, endDate: v })} />
+          <Text
+            label="Custom Label"
+            placeholder={op?.name ?? ""}
+            value={draft.label}
+            onChange={(v) => setDraft({ ...draft, label: v })}
+          />
+          <Text
+            icon={<User className="h-3.5 w-3.5" />}
+            label="Assigned Team / Worker"
+            value={draft.assignedTo}
+            onChange={(v) => setDraft({ ...draft, assignedTo: v })}
+          />
+          <Num
+            label="Input Qty"
+            value={draft.inputQuantity}
+            onChange={(v) => setDraft({ ...draft, inputQuantity: v })}
+          />
+          <Num
+            label="Output Qty"
+            value={draft.outputQuantity}
+            onChange={(v) => setDraft({ ...draft, outputQuantity: v })}
+          />
+          <Num
+            label="Wastage / Rework"
+            value={draft.wastageQuantity}
+            onChange={(v) => setDraft({ ...draft, wastageQuantity: v })}
+          />
+          <Text
+            icon={<Calendar className="h-3.5 w-3.5" />}
+            label="Start Date"
+            type="date"
+            value={draft.startDate}
+            onChange={(v) => setDraft({ ...draft, startDate: v })}
+          />
+          <Text
+            icon={<Calendar className="h-3.5 w-3.5" />}
+            label="End Date"
+            type="date"
+            value={draft.endDate}
+            onChange={(v) => setDraft({ ...draft, endDate: v })}
+          />
           <label className="block sm:col-span-2">
             <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Remarks</span>
-            <textarea rows={2} value={draft.remarks} onChange={(e) => setDraft({ ...draft, remarks: e.target.value })}
-              className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary" />
+            <textarea
+              rows={2}
+              value={draft.remarks}
+              onChange={(e) => setDraft({ ...draft, remarks: e.target.value })}
+              className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary"
+            />
           </label>
 
           <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
-            <button onClick={save} disabled={locked}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-50">
+            <button
+              onClick={save}
+              disabled={locked}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-50"
+            >
               <Save className="h-3.5 w-3.5" /> Save
             </button>
-            <button onClick={duplicate} disabled={locked}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold hover:bg-accent disabled:opacity-50">
+            <button
+              onClick={duplicate}
+              disabled={locked}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold hover:bg-accent disabled:opacity-50"
+            >
               <Copy className="h-3.5 w-3.5" /> Duplicate
             </button>
-            <button onClick={() => del.mutate(step.id)} disabled={locked}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-bold text-destructive hover:bg-destructive/20 disabled:opacity-50">
+            <button
+              onClick={() => {
+                if (window.confirm("Remove this step from the workflow?")) del.mutate(step.id);
+              }}
+              disabled={locked}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-bold text-destructive hover:bg-destructive/20 disabled:opacity-50"
+            >
               <Trash2 className="h-3.5 w-3.5" /> Remove
             </button>
           </div>
@@ -439,18 +503,33 @@ function OperationPalette({
 
 // ---------- form helpers ----------
 
-function Text({ label, value, onChange, placeholder, type = "text", icon }: {
-  label: string; value: string; onChange: (v: string) => void;
-  placeholder?: string; type?: string; icon?: React.ReactNode;
+function Text({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  icon,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  icon?: React.ReactNode;
 }) {
   return (
     <label className="block">
       <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
         {icon} {label}
       </span>
-      <input type={type} value={value} placeholder={placeholder}
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
+        className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+      />
     </label>
   );
 }
@@ -459,9 +538,13 @@ function Num({ label, value, onChange }: { label: string; value: number; onChang
   return (
     <label className="block">
       <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{label}</span>
-      <input type="number" min={0} value={value}
+      <input
+        type="number"
+        min={0}
+        value={value}
         onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
-        className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-extrabold outline-none focus:border-primary" />
+        className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm font-extrabold outline-none focus:border-primary"
+      />
     </label>
   );
 }
