@@ -363,11 +363,7 @@ function StepRow({
               className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold hover:bg-accent disabled:opacity-50">
               <Copy className="h-3.5 w-3.5" /> Duplicate
             </button>
-            <button
-              onClick={() => {
-                if (window.confirm("Remove this step from the workflow?")) del.mutate(step.id);
-              }}
-              disabled={locked}
+            <button onClick={() => del.mutate(step.id)} disabled={locked}
               className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-bold text-destructive hover:bg-destructive/20 disabled:opacity-50">
               <Trash2 className="h-3.5 w-3.5" /> Remove
             </button>

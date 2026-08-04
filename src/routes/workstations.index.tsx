@@ -1,9 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Factory, User, Package, Loader2, RefreshCw, Search } from "lucide-react";
+import { Factory, User, Package, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { useWorkstationCards, type WorkstationCard, type WorkstationStatus } from "@/lib/api/workstations";
-import { ACTIVITY_OP_NAME } from "@/lib/api/production-activities";
 
 export const Route = createFileRoute("/workstations/")({
   head: () => ({
@@ -19,9 +17,8 @@ export const Route = createFileRoute("/workstations/")({
 
 const STATUS_STYLES: Record<WorkstationStatus, string> = {
   idle: "bg-muted text-muted-foreground",
-  pending: "bg-amber-100 text-amber-700",
   running: "bg-emerald-100 text-emerald-700",
-  paused: "bg-amber-100 text-amber-700",
+  completed: "bg-violet-100 text-violet-700",
 };
 
 function StatusBadge({ status }: { status: WorkstationStatus }) {
@@ -55,43 +52,43 @@ function Card({ card }: { card: WorkstationCard }) {
       <div className="mt-3 space-y-1.5 text-sm">
         <div className="flex items-center gap-2 text-muted-foreground">
           <User className="h-3.5 w-3.5" />
-          <span className="truncate">{card.current?.assignedTo ?? "Unassigned"}</span>
+          <span className="truncate">{card.employee ?? "Unassigned"}</span>
         </div>
         <div className="flex items-center gap-2 text-muted-foreground">
           <Package className="h-3.5 w-3.5" />
           <span className="truncate">
-            {card.current?.productionOrderCode
-              ? `${card.current.productionOrderCode} · ${card.current.designCode ?? "—"}`
-              : "No job running"}
+            {card.productionOrderCode ? `${card.productionOrderCode} · ${card.designCode ?? "—"}` : "No active order"}
           </span>
         </div>
-        {card.current && <div className="text-xs text-muted-foreground">Operation: {ACTIVITY_OP_NAME[card.current.operationId]}</div>}
+        {card.operationId && (
+          <div className="text-xs text-muted-foreground capitalize">Operation: {card.operationId}</div>
+        )}
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-muted/50 p-2 text-center">
-        <div>
-          <div className="text-xs text-muted-foreground">Pending Queue</div>
-          <div className="text-sm font-semibold text-amber-600">{card.pendingCount}</div>
+      {card.status !== "idle" && (
+        <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-muted/50 p-2 text-center">
+          <div>
+            <div className="text-xs text-muted-foreground">Assigned</div>
+            <div className="text-sm font-semibold">{card.assignedQty}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Completed</div>
+            <div className="text-sm font-semibold text-emerald-600">{card.completedQty}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Pending</div>
+            <div className="text-sm font-semibold text-amber-600">{card.pendingQty}</div>
+          </div>
         </div>
-        <div>
-          <div className="text-xs text-muted-foreground">Completed Today</div>
-          <div className="text-sm font-semibold text-emerald-600">{card.completedTodayCount}</div>
-        </div>
-      </div>
+      )}
     </Link>
   );
 }
 
 function WorkstationsPage() {
-  const { data: cards = [], isLoading, isFetching, error, refetch } = useWorkstationCards();
-  const [search, setSearch] = useState("");
+  const { data: cards = [], isLoading } = useWorkstationCards();
 
-  const q = search.trim().toLowerCase();
-  const visibleCards = q
-    ? cards.filter((c) => c.workstationId.toLowerCase().includes(q) || c.typeLabel.toLowerCase().includes(q))
-    : cards;
-
-  const groups = visibleCards.reduce<Record<string, { label: string; items: WorkstationCard[] }>>((acc, c) => {
+  const groups = cards.reduce<Record<string, { label: string; items: WorkstationCard[] }>>((acc, c) => {
     if (!acc[c.typeKey]) acc[c.typeKey] = { label: c.typeLabel, items: [] };
     acc[c.typeKey].items.push(c);
     return acc;
@@ -110,40 +107,9 @@ function WorkstationsPage() {
           </Link>
         </header>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="relative min-w-[200px] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by workstation or type…"
-              className="w-full rounded-xl border border-border bg-background py-2.5 pl-9 pr-3 text-sm"
-            />
-          </label>
-          <button
-            onClick={() => refetch()}
-            title="Refresh"
-            className="rounded-xl border border-border bg-background p-2.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
-            <RefreshCw className={"h-4 w-4 " + (isFetching ? "animate-spin" : "")} />
-          </button>
-        </div>
-
         {isLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading workstations…
-          </div>
-        ) : error ? (
-          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-10 text-center">
-            <p className="text-sm text-destructive">
-              Failed to load workstations. {error instanceof Error ? error.message : ""}
-            </p>
-            <button
-              onClick={() => refetch()}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2 text-xs font-bold hover:bg-accent"
-            >
-              <RefreshCw className="h-3.5 w-3.5" /> Retry
-            </button>
           </div>
         ) : cards.length === 0 ? (
           <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
@@ -152,10 +118,6 @@ function WorkstationsPage() {
               Set them up
             </Link>
             .
-          </div>
-        ) : visibleCards.length === 0 ? (
-          <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-            No workstations match your search.
           </div>
         ) : (
           Object.entries(groups).map(([key, group]) => (
